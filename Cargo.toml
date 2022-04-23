@@ -1,0 +1,11 @@
+[package]
+name = "impostor"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = "0.7.0"
+bevy_config_cam = { version = "0.3.0"}
+rand = "0.8.5"
