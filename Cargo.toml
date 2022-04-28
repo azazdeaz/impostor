@@ -9,3 +9,5 @@ edition = "2021"
 bevy = "0.7.0"
 bevy_config_cam = { version = "0.3.0"}
 rand = "0.8.5"
+itertools = "0.10.3"
+nalgebra = "0.30.1"

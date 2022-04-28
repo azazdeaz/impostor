@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::f32::consts::PI;
 
 use bevy::{
@@ -29,7 +30,7 @@ fn main() {
 
 /// Used to mark a joint to be animated in the [`joint_animation`] system.
 #[derive(Component)]
-struct AnimatedJoint;
+struct AnimatedJoint(f32);
 
 /// Construct a mesh and a skeleton with 2 joints for that mesh,
 ///   and mark the second joint to be animated.
@@ -47,16 +48,19 @@ fn setup(
     //     ..default()
     // });
 
-    let levels = 4;
+    let joint_count = 4;
+    let levels = 16;
     let resolution = 7;
     let radius = 0.3;
     let level_height = 0.5;
-
+    let joint_height = levels as f32 / joint_count as f32 * level_height;
     // Create inverse bindpose matrices for a skeleton consists of 2 joints
     let inverse_bindposes =
         skinned_mesh_inverse_bindposes_assets.add(SkinnedMeshInverseBindposes::from(vec![
             Mat4::from_translation(Vec3::new(-0.0, -0.0, -0.0)),
             Mat4::from_translation(Vec3::new(-0.0, -2.0, -0.0)),
+            Mat4::from_translation(Vec3::new(-0.0, -4.0, -0.0)),
+            Mat4::from_translation(Vec3::new(-0.0, -6.0, -0.0)),
         ]));
 
     let vertex_count = (levels + 1) * (resolution + 1);
@@ -73,7 +77,6 @@ fn setup(
         let y = level * level_height;
         let theta = (step / resolution as f32) * PI * 2.0;
 
-        
         let x = theta.cos() * radius;
         let z = theta.sin() * radius;
         let normal_x = theta.cos();
@@ -84,10 +87,19 @@ fn setup(
         positions.push([x, y, z]);
         normals.push([normal_x, normal_y, normal_z]);
         uvs.push([uv_x, uv_y]);
-        joint_indices.push([0u16, 1, 0, 0]);
-        let weight_1 = (level / (levels as f32)).powi(2);
-        joint_weights.push([1.0 - weight_1, weight_1, 0.0, 0.0]);
-        println!("level {} step {} theta {} weight_1 {} y {}", level, step, theta, weight_1, y);
+        joint_indices.push([0u16, 1, 2, 3]);
+
+        let weights = (0..joint_count)
+            .map(|joint_no| (joint_height - ((joint_no as f32 * joint_height) - y).abs()).max(0.0))
+            .collect_vec();
+        println!("weights {:?}", weights);
+        let weights = bevy::math::vec4(weights[0], weights[1], weights[2], weights[3]);
+        let weights = weights / (weights[0] + weights[1] + weights[2] + weights[3]);
+        joint_weights.push(weights.to_array()); //([1.0 - weight_1, weight_1, 0.0, 0.0]);
+        println!(
+            "level {} step {} theta {} weights {:?} y {}",
+            level, step, theta, weights, y
+        );
     }
 
     let quad_count = resolution * levels;
@@ -99,7 +111,7 @@ fn setup(
     for n in 0..quad_count {
         let res = resolution as u32;
         // number of vertices at one level
-        let level_up = res+1;
+        let level_up = res + 1;
         let level = n as u32 / res;
         let step1 = n as u32 % res;
         let step2 = step1 + 1;
@@ -159,7 +171,21 @@ fn setup(
             .id();
         let joint_1 = commands
             .spawn_bundle((
-                AnimatedJoint,
+                AnimatedJoint(1.0),
+                Transform::identity(),
+                GlobalTransform::identity(),
+            ))
+            .id();
+        let joint_2 = commands
+            .spawn_bundle((
+                AnimatedJoint(-1.0),
+                Transform::identity(),
+                GlobalTransform::identity(),
+            ))
+            .id();
+        let joint_3 = commands
+            .spawn_bundle((
+                AnimatedJoint(1.0),
                 Transform::identity(),
                 GlobalTransform::identity(),
             ))
@@ -167,9 +193,11 @@ fn setup(
 
         // Set joint_1 as a child of joint_0.
         commands.entity(joint_0).push_children(&[joint_1]);
+        commands.entity(joint_1).push_children(&[joint_2]);
+        commands.entity(joint_2).push_children(&[joint_3]);
 
         // Each joint in this vector corresponds to each inverse bindpose matrix in `SkinnedMeshInverseBindposes`.
-        let joint_entities = vec![joint_0, joint_1];
+        let joint_entities = vec![joint_0, joint_1, joint_2, joint_3];
 
         // Create skinned mesh renderer. Note that its transform doesn't affect the position of the mesh.
         commands
@@ -193,8 +221,8 @@ fn setup(
 }
 
 /// Animate the joint marked with [`AnimatedJoint`] component.
-fn joint_animation(time: Res<Time>, mut query: Query<&mut Transform, With<AnimatedJoint>>) {
-    for mut transform in query.iter_mut() {
+fn joint_animation(time: Res<Time>, mut query: Query<(&mut Transform, &AnimatedJoint)>) {
+    for (mut transform, AnimatedJoint(way)) in query.iter_mut() {
         // transform.rotation = Quat::from_euler(
         //     EulerRot::XYZ,
         //     0.2 * PI * time.time_since_startup().as_secs_f32().cos(),
@@ -203,9 +231,9 @@ fn joint_animation(time: Res<Time>, mut query: Query<&mut Transform, With<Animat
         // );
         // println!("{:?} ", transform.translation);
         transform.translation = Vec3::from([
-            0.1 * PI * time.time_since_startup().as_secs_f32().cos(),
+            0.1 * PI * time.time_since_startup().as_secs_f32().cos() * way,
             2.0,
-            0.1 * PI * time.time_since_startup().as_secs_f32().sin(),
+            0.1 * PI * time.time_since_startup().as_secs_f32().sin() * way,
         ]);
         // transform.rotation = Quat::from_axis_angle(
         //     Vec3::Z,
