@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use rand::Rng;
 use std::f32::consts::PI;
 
 use bevy::{
@@ -10,13 +11,13 @@ use bevy::{
     },
 };
 use bevy_config_cam::ConfigCam;
-use rand::Rng;
 // use bevy_config_cam::ConfigCam;
 
 /// Skinned mesh example with mesh and joints data defined in code.
 /// Example taken from <https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_019_SimpleSkin.md>
 fn main() {
     App::new()
+        .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .add_plugin(ConfigCam)
         .insert_resource(AmbientLight {
@@ -40,8 +41,10 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
+    asset_server: Res<AssetServer>,
 ) {
-    let enable_wireframe = true;
+    let texture_handle = asset_server.load("tomato/AG15brn1.png");
+    let enable_wireframe = false;
     // Create a camera
     // commands.spawn_bundle(PerspectiveCameraBundle {
     //     transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -49,10 +52,10 @@ fn setup(
     // });
 
     let joint_count = 4;
-    let levels = 16;
+    let levels = 64;
     let resolution = 7;
     let radius = 0.3;
-    let level_height = 0.5;
+    let level_height = 0.1;
     let joint_height = levels as f32 / joint_count as f32 * level_height;
     // Create inverse bindpose matrices for a skeleton consists of 2 joints
     let inverse_bindposes =
@@ -82,24 +85,35 @@ fn setup(
         let normal_x = theta.cos();
         let normal_z = -theta.sin();
         let normal_y = 0.0;
-        let uv_x = 0.0;
-        let uv_y = 0.0;
+        let mut uv_x = (step / (resolution as f32 / 4.0)) % 2.0;
+        if uv_x > 1.0 {
+            uv_x = 2.0 - uv_x;
+        }
+        let mut uv_y = (y / 0.4) % 2.0;
+        if uv_y > 1.0 {
+            uv_y = 2.0 - uv_y;
+        }
+        println!("uv {} {}", uv_x, uv_y);
         positions.push([x, y, z]);
         normals.push([normal_x, normal_y, normal_z]);
         uvs.push([uv_x, uv_y]);
         joint_indices.push([0u16, 1, 2, 3]);
 
         let weights = (0..joint_count)
-            .map(|joint_no| (joint_height - ((joint_no as f32 * joint_height) - y).abs()).max(0.0))
+            .map(|joint_no| {
+                ((joint_height - ((joint_no as f32 * joint_height) - y).abs()) / joint_height)
+                    .max(0.0)
+                    .powi(2)
+            })
             .collect_vec();
-        println!("weights {:?}", weights);
+        // println!("weights {:?}", weights);
         let weights = bevy::math::vec4(weights[0], weights[1], weights[2], weights[3]);
         let weights = weights / (weights[0] + weights[1] + weights[2] + weights[3]);
         joint_weights.push(weights.to_array()); //([1.0 - weight_1, weight_1, 0.0, 0.0]);
-        println!(
-            "level {} step {} theta {} weights {:?} y {}",
-            level, step, theta, weights, y
-        );
+        // println!(
+        //     "level {} step {} theta {} weights {:?} y {}",
+        //     level, step, theta, weights, y
+        // );
     }
 
     let quad_count = resolution * levels;
@@ -178,14 +192,14 @@ fn setup(
             .id();
         let joint_2 = commands
             .spawn_bundle((
-                AnimatedJoint(-1.0),
+                AnimatedJoint(-2.0),
                 Transform::identity(),
                 GlobalTransform::identity(),
             ))
             .id();
         let joint_3 = commands
             .spawn_bundle((
-                AnimatedJoint(1.0),
+                AnimatedJoint(3.0),
                 Transform::identity(),
                 GlobalTransform::identity(),
             ))
@@ -199,18 +213,23 @@ fn setup(
         // Each joint in this vector corresponds to each inverse bindpose matrix in `SkinnedMeshInverseBindposes`.
         let joint_entities = vec![joint_0, joint_1, joint_2, joint_3];
 
+        let material_handle = materials.add(StandardMaterial {
+            // base_color: Color::rgb(
+            //     rand::thread_rng().gen_range(0.0..1.0),
+            //     rand::thread_rng().gen_range(0.0..1.0),
+            //     rand::thread_rng().gen_range(0.0..1.0),
+            // ),
+            base_color_texture: Some(texture_handle.clone()),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        });
+
         // Create skinned mesh renderer. Note that its transform doesn't affect the position of the mesh.
         commands
             .spawn_bundle(PbrBundle {
                 mesh: mesh.clone(),
-                material: materials.add(
-                    Color::rgb(
-                        rand::thread_rng().gen_range(0.0..1.0),
-                        rand::thread_rng().gen_range(0.0..1.0),
-                        rand::thread_rng().gen_range(0.0..1.0),
-                    )
-                    .into(),
-                ),
+                material: material_handle,
                 ..Default::default()
             })
             .insert(SkinnedMesh {
@@ -235,9 +254,9 @@ fn joint_animation(time: Res<Time>, mut query: Query<(&mut Transform, &AnimatedJ
             2.0,
             0.1 * PI * time.time_since_startup().as_secs_f32().sin() * way,
         ]);
-        // transform.rotation = Quat::from_axis_angle(
-        //     Vec3::Z,
-        //     0.5 * PI * time.time_since_startup().as_secs_f32().sin(),
-        // );
+        transform.rotation = Quat::from_axis_angle(
+            Vec3::Z,
+            0.05 * PI * time.time_since_startup().as_secs_f32().sin() * way,
+        );
     }
 }
