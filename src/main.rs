@@ -21,7 +21,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(ConfigCam)
         .insert_resource(AmbientLight {
-            brightness: 1.0,
+            brightness: 0.3,
             ..Default::default()
         })
         .add_startup_system(setup)
@@ -50,6 +50,25 @@ fn setup(
     //     transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
     //     ..default()
     // });
+
+    commands.spawn_bundle(PointLightBundle {
+        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        point_light: PointLight {
+            shadow_depth_bias: 0.0,
+            shadow_normal_bias: 0.0,
+            shadows_enabled: true,
+            ..default()
+        },
+        ..default()
+    });
+
+
+    commands.spawn_bundle(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 20.0 })),
+        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+        // transform: Transform::from_xyz(2.0, -1.0, 2.0),
+        ..default()
+    });
 
     let joint_count = 4;
     let levels = 64;
@@ -83,7 +102,7 @@ fn setup(
         let x = theta.cos() * radius;
         let z = theta.sin() * radius;
         let normal_x = theta.cos();
-        let normal_z = -theta.sin();
+        let normal_z = theta.sin();
         let normal_y = 0.0;
         let mut uv_x = (step / (resolution as f32 / 4.0)) % 2.0;
         if uv_x > 1.0 {
@@ -110,10 +129,10 @@ fn setup(
         let weights = bevy::math::vec4(weights[0], weights[1], weights[2], weights[3]);
         let weights = weights / (weights[0] + weights[1] + weights[2] + weights[3]);
         joint_weights.push(weights.to_array()); //([1.0 - weight_1, weight_1, 0.0, 0.0]);
-        // println!(
-        //     "level {} step {} theta {} weights {:?} y {}",
-        //     level, step, theta, weights, y
-        // );
+                                                // println!(
+                                                //     "level {} step {} theta {} weights {:?} y {}",
+                                                //     level, step, theta, weights, y
+                                                // );
     }
 
     let quad_count = resolution * levels;
@@ -138,7 +157,6 @@ fn setup(
         let d = start + step1;
         let e = start + step1 + level_up;
         let f = start + step2 + level_up;
-        println!("{:?}", [a, b, c, d, e, f]);
         if enable_wireframe {
             indices.extend_from_slice(&[a, b, b, c, c, a, d, e, e, f, f, d])
         } else {
@@ -221,9 +239,15 @@ fn setup(
             // ),
             base_color_texture: Some(texture_handle.clone()),
             alpha_mode: AlphaMode::Blend,
-            unlit: true,
+            unlit: false,
+            // double_sided: true,
+            metallic: 0.001,
+            reflectance: 0.01,
+            perceptual_roughness: 0.3,
+            // flip_normal_map_y: true,
             ..default()
         });
+        // let material_handle = materials.add(texture_handle.clone().into());
 
         // Create skinned mesh renderer. Note that its transform doesn't affect the position of the mesh.
         commands
@@ -242,21 +266,21 @@ fn setup(
 /// Animate the joint marked with [`AnimatedJoint`] component.
 fn joint_animation(time: Res<Time>, mut query: Query<(&mut Transform, &AnimatedJoint)>) {
     for (mut transform, AnimatedJoint(way)) in query.iter_mut() {
-        // transform.rotation = Quat::from_euler(
-        //     EulerRot::XYZ,
-        //     0.2 * PI * time.time_since_startup().as_secs_f32().cos(),
-        //     0.0,
-        //     0.2 * PI * time.time_since_startup().as_secs_f32().sin(),
-        // );
+        transform.rotation = Quat::from_euler(
+            EulerRot::XYZ,
+            0.02 * PI * time.time_since_startup().as_secs_f32().cos(),
+            0.0,
+            0.02 * PI * time.time_since_startup().as_secs_f32().sin(),
+        );
         // println!("{:?} ", transform.translation);
         transform.translation = Vec3::from([
             0.1 * PI * time.time_since_startup().as_secs_f32().cos() * way,
             2.0,
             0.1 * PI * time.time_since_startup().as_secs_f32().sin() * way,
         ]);
-        transform.rotation = Quat::from_axis_angle(
-            Vec3::Z,
-            0.05 * PI * time.time_since_startup().as_secs_f32().sin() * way,
-        );
+        // transform.rotation = Quat::from_axis_angle(
+        //     Vec3::Y,
+        //     0.5 * PI * time.time_since_startup().as_secs_f32().sin() * way,
+        // );
     }
 }
