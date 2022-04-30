@@ -53,7 +53,7 @@ fn setup(
 
     let joint_count = 4;
     let levels = 64;
-    let resolution = 7;
+    let resolution = 12;
     let radius = 0.3;
     let level_height = 0.1;
     let joint_height = levels as f32 / joint_count as f32 * level_height;
@@ -132,12 +132,12 @@ fn setup(
         let start = level * level_up;
         // lower triangle
         let a = start + step1;
-        let b = start + step2;
-        let c = start + step2 + level_up;
+        let b = start + step2 + level_up;
+        let c = start + step2;
         // upper triangle
         let d = start + step1;
-        let e = start + step2 + level_up;
-        let f = start + step1 + level_up;
+        let e = start + step1 + level_up;
+        let f = start + step2 + level_up;
         println!("{:?}", [a, b, c, d, e, f]);
         if enable_wireframe {
             indices.extend_from_slice(&[a, b, b, c, c, a, d, e, e, f, f, d])
