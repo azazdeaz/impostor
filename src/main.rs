@@ -11,7 +11,7 @@ use bevy::{
     },
 };
 use bevy_config_cam::ConfigCam;
-// use bevy_config_cam::ConfigCam;
+use bevy_rapier3d::prelude::*;
 
 /// Skinned mesh example with mesh and joints data defined in code.
 /// Example taken from <https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_019_SimpleSkin.md>
@@ -19,6 +19,8 @@ fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(ConfigCam)
         .insert_resource(AmbientLight {
             brightness: 0.3,
@@ -26,7 +28,31 @@ fn main() {
         })
         .add_startup_system(setup)
         .add_system(joint_animation)
+        // .add_startup_system(setup_physics)
+        // .add_system(print_ball_altitude)
         .run();
+}
+
+fn setup_physics(mut commands: Commands) {
+    /* Create the ground. */
+    commands
+        .spawn()
+        .insert(Collider::cuboid(100.0, 0.1, 100.0))
+        .insert(Transform::from_xyz(0.0, -2.0, 0.0));
+
+    /* Create the bouncing ball. */
+    commands
+        .spawn()
+        .insert(RigidBody::Dynamic)
+        .insert(Collider::ball(0.5))
+        .insert(Restitution::coefficient(0.7))
+        .insert(Transform::from_xyz(0.0, 4.0, 0.0));
+}
+
+fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
+    for transform in positions.iter() {
+        println!("Ball altitude: {}", transform.translation.y);
+    }
 }
 
 /// Used to mark a joint to be animated in the [`joint_animation`] system.
@@ -61,7 +87,6 @@ fn setup(
         },
         ..default()
     });
-
 
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 20.0 })),
@@ -193,43 +218,95 @@ fn setup(
     mesh.set_indices(Some(Indices::U32(indices)));
 
     let mesh = meshes.add(mesh);
-    for i in -5..5 {
-        // Create joint entities
-        let joint_0 = commands
-            .spawn_bundle((
-                Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0),
-                GlobalTransform::identity(),
-            ))
-            .id();
-        let joint_1 = commands
-            .spawn_bundle((
-                AnimatedJoint(1.0),
-                Transform::identity(),
-                GlobalTransform::identity(),
-            ))
-            .id();
-        let joint_2 = commands
-            .spawn_bundle((
-                AnimatedJoint(-2.0),
-                Transform::identity(),
-                GlobalTransform::identity(),
-            ))
-            .id();
-        let joint_3 = commands
-            .spawn_bundle((
-                AnimatedJoint(3.0),
-                Transform::identity(),
-                GlobalTransform::identity(),
-            ))
-            .id();
+    for i in -0..1 {
+        let mut prev_joint = None;
+        let mut joint_entities = Vec::new();
+        for j in 0..joint_count {
+            let mut joint = commands.spawn();
+            let joint = if prev_joint.is_none() {
+                joint.insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
+            } else {
+                let rapier_joint = SphericalJointBuilder::new()
+                    .local_anchor1(Vec3::new(0.0, 0.0, 1.0))
+                    .local_anchor2(Vec3::new(0.0, joint_height, 0.0));
+                joint
+                    .insert(Transform::from_xyz(0.0, joint_height, 0.0))
+                    .insert(AnimatedJoint(1.0))
+                    .insert(ImpulseJoint::new(prev_joint.unwrap(), rapier_joint))
+            };
+            let joint_id = joint
+                .insert(GlobalTransform::identity())
+                .insert(RigidBody::Dynamic)
+                .insert(GravityScale(0.001))
+                .with_children(|children| {
+                    children
+                        .spawn()
+                        .insert(Collider::capsule_y(joint_height / 2.0, radius))
+                        .insert(Transform::from_xyz(0.0, joint_height / 2.0, 0.0));
+                })
+                .insert(CollisionGroups::new(0b1000, 0b0100))
+                // .insert(ExternalForce {
+                //     force: Vec3::new(10.0, 20.0, 30.0),
+                //     torque: Vec3::new(1.0, 2.0, 3.0),
+                // })
+                // .insert(ExternalImpulse {
+                //     impulse: Vec3::new(1.0, 2.0, 3.0),
+                //     torque_impulse: Vec3::new(0.1, 0.2, 0.3),
+                // })
+                .id();
+            if let Some(prev_joint) = prev_joint {
+                commands.entity(prev_joint).push_children(&[joint_id]);
+            }
+            joint_entities.push(joint_id);
+            prev_joint = Some(joint_id);
+        }
+        // // Create joint entities
+        // let joint_0 = commands
+        //     .spawn_bundle((
+        //         Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0),
+        //         GlobalTransform::identity(),
+        //     ))
+        //     .id();
+        // let joint_1 = commands
+        //     .spawn_bundle((
+        //         AnimatedJoint(1.0),
+        //         Transform::from_xyz(0.0, joint_height, 0.0),
+        //         GlobalTransform::identity(),
+        //     ))
+        //     .id();
+        // let joint_2 = commands
+        //     .spawn_bundle((
+        //         AnimatedJoint(-2.0),
+        //         Transform::from_xyz(0.0, joint_height, 0.0),
+        //         GlobalTransform::identity(),
+        //     ))
+        //     .id();
+        // let joint_3 = commands
+        //     .spawn_bundle((
+        //         AnimatedJoint(3.0),
+        //         Transform::from_xyz(0.0, joint_height, 0.0),
+        //         GlobalTransform::identity(),
+        //     ))
+        //     .insert(RigidBody::Dynamic)
+        //     .insert(GravityScale(2.0))
+        //     .insert(Collider::ball(radius))
+        //     // .insert(ExternalForce {
+        //     //     force: Vec3::new(10.0, 20.0, 30.0),
+        //     //     torque: Vec3::new(1.0, 2.0, 3.0),
+        //     // })
+        //     // .insert(ExternalImpulse {
+        //     //     impulse: Vec3::new(1.0, 2.0, 3.0),
+        //     //     torque_impulse: Vec3::new(0.1, 0.2, 0.3),
+        //     // })
+        //     .id();
 
-        // Set joint_1 as a child of joint_0.
-        commands.entity(joint_0).push_children(&[joint_1]);
-        commands.entity(joint_1).push_children(&[joint_2]);
-        commands.entity(joint_2).push_children(&[joint_3]);
+        // // Set joint_1 as a child of joint_0.
+        // commands.entity(joint_0).push_children(&[joint_1]);
+        // commands.entity(joint_1).push_children(&[joint_2]);
+        // commands.entity(joint_2).push_children(&[joint_3]);
 
-        // Each joint in this vector corresponds to each inverse bindpose matrix in `SkinnedMeshInverseBindposes`.
-        let joint_entities = vec![joint_0, joint_1, joint_2, joint_3];
+        // // Each joint in this vector corresponds to each inverse bindpose matrix in `SkinnedMeshInverseBindposes`.
+        // let joint_entities = vec![joint_0, joint_1, joint_2, joint_3];
 
         let material_handle = materials.add(StandardMaterial {
             // base_color: Color::rgb(
@@ -266,18 +343,18 @@ fn setup(
 /// Animate the joint marked with [`AnimatedJoint`] component.
 fn joint_animation(time: Res<Time>, mut query: Query<(&mut Transform, &AnimatedJoint)>) {
     for (mut transform, AnimatedJoint(way)) in query.iter_mut() {
-        transform.rotation = Quat::from_euler(
-            EulerRot::XYZ,
-            0.02 * PI * time.time_since_startup().as_secs_f32().cos(),
-            0.0,
-            0.02 * PI * time.time_since_startup().as_secs_f32().sin(),
-        );
+        // transform.rotation = Quat::from_euler(
+        //     EulerRot::XYZ,
+        //     0.02 * PI * time.time_since_startup().as_secs_f32().cos(),
+        //     0.0,
+        //     0.02 * PI * time.time_since_startup().as_secs_f32().sin(),
+        // );
         // println!("{:?} ", transform.translation);
-        transform.translation = Vec3::from([
-            0.1 * PI * time.time_since_startup().as_secs_f32().cos() * way,
-            2.0,
-            0.1 * PI * time.time_since_startup().as_secs_f32().sin() * way,
-        ]);
+        // transform.translation = Vec3::from([
+        //     0.1 * PI * time.time_since_startup().as_secs_f32().cos() * way,
+        //     2.0,
+        //     0.1 * PI * time.time_since_startup().as_secs_f32().sin() * way,
+        // ]);
         // transform.rotation = Quat::from_axis_angle(
         //     Vec3::Y,
         //     0.5 * PI * time.time_since_startup().as_secs_f32().sin() * way,
