@@ -11,7 +11,7 @@ use bevy::{
     },
 };
 use bevy_config_cam::ConfigCam;
-use bevy_rapier3d::prelude::*;
+use bevy_rapier3d::{prelude::*, rapier::prelude::JointAxis};
 
 /// Skinned mesh example with mesh and joints data defined in code.
 /// Example taken from <https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_019_SimpleSkin.md>
@@ -70,7 +70,7 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     let texture_handle = asset_server.load("tomato/AG15brn1.png");
-    let enable_wireframe = false;
+    let enable_wireframe = true;
     // Create a camera
     // commands.spawn_bundle(PerspectiveCameraBundle {
     //     transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -221,28 +221,52 @@ fn setup(
     for i in -0..1 {
         let mut prev_joint = None;
         let mut joint_entities = Vec::new();
+        let root = commands
+            .spawn()
+            .insert(RigidBody::Fixed)
+            .insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
+            .id();
+
         for j in 0..joint_count {
             let mut joint = commands.spawn();
             let joint = if prev_joint.is_none() {
-                joint.insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
+                let rapier_joint = SphericalJointBuilder::new()
+                    .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
+                    .local_anchor2(Vec3::new(0.0, joint_height, 0.0));
+                    // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
+                    // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
+                    // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
+                joint
+                    .insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
+                    .insert(ImpulseJoint::new(root, rapier_joint))
             } else {
                 let rapier_joint = SphericalJointBuilder::new()
-                    .local_anchor1(Vec3::new(0.0, 0.0, 1.0))
+                    .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
                     .local_anchor2(Vec3::new(0.0, joint_height, 0.0));
+                    // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
+                    // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
+                    // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
                 joint
                     .insert(Transform::from_xyz(0.0, joint_height, 0.0))
-                    .insert(AnimatedJoint(1.0))
                     .insert(ImpulseJoint::new(prev_joint.unwrap(), rapier_joint))
             };
             let joint_id = joint
                 .insert(GlobalTransform::identity())
+                .insert(AnimatedJoint(j as f32))
                 .insert(RigidBody::Dynamic)
-                .insert(GravityScale(0.001))
+                // .insert(GravityScale(-0.001))
                 .with_children(|children| {
                     children
                         .spawn()
-                        .insert(Collider::capsule_y(joint_height / 2.0, radius))
-                        .insert(Transform::from_xyz(0.0, joint_height / 2.0, 0.0));
+                        .insert(Collider::capsule_y(joint_height / 2.0, radius * 1.2))
+                        .insert(Transform::from_xyz(0.0, joint_height / 2.0, j as f32));
+                        // .insert(GlobalTransform::identity());
+                    // children.spawn_bundle(PbrBundle {
+                    //     mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+                    //     material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+                    //     transform: Transform::from_xyz(0.0, 0.5, 0.0),
+                    //     ..default()
+                    // });
                 })
                 .insert(CollisionGroups::new(0b1000, 0b0100))
                 // .insert(ExternalForce {
@@ -340,9 +364,22 @@ fn setup(
     }
 }
 
-/// Animate the joint marked with [`AnimatedJoint`] component.
-fn joint_animation(time: Res<Time>, mut query: Query<(&mut Transform, &AnimatedJoint)>) {
-    for (mut transform, AnimatedJoint(way)) in query.iter_mut() {
+/// Animate the joint marked with [`AnimatedJ   oint`] component.
+fn joint_animation(
+    time: Res<Time>,
+    mut query: Query<(&Transform, &GlobalTransform, &AnimatedJoint, &Children)>,
+    capsules_query: Query<&GlobalTransform, With<Collider>>,
+) {
+    for (mut transform, global_transform, AnimatedJoint(way), children) in query.iter_mut() {
+        println!(
+            "{:?}, t:{:?} gt:{:?}",
+            way, transform.translation, global_transform.translation,
+        );
+        for child in children.iter() {
+            if let Ok(capsule) = capsules_query.get(*child) {
+                println!("   - capsule{:?}", capsule.translation);
+            }
+        }
         // transform.rotation = Quat::from_euler(
         //     EulerRot::XYZ,
         //     0.02 * PI * time.time_since_startup().as_secs_f32().cos(),
