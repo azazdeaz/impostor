@@ -13,6 +13,8 @@ use bevy::{
 use bevy_config_cam::ConfigCam;
 use bevy_rapier3d::{prelude::*, rapier::prelude::JointAxis};
 
+const JOINT_COUNT: usize = 2;
+
 /// Skinned mesh example with mesh and joints data defined in code.
 /// Example taken from <https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_019_SimpleSkin.md>
 fn main() {
@@ -21,6 +23,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
+        .add_system(handle_physics_commands)
         .add_plugin(ConfigCam)
         .insert_resource(AmbientLight {
             brightness: 0.3,
@@ -47,6 +50,15 @@ fn setup_physics(mut commands: Commands) {
         .insert(Collider::ball(0.5))
         .insert(Restitution::coefficient(0.7))
         .insert(Transform::from_xyz(0.0, 4.0, 0.0));
+}
+
+fn handle_physics_commands(
+    keys: Res<Input<KeyCode>>,
+    mut rapier_config: ResMut<RapierConfiguration>,
+) {
+    let go = true;//keys.just_pressed(KeyCode::Space);
+    rapier_config.physics_pipeline_active = go;
+    rapier_config.query_pipeline_active = go;
 }
 
 fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
@@ -95,12 +107,11 @@ fn setup(
         ..default()
     });
 
-    let joint_count = 4;
     let levels = 64;
     let resolution = 12;
     let radius = 0.3;
     let level_height = 0.1;
-    let joint_height = levels as f32 / joint_count as f32 * level_height;
+    let joint_height = levels as f32 / JOINT_COUNT as f32 * level_height;
     // Create inverse bindpose matrices for a skeleton consists of 2 joints
     let inverse_bindposes =
         skinned_mesh_inverse_bindposes_assets.add(SkinnedMeshInverseBindposes::from(vec![
@@ -143,7 +154,7 @@ fn setup(
         uvs.push([uv_x, uv_y]);
         joint_indices.push([0u16, 1, 2, 3]);
 
-        let weights = (0..joint_count)
+        let weights = (0..JOINT_COUNT)
             .map(|joint_no| {
                 ((joint_height - ((joint_no as f32 * joint_height) - y).abs()) / joint_height)
                     .max(0.0)
@@ -151,9 +162,11 @@ fn setup(
             })
             .collect_vec();
         // println!("weights {:?}", weights);
-        let weights = bevy::math::vec4(weights[0], weights[1], weights[2], weights[3]);
-        let weights = weights / (weights[0] + weights[1] + weights[2] + weights[3]);
-        joint_weights.push(weights.to_array()); //([1.0 - weight_1, weight_1, 0.0, 0.0]);
+        let sum: f32 = weights.iter().sum();
+        let weights: [f32;JOINT_COUNT] = weights.iter().map(|w| w / sum).collect_vec().try_into().unwrap();
+        // let weights = bevy::math::vec4(weights[0], weights[1], weights[2], weights[3]);
+        // let weights = weights / (weights[0] + weights[1] + weights[2] + weights[3]);
+        joint_weights.push(weights); //([1.0 - weight_1, weight_1, 0.0, 0.0]);
                                                 // println!(
                                                 //     "level {} step {} theta {} weights {:?} y {}",
                                                 //     level, step, theta, weights, y
@@ -227,15 +240,15 @@ fn setup(
             .insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
             .id();
 
-        for j in 0..joint_count {
+        for j in 0..JOINT_COUNT {
             let mut joint = commands.spawn();
             let joint = if prev_joint.is_none() {
                 let rapier_joint = SphericalJointBuilder::new()
                     .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
                     .local_anchor2(Vec3::new(0.0, joint_height, 0.0));
-                    // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
-                    // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
-                    // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
+                // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
+                // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
+                // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
                 joint
                     .insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
                     .insert(ImpulseJoint::new(root, rapier_joint))
@@ -243,9 +256,9 @@ fn setup(
                 let rapier_joint = SphericalJointBuilder::new()
                     .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
                     .local_anchor2(Vec3::new(0.0, joint_height, 0.0));
-                    // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
-                    // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
-                    // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
+                // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
+                // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
+                // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
                 joint
                     .insert(Transform::from_xyz(0.0, joint_height, 0.0))
                     .insert(ImpulseJoint::new(prev_joint.unwrap(), rapier_joint))
@@ -259,8 +272,8 @@ fn setup(
                     children
                         .spawn()
                         .insert(Collider::capsule_y(joint_height / 2.0, radius * 1.2))
-                        .insert(Transform::from_xyz(0.0, joint_height / 2.0, j as f32));
-                        // .insert(GlobalTransform::identity());
+                        .insert(Transform::from_xyz(0.0, joint_height / 2.0, 0.0));
+                    // .insert(GlobalTransform::identity());
                     // children.spawn_bundle(PbrBundle {
                     //     mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
                     //     material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
@@ -269,14 +282,14 @@ fn setup(
                     // });
                 })
                 .insert(CollisionGroups::new(0b1000, 0b0100))
-                // .insert(ExternalForce {
-                //     force: Vec3::new(10.0, 20.0, 30.0),
-                //     torque: Vec3::new(1.0, 2.0, 3.0),
-                // })
-                // .insert(ExternalImpulse {
-                //     impulse: Vec3::new(1.0, 2.0, 3.0),
-                //     torque_impulse: Vec3::new(0.1, 0.2, 0.3),
-                // })
+                .insert(ExternalForce {
+                    force: Vec3::new(10.0, 20.0, 30.0),
+                    torque: Vec3::new(1.0, 2.0, 3.0),
+                })
+                .insert(ExternalImpulse {
+                    impulse: Vec3::new(1.0, 2.0, 3.0),
+                    torque_impulse: Vec3::new(0.1, 0.2, 0.3),
+                })
                 .id();
             if let Some(prev_joint) = prev_joint {
                 commands.entity(prev_joint).push_children(&[joint_id]);
