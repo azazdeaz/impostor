@@ -12,3 +12,12 @@ bevy_rapier3d = { version = "*", features = [ "simd-stable", "debug-render" ] }
 rand = "0.8.5"
 itertools = "0.10.3"
 nalgebra = "0.30.1"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+
+[[bin]]
+name = "ragdoll"
+path = "src/ragdoll.rs"
