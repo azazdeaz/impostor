@@ -1,4 +1,4 @@
-use bevy::{pbr::AmbientLight, prelude::*};
+use bevy::prelude::*;
 use bevy_rapier3d::{prelude::*, rapier::prelude::JointAxis};
 
 fn main() {
@@ -7,10 +7,6 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
-        .insert_resource(AmbientLight {
-            brightness: 0.3,
-            ..Default::default()
-        })
         .add_startup_system(setup_scene)
         .run();
 }
@@ -25,8 +21,6 @@ fn setup_scene(mut commands: Commands) {
     for i in 0..joint_count {
         let section = commands
             .spawn()
-            .insert(Transform::from_xyz(0.0, joint_height, 0.0))
-            .insert(GlobalTransform::identity())
             .insert(RigidBody::Dynamic)
             .insert(Transform::from_xyz(0.0, joint_height * (i as f32), 0.0))
             .with_children(|children| {
@@ -49,7 +43,7 @@ fn setup_scene(mut commands: Commands) {
             commands
                 .entity(section)
                 .insert(ImpulseJoint::new(prev_section, rapier_joint));
-            commands.entity(prev_section).push_children(&[section]); // Is this needed?
+            // commands.entity(prev_section).push_children(&[section]); // Is this needed?
         }
 
         prev_section = Some(section);
