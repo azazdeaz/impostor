@@ -36,9 +36,9 @@ fn setup_scene(mut commands: Commands) {
             let rapier_joint = SphericalJointBuilder::new()
                 .local_anchor1(Vec3::new(0.0, joint_height, 0.0))
                 .local_anchor2(Vec3::new(0.0, 0.0, 0.0))
-                .motor_position(JointAxis::X, 0.0, 100.0, 1.0)
-                .motor_position(JointAxis::Y, 0.0, 100.0, 1.0)
-                .motor_position(JointAxis::Z, 0.0, 100.0, 1.0);
+                .motor_position(JointAxis::AngX, 0.0, 100.0, 1.0)
+                .motor_position(JointAxis::AngY, 0.0, 100.0, 1.0)
+                .motor_position(JointAxis::AngZ, 0.0, 100.0, 1.0);
 
             commands
                 .entity(section)
