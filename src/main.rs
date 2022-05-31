@@ -56,7 +56,7 @@ fn handle_physics_commands(
     keys: Res<Input<KeyCode>>,
     mut rapier_config: ResMut<RapierConfiguration>,
 ) {
-    let go = true;//keys.just_pressed(KeyCode::Space);
+    let go = true; //keys.just_pressed(KeyCode::Space);
     rapier_config.physics_pipeline_active = go;
     rapier_config.query_pipeline_active = go;
 }
@@ -163,14 +163,19 @@ fn setup(
             .collect_vec();
         // println!("weights {:?}", weights);
         let sum: f32 = weights.iter().sum();
-        let weights: [f32;JOINT_COUNT] = weights.iter().map(|w| w / sum).collect_vec().try_into().unwrap();
+        let weights: [f32; JOINT_COUNT] = weights
+            .iter()
+            .map(|w| w / sum)
+            .collect_vec()
+            .try_into()
+            .unwrap();
         // let weights = bevy::math::vec4(weights[0], weights[1], weights[2], weights[3]);
         // let weights = weights / (weights[0] + weights[1] + weights[2] + weights[3]);
         joint_weights.push(weights); //([1.0 - weight_1, weight_1, 0.0, 0.0]);
-                                                // println!(
-                                                //     "level {} step {} theta {} weights {:?} y {}",
-                                                //     level, step, theta, weights, y
-                                                // );
+                                     // println!(
+                                     //     "level {} step {} theta {} weights {:?} y {}",
+                                     //     level, step, theta, weights, y
+                                     // );
     }
 
     let quad_count = resolution * levels;
@@ -245,20 +250,20 @@ fn setup(
             let joint = if prev_joint.is_none() {
                 let rapier_joint = SphericalJointBuilder::new()
                     .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
-                    .local_anchor2(Vec3::new(0.0, joint_height, 0.0));
-                // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
-                // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
-                // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
+                    .local_anchor2(Vec3::new(0.0, joint_height, 0.0))
+                    .motor_position(JointAxis::AngX, 0.0, 1.0, 1.0)
+                    .motor_position(JointAxis::AngY, 0.0, 1.0, 1.0)
+                    .motor_position(JointAxis::AngZ, 0.0, 1.0, 1.0);
                 joint
                     .insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
                     .insert(ImpulseJoint::new(root, rapier_joint))
             } else {
                 let rapier_joint = SphericalJointBuilder::new()
                     .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
-                    .local_anchor2(Vec3::new(0.0, joint_height, 0.0));
-                // .motor_position(JointAxis::X, 0.0, 1.0, 1.0)
-                // .motor_position(JointAxis::Y, 0.0, 1.0, 1.0)
-                // .motor_position(JointAxis::Z, 0.0, 1.0, 1.0);
+                    .local_anchor2(Vec3::new(0.0, joint_height, 0.0))
+                    .motor_position(JointAxis::AngX, 0.0, 1.0, 1.0)
+                    .motor_position(JointAxis::AngY, 0.0, 1.0, 1.0)
+                    .motor_position(JointAxis::AngZ, 0.0, 1.0, 1.0);
                 joint
                     .insert(Transform::from_xyz(0.0, joint_height, 0.0))
                     .insert(ImpulseJoint::new(prev_joint.unwrap(), rapier_joint))
