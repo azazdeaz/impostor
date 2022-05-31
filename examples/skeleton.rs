@@ -20,9 +20,9 @@ fn create_stem_skeleton(
     prev_section: Entity,
     prev_section_height: f32,
     rotation: Quat,
+    radius: (f32, f32),
 ) -> Vec<Entity> {
     let joint_height = 4.0;
-    let radius = 1.0;
     let mut prev_section = prev_section;
     let mut prev_section_height = prev_section_height;
     let mut sections = Vec::with_capacity(joint_count as usize);
@@ -30,11 +30,13 @@ fn create_stem_skeleton(
     for i in 0..joint_count {
         let transform =
             Transform::from_xyz(0.0, joint_height * (i as f32), 0.0).with_rotation(rotation);
-        let (rot_x, rot_y, rot_z) = if i == 0 {
-            rotation.to_euler(EulerRot::XYZ)
+        let (rot_y, rot_z, rot_x) = if i == 0 {
+            rotation.to_euler(EulerRot::YZX)
         } else {
             (0.0, 0.0, 0.0)
         };
+        let r = radius.0 + (radius.1 - radius.0) * (i as f32 / (joint_count - 1) as f32  );
+        println!("x: {} y: {} z: {}", rot_x, rot_y, rot_z);
         let section = commands
             .spawn()
             .insert(RigidBody::Dynamic)
@@ -42,7 +44,7 @@ fn create_stem_skeleton(
             .with_children(|children| {
                 children
                     .spawn()
-                    .insert(Collider::capsule_y(joint_height / 2.0, radius * 1.0))
+                    .insert(Collider::capsule_y(joint_height / 2.0, r))
                     .insert(CollisionGroups::new(0b1000, 0b0100))
                     .insert(Transform::from_xyz(0.0, joint_height / 2.0, 0.0));
             })
@@ -51,9 +53,9 @@ fn create_stem_skeleton(
         let rapier_joint = SphericalJointBuilder::new()
             .local_anchor1(Vec3::new(0.0, prev_section_height, 0.0))
             .local_anchor2(Vec3::new(0.0, 0.0, 0.0))
-            .motor_position(JointAxis::AngX, rot_x, 500000.0, 500.0)
-            .motor_position(JointAxis::AngY, rot_y, 500000.0, 500.0)
-            .motor_position(JointAxis::AngZ, rot_z, 500000.0, 500.0)
+            .motor_position(JointAxis::AngX, rot_x, 100000.0, 10000.0)
+            .motor_position(JointAxis::AngY, rot_y, 100000.0, 10000.0)
+            .motor_position(JointAxis::AngZ, rot_z, 100000.0, 10000.0)
             .motor_model(JointAxis::AngX, MotorModel::ForceBased)
             .motor_model(JointAxis::AngY, MotorModel::ForceBased)
             .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
@@ -84,6 +86,7 @@ fn setup_scene(mut commands: Commands) {
         root,
         0.0,
         Quat::from_euler(EulerRot::YZX, 0.0, 0.0, 0.0),
+        (0.6, 0.4)
     );
 
     create_stem_skeleton(
@@ -91,14 +94,16 @@ fn setup_scene(mut commands: Commands) {
         3,
         joints[1],
         0.0,
-        Quat::from_euler(EulerRot::YZX, 0.0, 1.0, 0.0),
+        Quat::from_euler(EulerRot::YZX, 0.0, 0.5, 0.0),
+    (0.5,0.2)
     );
     create_stem_skeleton(
         &mut commands,
         3,
-        joints[1],
+        joints[2],
         0.0,
-        Quat::from_euler(EulerRot::YZX, 0.0, -1.0, 0.0),
+        Quat::from_euler(EulerRot::YZX, 0.0, -0.2, 0.0),
+        (0.42,0.14)
     );
 
     /* Create the joint chain */
