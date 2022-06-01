@@ -45,7 +45,7 @@ fn setup_scene(mut commands: Commands) {
             .motor_position(JointAxis::AngX, 0.0, 500.0, 500.0)
             .motor_position(JointAxis::AngY, 0.0, 500.0, 500.0)
             .motor_position(JointAxis::AngZ, 0.0, 500.0, 500.0);
-;
+
         commands
             .entity(section)
             .insert(ImpulseJoint::new(prev_section, rapier_joint));

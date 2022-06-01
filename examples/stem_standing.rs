@@ -37,15 +37,19 @@ fn setup_scene(mut commands: Commands) {
                     .insert(Transform::from_xyz(0.0, joint_height / 2.0, 0.0));
             })
             .id();
-        
-        let local_anchor1_y = if prev_section == root { 0.0 } else { joint_height };
+
+        let local_anchor1_y = if prev_section == root {
+            0.0
+        } else {
+            joint_height
+        };
         let rapier_joint = SphericalJointBuilder::new()
             .local_anchor1(Vec3::new(0.0, local_anchor1_y, 0.0))
             .local_anchor2(Vec3::new(0.0, 0.0, 0.0))
             .motor_position(JointAxis::AngX, 0.0, 500.0, 500.0)
             .motor_position(JointAxis::AngY, 0.0, 500.0, 500.0)
             .motor_position(JointAxis::AngZ, 0.0, 500.0, 500.0);
-;
+
         commands
             .entity(section)
             .insert(ImpulseJoint::new(prev_section, rapier_joint));
