@@ -39,8 +39,8 @@ fn create_mesh_stem(
     let texture_handle = asset_server.load("tomato/AG15brn1.png");
 
     let d = (to - from).length();
-    let resolution = 1.0;
-    let ring_resolution = 3;
+    let resolution = 6.0;
+    let ring_resolution = 8;
     let levels = (d / resolution) as usize + 1;
     let level_height = d / levels as f32;
     let vertex_count = (levels + 1) * (ring_resolution + 1);
@@ -67,7 +67,7 @@ fn create_mesh_stem(
     );
     let inverse_bindposes = skinned_mesh_inverse_bindposes_assets
         .add(SkinnedMeshInverseBindposes::from(inverse_bindposes));
-    let inverse_bindposes =
+    // let inverse_bindposes =
     // skinned_mesh_inverse_bindposes_assets.add(SkinnedMeshInverseBindposes::from(vec![
     //     Mat4::from_translation(Vec3::new(-0.0, -0.0, -0.0)),
     //     Mat4::from_translation(Vec3::new(-0.0, -2.0, -0.0)),
@@ -114,7 +114,7 @@ fn create_mesh_stem(
         w1 /= sum;
         joint_weights.push([w0, w1, 0.0, 0.0]);
         // joint_weights.push([0.0f32, 1.0, 0.0, 0.0]);
-    }
+    };
 
     let quad_count = ring_resolution * levels;
     let mut indices = if enable_wireframe {
@@ -258,6 +258,7 @@ fn create_stem_skeleton(
             .spawn()
             .insert(RigidBody::Dynamic)
             .insert(transform)
+            .insert(GlobalTransform::identity())
             .with_children(|children| {
                 children
                     .spawn()
