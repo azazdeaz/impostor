@@ -34,15 +34,16 @@ fn create_mesh_stem(
     asset_server: Res<AssetServer>,
 ) {
     use std::f32::consts::PI;
-    let enable_wireframe = false;
+    let enable_wireframe = true;
 
     let texture_handle = asset_server.load("tomato/AG15brn1.png");
 
     let d = (to - from).length();
-    let resolution = 6.0;
-    let ring_resolution = 8;
-    let levels = (d / resolution) as usize + 1;
-    let level_height = d / levels as f32;
+    // rings per joint
+    let resolution = 0.5;
+    let ring_resolution = 3;
+    let levels = (d * resolution) as usize + 1;
+    let level_height = d as f32 / levels as f32;
     let vertex_count = (levels + 1) * (ring_resolution + 1);
     println!("joints.len() {}", joints.len());
     println!("vertex_count {}", vertex_count);
@@ -55,9 +56,12 @@ fn create_mesh_stem(
     let mut joint_indices = Vec::with_capacity(vertex_count);
     let mut joint_weights = Vec::with_capacity(vertex_count);
 
-    let inverse_bindposes = (0..joints.len())
+    let inverse_bindposes = (0..(joints.len()))
         .map(|i| {
-            Mat4::from_translation(from + (to - from) * (i as f32 / (joints.len() - 1) as f32))
+            let translation =
+                (from + (to - from) * (i as f32 / (joints.len() - 1) as f32)) * Vec3::splat(-1.0);
+            println!("T {:?}", translation);
+            Mat4::from_translation(translation)
         })
         .collect_vec();
     println!(
@@ -79,6 +83,7 @@ fn create_mesh_stem(
         let level = (n / (ring_resolution + 1)) as f32;
         let step = (n % (ring_resolution + 1)) as f32;
         let y = level * level_height;
+        println!("y {} level {} level_height {}", y, level, level_height);
         let theta = (step / ring_resolution as f32) * PI * 2.0;
 
         let level_p = level as f32 / levels as f32;
@@ -114,7 +119,7 @@ fn create_mesh_stem(
         w1 /= sum;
         joint_weights.push([w0, w1, 0.0, 0.0]);
         // joint_weights.push([0.0f32, 1.0, 0.0, 0.0]);
-    };
+    }
 
     let quad_count = ring_resolution * levels;
     let mut indices = if enable_wireframe {
@@ -152,16 +157,16 @@ fn create_mesh_stem(
         Mesh::new(PrimitiveTopology::TriangleList)
     };
     // Set mesh vertex positions
-    println!("\n\npositions: {} {:?}", positions.len(), positions);
+    // println!("\n\npositions: {} {:?}", positions.len(), positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
     // Set mesh vertex normals
-    println!("\n\nnormals: {} {:?}", normals.len(), normals);
+    // println!("\n\nnormals: {} {:?}", normals.len(), normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
 
     // Set mesh vertex UVs. Although the mesh doesn't have any texture applied,
     //  UVs are still required by the render pipeline. So these UVs are zeroed out.
-    println!("\n\nuvs: {} {:?}", uvs.len(), uvs);
+    // println!("\n\nuvs: {} {:?}", uvs.len(), uvs);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
     // Set mesh vertex joint indices for mesh skinning.
@@ -189,7 +194,7 @@ fn create_mesh_stem(
     // Tell bevy to construct triangles from a list of vertex indices,
     //  where each 3 vertex indices form an triangle.
 
-    println!("\n\nindices: {} {:?}", indices.len(), indices);
+    // println!("\n\nindices: {} {:?}", indices.len(), indices);
     mesh.set_indices(Some(Indices::U32(indices)));
 
     let mesh = meshes.add(mesh);
@@ -222,8 +227,7 @@ fn create_mesh_stem(
         .insert(SkinnedMesh {
             inverse_bindposes: inverse_bindposes.clone(),
             joints: joints,
-        })
-        ;
+        });
 }
 
 fn create_stem_skeleton(
@@ -237,7 +241,8 @@ fn create_stem_skeleton(
     let joint_height = 4.0;
     let mut prev_section = prev_section;
     let mut prev_section_height = prev_section_height;
-    let mut sections = Vec::with_capacity(joint_count as usize);
+    let mut sections = Vec::with_capacity(joint_count as usize + 1);
+    sections.push(prev_section);
 
     let draft = (0..joint_count).map(|i| {
         let transform =
@@ -299,7 +304,9 @@ fn setup_scene(
     let root = commands
         .spawn()
         .insert(RigidBody::Fixed)
-        // .insert(Transform::from_xyz(i as f32 * 1.5, 0.0, 0.0))
+
+        .insert(GlobalTransform::identity())
+        .insert(Transform::from_xyz(0.0, 0.0, 0.0))
         .id();
 
     let joint_count = 4;
