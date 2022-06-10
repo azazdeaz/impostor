@@ -40,8 +40,8 @@ fn create_mesh_stem(
 
     let d = (to - from).length();
     // rings per joint
-    let resolution = 0.5;
-    let ring_resolution = 3;
+    let resolution = 2.0;
+    let ring_resolution = 8;
     let levels = (d * resolution) as usize + 1;
     let level_height = d as f32 / levels as f32;
     let vertex_count = (levels + 1) * (ring_resolution + 1);
@@ -110,13 +110,14 @@ fn create_mesh_stem(
         // joint_indices.push([0u16, 1, 2, 3]);
 
         // 0..1.0 place of vertex btwn the two joints
-        let joint_p = (level_p * joints.len() as f32) % 1.0;
-        let mut w0 = (1.0 - joint_p).powi(2);
-        let mut w1 = joint_p.powi(2);
-        // normalize wights
-        let sum = w0 + w1;
-        w0 /= sum;
-        w1 /= sum;
+        let joint_p = (level_p * (joints.len()-1) as f32) % 1.0;
+        let mut w0 = 1.0 - joint_p;
+        let mut w1 = joint_p;
+        println!("n {} level_p {}, joint_p: {}, w0 {}, w1 {}",n, level_p, joint_p, w0, w1);
+        // normalize weights
+        // let sum = w0 + w1;
+        // w0 /= sum;
+        // w1 /= sum;
         joint_weights.push([w0, w1, 0.0, 0.0]);
         // joint_weights.push([0.0f32, 1.0, 0.0, 0.0]);
     }
@@ -127,7 +128,7 @@ fn create_mesh_stem(
     } else {
         Vec::with_capacity(quad_count * 6)
     };
-    for n in 0..quad_count {
+    for n in (quad_count/levels*0)..(quad_count/levels*levels) {
         let res = ring_resolution as u32;
         // number of vertices at one level
         let level_up = res + 1;
@@ -143,6 +144,8 @@ fn create_mesh_stem(
         let d = start + step1;
         let e = start + step1 + level_up;
         let f = start + step2 + level_up;
+        println!("n {}\ta:{}|{:?}\tb:{}|{:?}\tc:{}|{:?}", n, a, positions[a as usize], b, positions[b as usize], c, positions[c as usize]);
+        println!("n {}\ta:{:?}|{:?}\tb:{:?}|{:?}\tc:{:?}|{:?}", n, joint_indices[a as usize], joint_weights[a as usize], joint_indices[b as usize], joint_weights[b as usize], joint_indices[c as usize], joint_weights[c as usize]);
         if enable_wireframe {
             indices.extend_from_slice(&[a, b, b, c, c, a, d, e, e, f, f, d])
         } else {
@@ -227,7 +230,8 @@ fn create_mesh_stem(
         .insert(SkinnedMesh {
             inverse_bindposes: inverse_bindposes.clone(),
             joints: joints,
-        });
+        })
+        ;
 }
 
 fn create_stem_skeleton(
@@ -242,17 +246,17 @@ fn create_stem_skeleton(
     let mut prev_section = prev_section;
     let mut prev_section_height = prev_section_height;
     let mut sections = Vec::with_capacity(joint_count as usize + 1);
-    sections.push(prev_section);
 
-    let draft = (0..joint_count).map(|i| {
+    let draft = (0..joint_count+1).map(|i| {
         let transform =
             Transform::from_xyz(0.0, joint_height * (i as f32), 0.0).with_rotation(rotation);
 
         let r = radius.0 + (radius.1 - radius.0) * (i as f32 / (joint_count - 1) as f32);
         (transform, r)
-    });
+    }).collect_vec();
+    let (draft_end, draft_joints) =  draft.split_last().unwrap();
 
-    for (i, (transform, r)) in draft.enumerate() {
+    for (i, (transform, r)) in draft_joints.iter().enumerate() {
         let (rot_y, rot_z, rot_x) = if i == 0 {
             rotation.to_euler(EulerRot::YZX)
         } else {
@@ -262,12 +266,12 @@ fn create_stem_skeleton(
         let section = commands
             .spawn()
             .insert(RigidBody::Dynamic)
-            .insert(transform)
+            .insert(*transform)
             .insert(GlobalTransform::identity())
             .with_children(|children| {
                 children
                     .spawn()
-                    .insert(Collider::capsule_y(joint_height / 2.0, r))
+                    .insert(Collider::capsule_y(joint_height / 2.0, *r))
                     .insert(CollisionGroups::new(0b1000, 0b0100))
                     .insert(Transform::from_xyz(0.0, joint_height / 2.0, 0.0));
             })
@@ -276,9 +280,9 @@ fn create_stem_skeleton(
         let rapier_joint = SphericalJointBuilder::new()
             .local_anchor1(Vec3::new(0.0, prev_section_height, 0.0))
             .local_anchor2(Vec3::new(0.0, 0.0, 0.0))
-            .motor_position(JointAxis::AngX, rot_x, 100000.0, 10000.0)
-            .motor_position(JointAxis::AngY, rot_y, 100000.0, 10000.0)
-            .motor_position(JointAxis::AngZ, rot_z, 100000.0, 10000.0)
+            .motor_position(JointAxis::AngX, rot_x, 90000.0 * *r, 10000.0)
+            .motor_position(JointAxis::AngY, rot_y, 90000.0 * *r, 10000.0)
+            .motor_position(JointAxis::AngZ, rot_z, 90000.0 * *r, 10000.0)
             .motor_model(JointAxis::AngX, MotorModel::ForceBased)
             .motor_model(JointAxis::AngY, MotorModel::ForceBased)
             .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
@@ -291,6 +295,20 @@ fn create_stem_skeleton(
         sections.push(section);
         prev_section_height = joint_height;
     }
+
+    let end_joint = FixedJointBuilder::new()
+        .local_anchor1(Vec3::new(0.0, prev_section_height, 0.0))
+        .local_anchor2(Vec3::new(0.0, 0.0, 0.0));
+    let end_section = commands.spawn()
+        .insert(RigidBody::Dynamic)
+        .insert(draft_end.0)
+        .insert(GlobalTransform::identity())
+        .insert(ImpulseJoint::new(prev_section, end_joint))
+        .insert(Collider::ball(draft_end.1))
+        .insert(CollisionGroups::new(0b1000, 0b0100))
+        .id();
+    sections.push(end_section);
+
     return sections;
 }
 
@@ -304,7 +322,6 @@ fn setup_scene(
     let root = commands
         .spawn()
         .insert(RigidBody::Fixed)
-
         .insert(GlobalTransform::identity())
         .insert(Transform::from_xyz(0.0, 0.0, 0.0))
         .id();
