@@ -144,7 +144,7 @@ fn setup_plant(
     }));
 
     println!(">> {:?}", plant.borrow());
-    for _ in 0..12 {
+    for _ in 0..16 {
         step(Rc::clone(&plant));
         println!(">> {:?}", plant.borrow());
     }
@@ -165,16 +165,16 @@ fn build_joints(commands: &mut Commands, ln: &LNode, prev_joint: Entity) {
                 .spawn()
                 .insert(Collider::capsule_y(ln.data.length / 2.0, ln.data.radius))
                 .insert(CollisionGroups::new(0b1000, 0b0100))
-                .insert(Transform::from_xyz(0.0, ln.data.length / 2.0, 0.0));
+                .insert(Transform::from_xyz(0.0, -ln.data.length / 2.0, 0.0));
         })
         .id();
 
     let rapier_joint = SphericalJointBuilder::new()
         .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
-        .local_anchor2(Vec3::new(0.0, ln.data.length, 0.0))
-        .motor_position(JointAxis::AngX, rot_x, 90000.0 * ln.data.radius, 10000.0)
-        .motor_position(JointAxis::AngY, rot_y, 90000.0 * ln.data.radius, 10000.0)
-        .motor_position(JointAxis::AngZ, rot_z, 90000.0 * ln.data.radius, 10000.0)
+        .local_anchor2(Vec3::new(0.0, -ln.data.length, 0.0))
+        .motor_position(JointAxis::AngX, rot_x, 2000.0 * ln.data.radius, 10000.0)
+        .motor_position(JointAxis::AngY, rot_y, 2000.0 * ln.data.radius, 10000.0)
+        .motor_position(JointAxis::AngZ, rot_z, 2000.0 * ln.data.radius, 10000.0)
         .motor_model(JointAxis::AngX, MotorModel::ForceBased)
         .motor_model(JointAxis::AngY, MotorModel::ForceBased)
         .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
@@ -202,11 +202,11 @@ fn setup_scene(mut commands: Commands) {
         .insert(RigidBody::Dynamic)
         .insert(Collider::ball(1.0))
         .insert(Restitution::coefficient(0.7))
-        .insert(Transform::from_xyz(0.1, (4.0 as f32) * 4.0 + 4.0, 0.1));
+        .insert(Transform::from_xyz(0.1, (6.0 as f32) * 4.0 + 4.0, 0.1));
 
     commands.spawn_bundle(PerspectiveCameraBundle {
-        transform: Transform::from_xyz(-13.0 / 2.0, 16.0 / 2.0, 17.0 / 2.0)
-            .looking_at(Vec3::new(0.0, -3.0, 0.0), Vec3::Y),
+        transform: Transform::from_xyz(-13.0 / 1.0, 24.0 / 1.0, 17.0 / 1.0)
+            .looking_at(Vec3::new(0.0, 8.0, 0.0), Vec3::Y),
         ..default()
     });
 }
