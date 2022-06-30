@@ -1,4 +1,5 @@
 use bevy::{
+    app::ScheduleRunnerSettings,
     prelude::*,
     render::mesh::{
         skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
@@ -16,6 +17,9 @@ use std::{cell::RefCell, fmt};
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
+        .insert_resource(ScheduleRunnerSettings {
+            run_mode: bevy::app::RunMode::Loop { wait: None },
+        })
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
@@ -24,53 +28,17 @@ fn main() {
         .run();
 }
 
-#[derive(Clone)]
-struct LNode {
-    next: Option<Rc<RefCell<LNode>>>,
-    prev: Option<Rc<RefCell<LNode>>>,
-    branches: Vec<Rc<RefCell<LNode>>>,
-    data: StemSection,
-}
-impl Default for LNode {
-    fn default() -> Self {
-        LNode {
-            next: None,
-            prev: None,
-            branches: Vec::new(),
-            data: StemSection::default(),
-        }
-    }
-}
-impl fmt::Debug for LNode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let next = if let Some(next) = self.next.as_ref() {
-            format!(" > ${:?}", next.borrow())
-        } else {
-            " |".to_string()
-        };
-        write!(
-            f,
-            "Stem {:.3?}/{:.3?}{}",
-            self.data.length, self.data.radius, next
-        )
-    }
-}
-// impl LNode {
-//     fn step(&mut self) {
-//         self.data.length += (1.0 - self.data.length) / 6.0;
-//         println!("_3length {}", self.data.length);
-//     }
-// }
 
-#[derive(Debug, Clone)]
-struct StemSection {
+#[derive(Component, Debug, Clone)]
+struct Stem {
     order: u32,
     length: f32,
     max_length: f32,
     radius: f32,
     direction: Quat,
 }
-impl Default for StemSection {
+
+impl Default for Stem {
     fn default() -> Self {
         Self {
             order: 0,
@@ -82,39 +50,37 @@ impl Default for StemSection {
     }
 }
 
-fn step(ln: Rc<RefCell<LNode>>) {
-    grow(&mut ln.borrow_mut());
-    extend(&mut ln.borrow_mut());
-
-    if ln.borrow().next.is_some() {
-        step(Rc::clone(ln.borrow().next.as_ref().unwrap()))
+fn grow(query: Query<(&Parent, &mut Stem)>, parent_stem: Query<&Stem>) {
+    for (parent, stem) in query.iter_mut() {
+        stem.length += (stem.max_length - stem.length) / 3.0;
+        let parent = parent_stem.get(parent.0);
+        let prev_radius = if let Ok(parent) = parent {
+            parent.radius
+        } else {
+            1.0
+        };
+        stem.radius += (prev_radius - stem.radius) / 12.0;
     }
 }
 
-fn grow(ln: &mut LNode) {
-    ln.data.length += (ln.data.max_length - ln.data.length) / 3.0;
-    let prev_radius = if let Some(prev) = ln.prev.as_ref() {
-        prev.borrow().data.radius
-    } else {
-        1.0
-    };
-    ln.data.radius += (prev_radius - ln.data.radius) / 12.0;
-}
-
-fn extend(ln: &mut LNode) {
-    if ln.data.length > ln.data.max_length * 0.8 && ln.next.is_none() {
-        ln.next = Some(Rc::new(RefCell::new(LNode {
-            next: None,
-            prev: None,
-            branches: Vec::new(),
-            data: StemSection {
-                order: ln.data.order,
+fn extend(
+    mut commands: Commands,
+    query: Query<(Entity, &mut Stem, &Children)>,
+    child_stem: Query<&Stem>,
+) {
+    for (stem_entity, stem, children) in query.iter_mut() {
+        let has_following = children.iter().any(|c| child_stem.get(*c).is_ok());
+        if !has_following {}
+        if stem.length > stem.max_length * 0.8 && !has_following {
+            let next = commands.spawn().insert(Stem {
+                order: stem.order,
                 length: 0.2,
                 max_length: 4.0,
                 radius: 0.001,
                 direction: Quat::default(),
-            },
-        })));
+            }).id();
+            commands.entity(stem_entity).push_children(&[next]);
+        }
     }
 }
 
@@ -125,68 +91,19 @@ fn setup_plant(
     // mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     // asset_server: Res<AssetServer>,
 ) {
+    commands.spawn().insert(Stem {
+        order: 0,
+        length: 0.2,
+        max_length: 4.0,
+        radius: 0.001,
+        direction: Quat::default(),
+    });
     let root_joint = commands
         .spawn()
         .insert(RigidBody::Fixed)
         .insert(GlobalTransform::identity())
         .insert(Transform::from_xyz(0.0, 0.0, 0.0))
         .id();
-
-    let plant = Rc::new(RefCell::new(LNode {
-        data: StemSection {
-            order: 0,
-            length: 0.2,
-            max_length: 4.0,
-            radius: 0.001,
-            direction: Quat::default(),
-        },
-        ..Default::default()
-    }));
-
-    println!(">> {:?}", plant.borrow());
-    for _ in 0..16 {
-        step(Rc::clone(&plant));
-        println!(">> {:?}", plant.borrow());
-    }
-    build_joints(&mut commands, &plant.borrow(), root_joint);
-}
-
-fn build_joints(commands: &mut Commands, ln: &LNode, prev_joint: Entity) {
-    let transform = Transform::from_xyz(0.0, ln.data.length, 0.0);
-    let (rot_y, rot_z, rot_x) = (0.0, 0.0, 0.0); //transform.rotation.to_euler(EulerRot::YZX);
-    println!("rot_x {} rot_y {} rot_z {}", rot_x, rot_y, rot_z);
-    let section = commands
-        .spawn()
-        .insert(RigidBody::Dynamic)
-        .insert(transform)
-        .insert(GlobalTransform::identity())
-        .with_children(|children| {
-            children
-                .spawn()
-                .insert(Collider::capsule_y(ln.data.length / 2.0, ln.data.radius))
-                .insert(CollisionGroups::new(0b1000, 0b0100))
-                .insert(Transform::from_xyz(0.0, -ln.data.length / 2.0, 0.0));
-        })
-        .id();
-
-    let rapier_joint = SphericalJointBuilder::new()
-        .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
-        .local_anchor2(Vec3::new(0.0, -ln.data.length, 0.0))
-        .motor_position(JointAxis::AngX, rot_x, 2000.0 * ln.data.radius, 10000.0)
-        .motor_position(JointAxis::AngY, rot_y, 2000.0 * ln.data.radius, 10000.0)
-        .motor_position(JointAxis::AngZ, rot_z, 2000.0 * ln.data.radius, 10000.0)
-        .motor_model(JointAxis::AngX, MotorModel::ForceBased)
-        .motor_model(JointAxis::AngY, MotorModel::ForceBased)
-        .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
-    commands
-        .entity(section)
-        .insert(ImpulseJoint::new(prev_joint, rapier_joint));
-    // commands.entity(prev_section).push_children(&[section]); // Is this needed?
-
-    if ln.next.is_some() {
-        let next = Rc::clone(ln.next.as_ref().unwrap());
-        build_joints(commands, &next.borrow_mut(), section);
-    }
 }
 
 fn setup_scene(mut commands: Commands) {
