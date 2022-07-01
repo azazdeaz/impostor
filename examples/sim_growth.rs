@@ -31,8 +31,8 @@ fn main() {
             SystemSet::new()
                 .with_run_criteria(run_if_growing)
                 .with_system(count_grow_steps)
-                // .with_system(grow)
-                // .with_system(extend),
+                .with_system(grow)
+                .with_system(extend),
         )
         .run();
 }
@@ -90,42 +90,92 @@ impl Default for Stem {
     }
 }
 
-fn grow(mut query: Query<(&Parent, &mut Stem)>, parent_stem: Query<&Stem>) {
-    for (parent, mut stem) in query.iter_mut() {
-        stem.length += (stem.max_length - stem.length) / 3.0;
-        let parent = parent_stem.get(parent.0);
-        let prev_radius = if let Ok(parent) = parent {
+fn grow(q_id: Query<(Entity, &Parent), With<Stem>>, mut q_stem: Query<&mut Stem>) {
+    for (stem_id, parent) in q_id.iter() {
+        let prev_radius = if let Ok(parent) = q_stem.get(parent.0) {
             parent.radius
         } else {
             1.0
         };
-        stem.radius += (prev_radius - stem.radius) / 12.0;
+        if let Ok(mut stem) = q_stem.get_mut(stem_id) {
+            stem.length += (stem.max_length - stem.length) / 3.0;
+            stem.radius += (prev_radius - stem.radius) / 12.0;
+        }
     }
 }
 
 fn extend(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Stem, &Children)>,
-    child_stem: Query<&Stem>,
+    q_id: Query<(Entity, &Children), With<Stem>>,
+    q_stem: Query<&Stem>,
 ) {
-    for (stem_entity, mut stem, children) in query.iter_mut() {
-        let has_following = children.iter().any(|c| child_stem.get(*c).is_ok());
-        if !has_following {}
-        if stem.length > stem.max_length * 0.8 && !has_following {
-            let next = commands
-                .spawn()
-                .insert(Stem {
-                    order: stem.order,
-                    length: 0.2,
-                    max_length: 4.0,
-                    radius: 0.001,
-                    direction: Quat::default(),
-                })
-                .id();
-            commands.entity(stem_entity).push_children(&[next]);
+    for (stem_id, children) in q_id.iter() {
+        let has_following = children.iter().any(|c| q_stem.get(*c).is_ok());
+
+        if let Ok(stem) = q_stem.get(stem_id) {
+            if stem.length > stem.max_length * 0.8 && !has_following {
+                let next = commands
+                    .spawn()
+                    .insert(Stem {
+                        order: stem.order,
+                        length: 0.2,
+                        max_length: 4.0,
+                        radius: 0.001,
+                        direction: Quat::default(),
+                    })
+                    .id();
+                commands.entity(stem_id).push_children(&[next]);
+            }
         }
     }
 }
+// fn extend(q_id: Query<(Entity, &Parent), With<Stem>>, mut q_stem: Query<&mut Stem>) {
+//     for (stem_id, parent) in q_id.iter() {
+//         let prev_radius = if let Ok(parent) = q_stem.get(parent.0) {
+//             parent.radius
+//         } else {
+//             1.0
+//         };
+//         if let Ok(mut stem) = q_stem.get_mut(stem_id) {
+//             stem.length += (stem.max_length - stem.length) / 3.0;
+//             stem.radius += (prev_radius - stem.radius) / 12.0;
+//         }
+//     }
+// }
+
+// fn grow(set: ParamSet<(Query<(&Parent, & Stem)>, Query<&Stem>)>) {
+//     for (parent, stem) in set.p0().iter() {
+//         // stem.length += (stem.max_length - stem.length) / 3.0;
+//         set.p1().get(parent.0);
+//         // let parent = query.get_mut(parent.0);
+//         // let prev_radius = if let Ok((_, parent)) = parent {
+//         //     parent.radius
+//         // } else {
+//         //     1.0
+//         // };
+//         // stem.radius += (prev_radius - stem.radius) / 12.0;
+//     }
+// }
+
+// #[derive(Component)]
+// struct Thing {
+//     size: f32,
+// }
+
+// fn grow(query_parents: Query<(Entity, &Parent), With<Thing>>, mut query_sizes: Query<&mut Thing>) {
+//     for (thing_id, parent) in query_parents.iter() {
+//         let parent_size = if let Ok(parent) = query_sizes.get(parent.0) {
+//             parent.size
+//         } else {
+//             1.0
+//         };
+//         if let Ok(mut thing) = query_sizes.get_mut(thing_id) {
+//             thing.size += (parent_size - thing.size) / 12.0;
+//         }
+//     }
+// }
+
+
 
 fn setup_plant(
     mut commands: Commands,
