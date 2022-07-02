@@ -7,6 +7,7 @@ use bevy::{
         Indices, PrimitiveTopology,
     },
 };
+use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
 use bevy_rapier3d::{
     prelude::*,
     rapier::prelude::{JointAxis, MotorModel},
@@ -15,14 +16,18 @@ use itertools::Itertools;
 use std::rc::Rc;
 use std::{cell::RefCell, fmt};
 
+
+
+
+
+
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
-        .insert_resource(ScheduleRunnerSettings {
-            run_mode: bevy::app::RunMode::Loop { wait: None },
-        })
-        .insert_resource(GrowSteps::from_steps(6))
         .add_plugins(DefaultPlugins)
+        .insert_resource(GrowSteps::from_steps(6))
+        .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
+        .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_startup_system(setup_plant)
@@ -34,25 +39,35 @@ fn main() {
                 .with_system(grow)
                 .with_system(extend),
         )
+        .add_system(update_mesh)
+        .register_type::<Stem>() 
         .run();
 }
 
+#[derive(Inspectable, Default)]
 struct GrowSteps {
     current: u32,
+    #[inspectable(min = 1, max = 30)]
     max: u32,
+    mesh_updated: bool,
 }
 impl GrowSteps {
     fn from_steps(max: u32) -> Self {
         Self {
             current: 0,
             max: max,
+            mesh_updated: false,
         }
     }
     fn step(&mut self) {
         self.current += 1;
+        self.mesh_updated = false;
     }
     fn is_done(&self) -> bool {
         self.max <= self.current
+    }
+    fn set_mesh_updated(&mut self) {
+        self.mesh_updated = true;
     }
 }
 
@@ -69,7 +84,11 @@ fn count_grow_steps(mut grow_steps: ResMut<GrowSteps>) {
     grow_steps.step();
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component)]
+struct AxisRoot {}
+
+#[derive(Reflect, Component, Debug, Clone)]
+#[reflect(Component)]
 struct Stem {
     order: u32,
     length: f32,
@@ -90,10 +109,14 @@ impl Default for Stem {
     }
 }
 
-fn grow(q_id: Query<(Entity, &Parent), With<Stem>>, mut q_stem: Query<&mut Stem>) {
+fn grow(q_id: Query<(Entity, Option<&Parent>), With<Stem>>, mut q_stem: Query<&mut Stem>) {
     for (stem_id, parent) in q_id.iter() {
-        let prev_radius = if let Ok(parent) = q_stem.get(parent.0) {
-            parent.radius
+        let prev_radius = if let Some(parent) = parent {
+            if let Ok(parent) = q_stem.get(parent.0) {
+                parent.radius
+            } else {
+                1.0
+            }
         } else {
             1.0
         };
@@ -106,11 +129,11 @@ fn grow(q_id: Query<(Entity, &Parent), With<Stem>>, mut q_stem: Query<&mut Stem>
 
 fn extend(
     mut commands: Commands,
-    q_id: Query<(Entity, &Children), With<Stem>>,
+    q_id: Query<(Entity, Option<&Children>), With<Stem>>,
     q_stem: Query<&Stem>,
 ) {
     for (stem_id, children) in q_id.iter() {
-        let has_following = children.iter().any(|c| q_stem.get(*c).is_ok());
+        let has_following = children.is_some(); //.iter().any(|c| q_stem.contains(*c));
 
         if let Ok(stem) = q_stem.get(stem_id) {
             if stem.length > stem.max_length * 0.8 && !has_following {
@@ -125,6 +148,29 @@ fn extend(
                     })
                     .id();
                 commands.entity(stem_id).push_children(&[next]);
+            }
+        }
+    }
+}
+
+fn update_mesh(
+    mut grow_steps: ResMut<GrowSteps>,
+    q_root: Query<Entity, With<AxisRoot>>,
+    q_stems: Query<(&Stem, &Children)>,
+) {
+    if !grow_steps.is_done() || grow_steps.mesh_updated {
+        return;
+    }
+    grow_steps.set_mesh_updated();
+
+    for root in q_root.iter() {
+        let mut prev = Some(&root);
+        while let Some(stem_id) = prev {
+            prev = if let Ok((stem, children)) = q_stems.get(*stem_id) {
+                println!("STEM {:?}", stem);
+                children.first()
+            } else {
+                None
             }
         }
     }
@@ -175,8 +221,6 @@ fn extend(
 //     }
 // }
 
-
-
 fn setup_plant(
     mut commands: Commands,
     // mut meshes: ResMut<Assets<Mesh>>,
@@ -184,13 +228,17 @@ fn setup_plant(
     // mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     // asset_server: Res<AssetServer>,
 ) {
-    commands.spawn().insert(Stem {
-        order: 0,
-        length: 0.2,
-        max_length: 4.0,
-        radius: 0.001,
-        direction: Quat::default(),
-    });
+    commands
+        .spawn()
+        .insert(Name::new("Root Node"))
+        .insert(Stem {
+            order: 0,
+            length: 0.2,
+            max_length: 4.0,
+            radius: 0.001,
+            direction: Quat::default(),
+        })
+        .insert(AxisRoot {});
     let root_joint = commands
         .spawn()
         .insert(RigidBody::Fixed)
