@@ -1,15 +1,10 @@
 use bevy::{
     prelude::*,
-    render::mesh::{
-        skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
-        Indices, PrimitiveTopology,
-    },
 };
 use bevy_rapier3d::{
     prelude::*,
     rapier::prelude::{JointAxis, MotorModel},
 };
-use itertools::Itertools;
 use std::rc::Rc;
 use std::{cell::RefCell, fmt};
 

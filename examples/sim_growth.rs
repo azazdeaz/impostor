@@ -1,5 +1,4 @@
 use bevy::{
-    app::ScheduleRunnerSettings,
     ecs::schedule::ShouldRun,
     prelude::*,
     render::mesh::{
@@ -16,16 +15,11 @@ use itertools::Itertools;
 use std::rc::Rc;
 use std::{cell::RefCell, fmt};
 
-
-
-
-
-
 fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
-        .insert_resource(GrowSteps::from_steps(6))
+        .insert_resource(GrowSteps::from_steps(16))
         .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
@@ -40,7 +34,8 @@ fn main() {
                 .with_system(extend),
         )
         .add_system(update_mesh)
-        .register_type::<Stem>() 
+        .add_system(add_bodies)
+        .register_type::<Stem>()
         .run();
 }
 
@@ -153,6 +148,76 @@ fn extend(
     }
 }
 
+// fn create_plant_joint(stiffness:f32, damping: f32) -> SphericalJointBuilder {
+//     let rapier_joint = SphericalJointBuilder::new()
+//         .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
+//         .local_anchor2(Vec3::new(0.0, -ln.data.length, 0.0))
+//         .motor_position(JointAxis::AngX, rot_x, stiffness, damping)
+//         .motor_position(JointAxis::AngY, rot_y, stiffness, damping)
+//         .motor_position(JointAxis::AngZ, rot_z, stiffness, damping)
+//         .motor_model(JointAxis::AngX, MotorModel::ForceBased)
+//         .motor_model(JointAxis::AngY, MotorModel::ForceBased)
+//         .motor_model(JointAxis::AngZ, MotorModel::ForceBased)
+// }
+
+fn add_bodies(
+    mut commands: Commands,
+    mut grow_steps: ResMut<GrowSteps>,
+    q_root: Query<Entity, (With<AxisRoot>, Without<RigidBody>)>,
+    q_stems: Query<(&Stem, Option<&Children>)>,
+) {
+    if !grow_steps.is_done() {
+        return;
+    }
+
+    for root in q_root.iter() {
+        let base = commands
+            .spawn()
+            .insert(RigidBody::Fixed)
+            .insert(GlobalTransform::identity())
+            .insert(Transform::from_xyz(0.0, 0.0, 0.0))
+            .id();
+        let mut next_step = Some((base, root));
+        while let Some((prev_node, node)) = next_step {
+            next_step = None;
+
+            if let Some((stem, children)) = q_stems.get(node).ok() {
+                let transform = Transform::from_xyz(0.0, stem.length, 0.0);
+                let (rot_y, rot_z, rot_x) = (0.0, 0.0, 0.0); //transform.rotation.to_euler(EulerRot::YZX);
+                println!("rot_x {} rot_y {} rot_z {}", rot_x, rot_y, rot_z);
+
+                let rapier_joint = SphericalJointBuilder::new()
+                    .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
+                    .local_anchor2(Vec3::new(0.0, -stem.length, 0.0))
+                    .motor_position(JointAxis::AngX, rot_x, 2000.0 * stem.radius, 10000.0)
+                    .motor_position(JointAxis::AngY, rot_y, 2000.0 * stem.radius, 10000.0)
+                    .motor_position(JointAxis::AngZ, rot_z, 2000.0 * stem.radius, 10000.0)
+                    .motor_model(JointAxis::AngX, MotorModel::ForceBased)
+                    .motor_model(JointAxis::AngY, MotorModel::ForceBased)
+                    .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
+
+                commands
+                    .entity(node)
+                    .insert(RigidBody::Dynamic)
+                    .insert(transform)
+                    .insert(GlobalTransform::identity())
+                    .with_children(|children| {
+                        children
+                            .spawn()
+                            .insert(Collider::capsule_y(stem.length / 2.0, stem.radius))
+                            .insert(CollisionGroups::new(0b1000, 0b0100))
+                            .insert(Transform::from_xyz(0.0, -stem.length / 2.0, 0.0));
+                    })
+                    .insert(ImpulseJoint::new(prev_node, rapier_joint));
+
+                next_step = children
+                    .and_then(|children| children.iter().find(|c| q_stems.get(**c).is_ok()))
+                    .and_then(|next| Some((node, *next)));
+            }
+        }
+    }
+}
+
 fn update_mesh(
     mut grow_steps: ResMut<GrowSteps>,
     q_root: Query<Entity, With<AxisRoot>>,
@@ -175,51 +240,6 @@ fn update_mesh(
         }
     }
 }
-// fn extend(q_id: Query<(Entity, &Parent), With<Stem>>, mut q_stem: Query<&mut Stem>) {
-//     for (stem_id, parent) in q_id.iter() {
-//         let prev_radius = if let Ok(parent) = q_stem.get(parent.0) {
-//             parent.radius
-//         } else {
-//             1.0
-//         };
-//         if let Ok(mut stem) = q_stem.get_mut(stem_id) {
-//             stem.length += (stem.max_length - stem.length) / 3.0;
-//             stem.radius += (prev_radius - stem.radius) / 12.0;
-//         }
-//     }
-// }
-
-// fn grow(set: ParamSet<(Query<(&Parent, & Stem)>, Query<&Stem>)>) {
-//     for (parent, stem) in set.p0().iter() {
-//         // stem.length += (stem.max_length - stem.length) / 3.0;
-//         set.p1().get(parent.0);
-//         // let parent = query.get_mut(parent.0);
-//         // let prev_radius = if let Ok((_, parent)) = parent {
-//         //     parent.radius
-//         // } else {
-//         //     1.0
-//         // };
-//         // stem.radius += (prev_radius - stem.radius) / 12.0;
-//     }
-// }
-
-// #[derive(Component)]
-// struct Thing {
-//     size: f32,
-// }
-
-// fn grow(query_parents: Query<(Entity, &Parent), With<Thing>>, mut query_sizes: Query<&mut Thing>) {
-//     for (thing_id, parent) in query_parents.iter() {
-//         let parent_size = if let Ok(parent) = query_sizes.get(parent.0) {
-//             parent.size
-//         } else {
-//             1.0
-//         };
-//         if let Ok(mut thing) = query_sizes.get_mut(thing_id) {
-//             thing.size += (parent_size - thing.size) / 12.0;
-//         }
-//     }
-// }
 
 fn setup_plant(
     mut commands: Commands,
