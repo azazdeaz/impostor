@@ -81,73 +81,91 @@ fn count_grow_steps(mut grow_steps: ResMut<GrowSteps>) {
 
 #[derive(Component)]
 struct AxisRoot {}
+#[derive(Component)]
+struct NextAxe(Entity);
 
-#[derive(Reflect, Component, Debug, Clone)]
+#[derive(Component, Debug)]
+struct Length(f32);
+#[derive(Component, Debug)]
+struct Radius(f32);
+
+#[derive(Reflect, Default, Component, Debug, Clone)]
 #[reflect(Component)]
 struct Stem {
     order: u32,
-    length: f32,
     max_length: f32,
-    radius: f32,
     direction: Quat,
 }
 
-impl Default for Stem {
+#[derive(Bundle)]
+struct StemBundle {
+    stem: Stem,
+    length: Length,
+    radius: Radius,
+}
+
+impl Default for StemBundle {
     fn default() -> Self {
         Self {
-            order: 0,
-            length: 1.0,
-            max_length: 4.0,
-            radius: 1.0,
-            direction: Quat::default(),
+            stem: Stem {
+                order: 0,
+                max_length: 4.0,
+                direction: Quat::default(),
+            },
+            length: Length(1.0),
+            radius: Radius(1.0),
         }
     }
 }
 
-fn grow(q_id: Query<(Entity, Option<&Parent>), With<Stem>>, mut q_stem: Query<&mut Stem>) {
-    for (stem_id, parent) in q_id.iter() {
-        let prev_radius = if let Some(parent) = parent {
-            if let Ok(parent) = q_stem.get(parent.0) {
-                parent.radius
-            } else {
-                1.0
-            }
-        } else {
-            1.0
-        };
-        if let Ok(mut stem) = q_stem.get_mut(stem_id) {
-            stem.length += (stem.max_length - stem.length) / 3.0;
-            stem.radius += (prev_radius - stem.radius) / 12.0;
-        }
+fn grow(mut commands: Commands, query: Query<(Entity, Option<&Parent>, &Radius, &Length, &Stem)>) {
+    for (stem_id, parent, Radius(radius), Length(length), stem) in query.iter() {
+        let prev_radius = parent
+            .and_then(|parent| query.get(parent.0).ok())
+            .and_then(|q| Some((*q.2).0))
+            .unwrap_or(1.0);
+        commands
+            .entity(stem_id)
+            .insert(Radius(radius + (prev_radius - radius) / 12.0))
+            .insert(Length(length + (stem.max_length - length) / 3.0));
     }
 }
 
-fn extend(
-    mut commands: Commands,
-    q_id: Query<(Entity, Option<&Children>), With<Stem>>,
-    q_stem: Query<&Stem>,
-) {
-    for (stem_id, children) in q_id.iter() {
-        let has_following = children.is_some(); //.iter().any(|c| q_stem.contains(*c));
-
-        if let Ok(stem) = q_stem.get(stem_id) {
-            if stem.length > stem.max_length * 0.8 && !has_following {
-                let next = commands
-                    .spawn()
-                    .insert(Stem {
+fn extend(mut commands: Commands, query: Query<(Entity, &Stem, &Length), (Without<NextAxe>)>) {
+    for (id, stem, Length(length)) in query.iter() {
+        if *length > stem.max_length * 0.8 {
+            let next = commands
+                .spawn()
+                .insert_bundle(StemBundle {
+                    stem: Stem {
                         order: stem.order,
-                        length: 0.2,
                         max_length: 4.0,
-                        radius: 0.001,
                         direction: Quat::default(),
-                    })
-                    .id();
-                commands.entity(stem_id).push_children(&[next]);
-            }
+                    },
+                    length: Length(0.2),
+                    radius: Radius(0.001),
+                    ..Default::default()
+                })
+                .id();
+            commands
+                .entity(id)
+                .push_children(&[next])
+                .insert(NextAxe(next));
         }
     }
 }
 
+// fn branch_out(q_root: Query<(Entity, &NextAxe), (With<AxisRoot>, With)>, q_stem: Query<(&Stem, &NextAxe)>) {
+//     for root in q_root.iter() {
+//         let mut no_branch_length = 0.0;
+//         let mut prev = root;
+//         while len(next) = q_stem()
+//         if let Ok(mut stem) = q_stem.get_mut(stem_id) {
+//             stem.length += (stem.max_length - stem.length) / 3.0;
+//             stem.radius += (prev_radius - stem.radius) / 12.0;
+//         }
+//     }
+// }
 // fn create_plant_joint(stiffness:f32, damping: f32) -> SphericalJointBuilder {
 //     let rapier_joint = SphericalJointBuilder::new()
 //         .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
@@ -164,7 +182,7 @@ fn add_bodies(
     mut commands: Commands,
     mut grow_steps: ResMut<GrowSteps>,
     q_root: Query<Entity, (With<AxisRoot>, Without<RigidBody>)>,
-    q_stems: Query<(&Stem, Option<&Children>)>,
+    q_stems: Query<(&Stem, &Length, &Radius, Option<&Children>)>,
 ) {
     if !grow_steps.is_done() {
         return;
@@ -181,17 +199,17 @@ fn add_bodies(
         while let Some((prev_node, node)) = next_step {
             next_step = None;
 
-            if let Some((stem, children)) = q_stems.get(node).ok() {
-                let transform = Transform::from_xyz(0.0, stem.length, 0.0);
+            if let Some((stem, Length(length), Radius(radius), children)) = q_stems.get(node).ok() {
+                let transform = Transform::from_xyz(0.0, *length, 0.0);
                 let (rot_y, rot_z, rot_x) = (0.0, 0.0, 0.0); //transform.rotation.to_euler(EulerRot::YZX);
                 println!("rot_x {} rot_y {} rot_z {}", rot_x, rot_y, rot_z);
 
                 let rapier_joint = SphericalJointBuilder::new()
                     .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
-                    .local_anchor2(Vec3::new(0.0, -stem.length, 0.0))
-                    .motor_position(JointAxis::AngX, rot_x, 2000.0 * stem.radius, 10000.0)
-                    .motor_position(JointAxis::AngY, rot_y, 2000.0 * stem.radius, 10000.0)
-                    .motor_position(JointAxis::AngZ, rot_z, 2000.0 * stem.radius, 10000.0)
+                    .local_anchor2(Vec3::new(0.0, -length, 0.0))
+                    .motor_position(JointAxis::AngX, rot_x, 2000.0 * radius, 10000.0)
+                    .motor_position(JointAxis::AngY, rot_y, 2000.0 * radius, 10000.0)
+                    .motor_position(JointAxis::AngZ, rot_z, 2000.0 * radius, 10000.0)
                     .motor_model(JointAxis::AngX, MotorModel::ForceBased)
                     .motor_model(JointAxis::AngY, MotorModel::ForceBased)
                     .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
@@ -204,9 +222,9 @@ fn add_bodies(
                     .with_children(|children| {
                         children
                             .spawn()
-                            .insert(Collider::capsule_y(stem.length / 2.0, stem.radius))
+                            .insert(Collider::capsule_y(length / 2.0, *radius))
                             .insert(CollisionGroups::new(0b1000, 0b0100))
-                            .insert(Transform::from_xyz(0.0, -stem.length / 2.0, 0.0));
+                            .insert(Transform::from_xyz(0.0, -length / 2.0, 0.0));
                     })
                     .insert(ImpulseJoint::new(prev_node, rapier_joint));
 
@@ -251,14 +269,18 @@ fn setup_plant(
     commands
         .spawn()
         .insert(Name::new("Root Node"))
-        .insert(Stem {
-            order: 0,
-            length: 0.2,
-            max_length: 4.0,
-            radius: 0.001,
-            direction: Quat::default(),
+        .insert_bundle(StemBundle {
+            stem: Stem {
+                order: 0,
+                max_length: 4.0,
+                direction: Quat::default(),
+            },
+            length: Length(0.2),
+            radius: Radius(0.001),
+            ..Default::default()
         })
         .insert(AxisRoot {});
+
     let root_joint = commands
         .spawn()
         .insert(RigidBody::Fixed)
