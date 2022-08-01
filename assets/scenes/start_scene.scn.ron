@@ -1,6 +1,6 @@
 [
   (
-    entity: 0,
+    entity: 1230,
     components: [
       {
         "type": "main::Primitive",
@@ -19,11 +19,11 @@
             "struct": {
               "x": {
                 "type": "f32",
-                "value": 10.0,
+                "value": 0.0,
               },
               "y": {
                 "type": "f32",
-                "value": 0.0,
+                "value": 1.6,
               },
               "z": {
                 "type": "f32",
