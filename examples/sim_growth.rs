@@ -6,7 +6,7 @@ use bevy::{
         Indices, PrimitiveTopology,
     },
 };
-use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
+// use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
 use bevy_rapier3d::{
     prelude::*,
     rapier::prelude::{JointAxis, MotorModel},
@@ -20,8 +20,8 @@ fn main() {
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .insert_resource(GrowSteps::from_steps(16))
-        .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
-        .add_plugin(WorldInspectorPlugin::new())
+        // .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
+        // .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_startup_system(setup_plant)
@@ -39,10 +39,10 @@ fn main() {
         .run();
 }
 
-#[derive(Inspectable, Default)]
+// #[derive(Inspectable, Default)]
 struct GrowSteps {
     current: u32,
-    #[inspectable(min = 1, max = 30)]
+    // #[inspectable(min = 1, max = 30)]
     max: u32,
     mesh_updated: bool,
 }
@@ -83,6 +83,8 @@ fn count_grow_steps(mut grow_steps: ResMut<GrowSteps>) {
 struct AxisRoot {}
 #[derive(Component)]
 struct NextAxe(Entity);
+#[derive(Component, Debug)]
+struct Branches(Vec<Entity>);
 
 #[derive(Component, Debug)]
 struct Length(f32);
@@ -121,7 +123,7 @@ impl Default for StemBundle {
 fn grow(mut commands: Commands, query: Query<(Entity, Option<&Parent>, &Radius, &Length, &Stem)>) {
     for (stem_id, parent, Radius(radius), Length(length), stem) in query.iter() {
         let prev_radius = parent
-            .and_then(|parent| query.get(parent.0).ok())
+            .and_then(|parent| query.get(parent.get()).ok())
             .and_then(|q| Some((*q.2).0))
             .unwrap_or(1.0);
         commands
@@ -136,6 +138,32 @@ fn extend(mut commands: Commands, query: Query<(Entity, &Stem, &Length), (Withou
         if *length > stem.max_length * 0.8 {
             let next = commands
                 .spawn()
+                .insert(Name::new("Stem Node"))
+                .insert_bundle(StemBundle {
+                    stem: Stem {
+                        order: stem.order,
+                        max_length: 4.0,
+                        direction: Quat::default(),
+                    },
+                    length: Length(0.2),
+                    radius: Radius(0.001),
+                    ..Default::default()
+                })
+                .id();
+            commands
+                .entity(id)
+                .push_children(&[next])
+                .insert(NextAxe(next));
+        }
+    }
+}
+
+fn branch_out(mut commands: Commands, query: Query<(Entity, &Stem, &Length, Option<&mut Branches>)>) {
+    for (id, stem, Length(length), branches) in query.iter() {
+        if *length > stem.max_length * 0.8 {
+            let next = commands
+                .spawn()
+                .insert(Name::new("Stem Node"))
                 .insert_bundle(StemBundle {
                     stem: Stem {
                         order: stem.order,
@@ -304,7 +332,7 @@ fn setup_scene(mut commands: Commands) {
         .insert(Restitution::coefficient(0.7))
         .insert(Transform::from_xyz(0.1, (6.0 as f32) * 4.0 + 4.0, 0.1));
 
-    commands.spawn_bundle(PerspectiveCameraBundle {
+    commands.spawn_bundle(Camera3dBundle {
         transform: Transform::from_xyz(-13.0 / 1.0, 24.0 / 1.0, 17.0 / 1.0)
             .looking_at(Vec3::new(0.0, 8.0, 0.0), Vec3::Y),
         ..default()

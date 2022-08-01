@@ -199,7 +199,7 @@ fn setup_scene(mut commands: Commands) {
         .insert(Restitution::coefficient(0.7))
         .insert(Transform::from_xyz(0.1, (6.0 as f32) * 4.0 + 4.0, 0.1));
 
-    commands.spawn_bundle(PerspectiveCameraBundle {
+    commands.spawn_bundle(Camera3dBundle {
         transform: Transform::from_xyz(-13.0 / 1.0, 24.0 / 1.0, 17.0 / 1.0)
             .looking_at(Vec3::new(0.0, 8.0, 0.0), Vec3::Y),
         ..default()
