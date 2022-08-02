@@ -8,6 +8,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     utils::Duration,
 };
+use bevy_rapier3d::prelude::{SphericalJointBuilder, RigidBody, ImpulseJoint};
 // use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
 
 fn main() {
@@ -19,13 +20,14 @@ fn main() {
             brightness: 1.0 / 5.0f32,
         })
         .register_type::<Primitive>()
+        .register_type::<RigidBody>()
         .add_plugins(DefaultPlugins)
         .add_startup_stage_after(StartupStage::Startup, CREATE, SystemStage::parallel())
         .add_startup_stage_after(CREATE, SAVE, SystemStage::parallel())
         // .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system_to_stage(CREATE, setup)
-        // .add_startup_system_to_stage(SAVE, save_scene_system.exclusive_system().at_end())
-        .add_startup_system(load_scene_system)
+        .add_startup_system_to_stage(SAVE, save_scene_system.exclusive_system().at_end())
+        // .add_startup_system(load_scene_system)
         .add_system(update_primitives)
         // .add_system(rotate)
         .add_system(inspect)
@@ -87,11 +89,17 @@ fn save_scene_system(world: &mut World) {
     // use the current World.
     let mut scene_world = World::new();
 
+    let rapier_joint = SphericalJointBuilder::new();
+
+    let prev_section = scene_world.spawn().insert_bundle((RigidBody::Dynamic,)).id();
+
     scene_world.spawn().insert_bundle((
         Primitive {
             shape: "cube".into(),
         },
         Transform::default(),
+        ImpulseJoint::new(prev_section, rapier_joint),
+        RigidBody::Dynamic,
     ));
 
     // The TypeRegistry resource contains information about all registered types (including
@@ -102,7 +110,7 @@ fn save_scene_system(world: &mut World) {
     // components). This is used to construct scenes.
     // let type_registry = scene_world.resource::<TypeRegistry>();
     // let type_registry = TypeRegistry::default();
-    type_registry.write().register::<Primitive>();
+    // type_registry.write().register::<Primitive>();
     // type_registry.write().register::<Transform>();
     // type_registry.write().register::<String>();
     // type_registry.write().register::<Player>();

@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 bevy = {version = "0.8.0", features=["jpeg"]}
 # bevy_config_cam = { version = "0.3.0"}
-bevy_rapier3d = { version = "*", features = [ "simd-stable", "debug-render" ] }
+bevy_rapier3d = { version = "0.16.0", features = [ "simd-stable", "debug-render", "serde-serialize" ] }
 rand = "0.8.5"
 itertools = "0.10.3"
 nalgebra = "0.30.1"
