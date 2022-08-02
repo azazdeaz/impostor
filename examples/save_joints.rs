@@ -14,7 +14,9 @@ fn main() {
 }
 
 fn save_scene_system(world: &mut World) {
-    world
+    let mut scene_world = World::new();
+
+    scene_world
         .spawn()
         .insert(RigidBody::Dynamic)
         // .insert(Collider::ball(0.5))
@@ -22,7 +24,7 @@ fn save_scene_system(world: &mut World) {
         .insert(Transform::default());
 
     let type_registry = world.resource::<TypeRegistry>();
-    let scene = DynamicScene::from_world(&world, &type_registry);
+    let scene = DynamicScene::from_world(&scene_world, &type_registry);
 
     info!("{}", scene.serialize_ron(&type_registry).unwrap());
 }
