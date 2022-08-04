@@ -10,7 +10,7 @@ use bevy::{
 };
 use bevy_rapier3d::prelude::{SphericalJointBuilder, RigidBody, ImpulseJoint};
 use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
-use impostor;
+use impostor_schemas::schemas;
 
 fn main() {
     App::new()
@@ -18,49 +18,19 @@ fn main() {
             color: Color::WHITE,
             brightness: 1.0 / 5.0f32,
         })
-        .register_type::<Primitive>()
-        .register_type::<impostor::schema::Primitive>()
-        .register_type::<impostor::schema::Transform>()
+        .register_type::<schemas::Primitive>()
+        .register_type::<schemas::Transform>()
         .add_plugins(DefaultPlugins)
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system( setup)
         .add_startup_system(load_scene_system)
         .add_system(update_primitives)
+        // .add_system(update_transforms)
         // .add_system(rotate)
         .add_system(inspect)
         .run();
 }
 
-#[derive(Component, Reflect, Default)]
-#[reflect(Component)] // this tells the reflect derive to also reflect component behaviors
-struct ComponentA {
-    pub x: f32,
-    pub y: f32,
-}
-
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-struct ComponentB {
-    pub value: String,
-    #[reflect(ignore)]
-    pub _time_since_startup: Duration,
-}
-
-#[derive(Component, Reflect, Default)]
-#[reflect(Component)] // this tells the reflect derive to also reflect component behaviors
-struct Primitive {
-    pub shape: String,
-}
-
-impl FromWorld for ComponentB {
-    fn from_world(world: &mut World) -> Self {
-        let time = world.resource::<Time>();
-        ComponentB {
-            _time_since_startup: time.time_since_startup(),
-            value: "Default Value".to_string(),
-        }
-    }
-}
 
 fn load_scene_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     // "Spawning" a scene bundle creates a new entity and spawns new instances
@@ -160,11 +130,11 @@ fn update_primitives(
     mut primitives: Query<
         (
             Entity,
-            &Primitive,
+            &schemas::Primitive,
             Option<&mut Handle<Mesh>>,
-            Added<Primitive>,
+            Added<schemas::Primitive>,
         ),
-        Changed<Primitive>,
+        Changed<schemas::Primitive>,
     >,
     mut material: Query<&DebugMaterial>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -211,6 +181,7 @@ fn update_primitives(
                     material.handle.clone(),
                     GlobalTransform::default(),
                     Visibility::default(),
+                    Transform::default(),
                     ComputedVisibility::default(),
                 ))
                 .insert(Shape);
@@ -220,7 +191,27 @@ fn update_primitives(
     }
 }
 
-fn rotate(mut query: Query<&mut Transform, With<Shape>>, time: Res<Time>) {
+
+fn update_transforms(
+    mut commands: Commands,
+    mut transforms: Query<
+        (
+            Entity,
+            &schemas::Transform,
+            &mut Transform,
+        ),
+        Changed<schemas::Transform>,
+    >,
+) {
+
+    for (entity, schemas::Transform(transform), mut t) in transforms.iter_mut() {
+        println!("Update transform {:?} {:?}", entity, transform);
+        // t.translation.y = transform.translation.y;
+        // commands.entity(entity).insert(transform.clone());
+    }
+}
+
+fn rotate(mut query: Query<&mut Transform, With<schemas::Primitive>>, time: Res<Time>) {
     for mut transform in &mut query {
         transform.rotate_y(time.delta_seconds() / 2.);
     }
