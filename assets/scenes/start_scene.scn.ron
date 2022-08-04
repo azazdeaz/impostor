@@ -1,58 +1,148 @@
 [
   (
-    entity: 1230,
+    entity: 0,
     components: [
       {
-        "type": "main::Primitive",
+        "type": "save_new::schema::Primitive",
         "struct": {
           "shape": {
             "type": "alloc::string::String",
-            "value": "torus",
+            "value": "cube",
           },
         },
       },
       {
-        "type": "bevy_transform::components::transform::Transform",
+        "type": "save_new::schema::Transform",
+        "tuple_struct": [
+          {
+            "type": "bevy_transform::components::transform::Transform",
+            "struct": {
+              "translation": {
+                "type": "glam::f32::vec3::Vec3",
+                "struct": {
+                  "x": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                  "y": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                  "z": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                },
+              },
+              "rotation": {
+                "type": "glam::f32::sse2::quat::Quat",
+                "value": (0.0, 0.0, 0.0, 1.0),
+              },
+              "scale": {
+                "type": "glam::f32::vec3::Vec3",
+                "struct": {
+                  "x": {
+                    "type": "f32",
+                    "value": 1.0,
+                  },
+                  "y": {
+                    "type": "f32",
+                    "value": 1.0,
+                  },
+                  "z": {
+                    "type": "f32",
+                    "value": 1.0,
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        "type": "bevy_hierarchy::components::children::Children",
+        "tuple_struct": [
+          {
+            "type": "smallvec::SmallVec<[bevy_ecs::entity::Entity; 8]>",
+            "list": [
+              {
+                "type": "bevy_ecs::entity::Entity",
+                "value": 1,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  ),
+  (
+    entity: 1,
+    components: [
+      {
+        "type": "save_new::schema::Primitive",
         "struct": {
-          "translation": {
-            "type": "glam::f32::vec3::Vec3",
-            "struct": {
-              "x": {
-                "type": "f32",
-                "value": 0.0,
-              },
-              "y": {
-                "type": "f32",
-                "value": 1.6,
-              },
-              "z": {
-                "type": "f32",
-                "value": 0.0,
-              },
-            },
-          },
-          "rotation": {
-            "type": "glam::f32::sse2::quat::Quat",
-            "value": (0.0, 0.0, 0.0, 1.0),
-          },
-          "scale": {
-            "type": "glam::f32::vec3::Vec3",
-            "struct": {
-              "x": {
-                "type": "f32",
-                "value": 1.0,
-              },
-              "y": {
-                "type": "f32",
-                "value": 1.0,
-              },
-              "z": {
-                "type": "f32",
-                "value": 1.0,
-              },
-            },
+          "shape": {
+            "type": "alloc::string::String",
+            "value": "uvsphere",
           },
         },
+      },
+      {
+        "type": "save_new::schema::Transform",
+        "tuple_struct": [
+          {
+            "type": "bevy_transform::components::transform::Transform",
+            "struct": {
+              "translation": {
+                "type": "glam::f32::vec3::Vec3",
+                "struct": {
+                  "x": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                  "y": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                  "z": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                },
+              },
+              "rotation": {
+                "type": "glam::f32::sse2::quat::Quat",
+                "value": (0.0, 0.0, 0.0, 1.0),
+              },
+              "scale": {
+                "type": "glam::f32::vec3::Vec3",
+                "struct": {
+                  "x": {
+                    "type": "f32",
+                    "value": 1.0,
+                  },
+                  "y": {
+                    "type": "f32",
+                    "value": 1.0,
+                  },
+                  "z": {
+                    "type": "f32",
+                    "value": 1.0,
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      {
+        "type": "bevy_hierarchy::components::parent::Parent",
+        "tuple_struct": [
+          {
+            "type": "bevy_ecs::entity::Entity",
+            "value": 0,
+          },
+        ],
       },
     ],
   ),

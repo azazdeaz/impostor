@@ -1,53 +1,42 @@
+use std::io::Write;
+
 use bevy::{prelude::*, reflect::TypeRegistry};
 use bevy_rapier3d::prelude::{
     Collider, ImpulseJoint, NoUserData, RapierPhysicsPlugin, Restitution, RigidBody,
     SphericalJointBuilder,
 };
-use impostor::schema;
+mod schema;
 
 fn main() {
-    App::new()
+    let mut type_registry = App::new()
+        .register_type::<schema::Primitive>()
+        .register_type::<schema::Transform>()
+        .register_type::<String>()
         .add_plugins(DefaultPlugins)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugin(bevy_rapier3d::render::RapierDebugRenderPlugin::default())
-        .add_startup_system(save_scene_system.exclusive_system().at_end())
-        .run();
-}
+        .world
+        .resource::<TypeRegistry>().clone();
 
-#[derive(Component, Reflect, Clone)]
-#[reflect(Component)]
-enum SeedRigidBody {
-    Dynamic,
-    Fixed,
-}
-impl Default for SeedRigidBody {
-    fn default() -> Self {
-        SeedRigidBody::Dynamic
-    }
-}
-
-fn save_scene_system(world: &mut World) {
-    let mut scene_world = World::new();
-
+    let mut scene_world = World::default();
     scene_world
         .spawn()
         .insert(schema::Primitive {
             shape: "cube".into(),
         })
-        // .insert(Restitution::coefficient(0.7))
         .insert(schema::Transform::default())
         .with_children(|parent| {
             parent
                 .spawn()
                 .insert(schema::Primitive {
-                    shape: "cube".into(),
+                    shape: "uvsphere".into(),
                 })
                 // .insert(Restitution::coefficient(0.7))
                 .insert(schema::Transform::default());
         });
-
-    let type_registry = world.resource::<TypeRegistry>();
     let scene = DynamicScene::from_world(&scene_world, &type_registry);
 
     info!("{}", scene.serialize_ron(&type_registry).unwrap());
+
+    let mut file = std::fs::File::create("assets/scenes/start_scene.scn.ron").unwrap();
+    file.write_all(scene.serialize_ron(&type_registry).unwrap().as_bytes())
+        .unwrap();
 }

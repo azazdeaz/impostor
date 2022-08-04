@@ -9,25 +9,22 @@ use bevy::{
     utils::Duration,
 };
 use bevy_rapier3d::prelude::{SphericalJointBuilder, RigidBody, ImpulseJoint};
-// use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
+use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
+use impostor;
 
 fn main() {
-    static CREATE: &str = "create";
-    static SAVE: &str = "save";
     App::new()
         .insert_resource(AmbientLight {
             color: Color::WHITE,
             brightness: 1.0 / 5.0f32,
         })
         .register_type::<Primitive>()
-        .register_type::<RigidBody>()
+        .register_type::<impostor::schema::Primitive>()
+        .register_type::<impostor::schema::Transform>()
         .add_plugins(DefaultPlugins)
-        .add_startup_stage_after(StartupStage::Startup, CREATE, SystemStage::parallel())
-        .add_startup_stage_after(CREATE, SAVE, SystemStage::parallel())
-        // .add_plugin(WorldInspectorPlugin::new())
-        .add_startup_system_to_stage(CREATE, setup)
-        .add_startup_system_to_stage(SAVE, save_scene_system.exclusive_system().at_end())
-        // .add_startup_system(load_scene_system)
+        .add_plugin(WorldInspectorPlugin::new())
+        .add_startup_system( setup)
+        .add_startup_system(load_scene_system)
         .add_system(update_primitives)
         // .add_system(rotate)
         .add_system(inspect)
@@ -79,51 +76,6 @@ fn load_scene_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     asset_server.watch_for_changes().unwrap();
 }
 
-fn save_scene_system(world: &mut World) {
-    // Scenes can be created from any ECS World. You can either create a new one for the scene or
-    // use the current World.
-    // let mut scene_world = World::new();
-    // scene_world.spawn().insert(Primitive { shape: "cube".into() }).insert(Transform::identity());
-
-    // Scenes can be created from any ECS World. You can either create a new one for the scene or
-    // use the current World.
-    let mut scene_world = World::new();
-
-    let rapier_joint = SphericalJointBuilder::new();
-
-    let prev_section = scene_world.spawn().insert_bundle((RigidBody::Dynamic,)).id();
-
-    scene_world.spawn().insert_bundle((
-        Primitive {
-            shape: "cube".into(),
-        },
-        Transform::default(),
-        ImpulseJoint::new(prev_section, rapier_joint),
-        RigidBody::Dynamic,
-    ));
-
-    // The TypeRegistry resource contains information about all registered types (including
-    // components). This is used to construct scenes.
-    let type_registry = world.resource::<TypeRegistry>();
-
-    // The TypeRegistry resource contains information about all registered types (including
-    // components). This is used to construct scenes.
-    // let type_registry = scene_world.resource::<TypeRegistry>();
-    // let type_registry = TypeRegistry::default();
-    // type_registry.write().register::<Primitive>();
-    // type_registry.write().register::<Transform>();
-    // type_registry.write().register::<String>();
-    // type_registry.write().register::<Player>();
-    // type_registry.write().register::<Enemy>();
-    let scene = DynamicScene::from_world(&scene_world, &type_registry);
-
-    // Scenes can be serialized like this:
-    info!("{}", scene.serialize_ron(&type_registry).unwrap());
-
-    let mut file = std::fs::File::create("assets/scenes/start_scene.scn.ron").unwrap();
-    file.write_all(scene.serialize_ron(&type_registry).unwrap().as_bytes())
-        .unwrap();
-}
 
 /// A marker component for our shapes so we can query them separately from the ground plane
 #[derive(Component, Reflect, Default)]
@@ -209,7 +161,6 @@ fn update_primitives(
         (
             Entity,
             &Primitive,
-            &Transform,
             Option<&mut Handle<Mesh>>,
             Added<Primitive>,
         ),
@@ -224,8 +175,9 @@ fn update_primitives(
     }
     let material = material.unwrap();
 
-    for (entity, primitive, transform, mesh_handle, is_added) in primitives.iter() {
-        println!("{:?}", transform);
+    for (entity, primitive, mesh_handle, is_added) in primitives.iter() {
+        println!("Update primitive {:?} {}", entity, primitive.shape);
+
         let new_mesh: Mesh = match &*primitive.shape {
             "cube" => shape::Cube::default().into(),
             "box" => shape::Box::default().into(),
@@ -233,7 +185,7 @@ fn update_primitives(
             "torus" => shape::Torus::default().into(),
             "icosphere" => shape::Icosphere::default().into(),
             "uvsphere" => shape::UVSphere::default().into(),
-            _ => panic!("Unknown Primitive shape {}", primitive.shape),
+            _ => shape::Icosphere::default().into(),
         };
 
         let mesh_handle = if let Some(mesh_handle) = mesh_handle {
