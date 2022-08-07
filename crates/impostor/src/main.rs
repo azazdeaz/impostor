@@ -1,5 +1,5 @@
 use core::panic;
-use std::io::Write;
+use std::{f32::consts::PI, io::Write};
 
 use bevy::{
     ecs::{archetype::Archetypes, component::Components, entity::Entities},
@@ -8,8 +8,8 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     utils::Duration,
 };
-use bevy_rapier3d::prelude::{SphericalJointBuilder, RigidBody, ImpulseJoint};
 use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
+use bevy_rapier3d::prelude::*;
 use impostor_schemas::schemas;
 
 fn main() {
@@ -21,16 +21,79 @@ fn main() {
         .register_type::<schemas::Primitive>()
         .register_type::<schemas::Transform>()
         .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(WorldInspectorPlugin::new())
-        .add_startup_system( setup)
-        .add_startup_system(load_scene_system)
+        .add_startup_system(setup)
+        // .add_startup_system(load_scene_system)
         .add_system(update_primitives)
+        .add_startup_system(create_car)
+        .add_system(keyboard_input_system)
         // .add_system(update_transforms)
         // .add_system(rotate)
         .add_system(inspect)
         .run();
 }
 
+fn create_car(mut commands: Commands) {
+    let width = 2.0;
+    let length = 4.0;
+    let height = 0.4;
+    let wheel_width = 0.5;
+    let wheel_radius = 1.0;
+
+    let chasis = commands
+        .spawn()
+        .insert(RigidBody::Dynamic)
+        .insert(Collider::cuboid(width, height, length))
+        .insert(Restitution::coefficient(0.7))
+        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 4.0, 0.0)))
+        .insert(CollisionGroups::new(0b1111, 0b0111))
+        .id();
+
+
+    let mut add_wheel = |front: f32, left: f32| {
+        let joint = RevoluteJointBuilder::new(Vect::X)
+            .motor_velocity(12., 10.)
+                .local_anchor1(Vec3::new(width * front, 0.0, length * left))
+                .local_anchor2(Vec3::new(0.0, 0.0, 0.0));
+
+            let wheel_fl = commands
+                .spawn()
+                .insert(RigidBody::Dynamic)
+                .insert_bundle(TransformBundle::from(Transform::from_xyz(0., 6., 0.)))
+                .with_children(|parent| {
+                    parent
+                        .spawn()
+                        .insert(Collider::cylinder(wheel_width / 2.0, wheel_radius))
+                        .insert(Restitution::coefficient(0.7))
+                        .insert_bundle(TransformBundle::from(Transform::from_rotation(
+                            Quat::from_axis_angle(Vec3::Z, PI / 2.),
+                        )))
+                        .insert(ImpulseJoint::new(chasis, joint))
+                        .insert(CollisionGroups::new(0b1000, 0b1111));
+                })
+                .id();
+    };
+
+    add_wheel(1., 1.);
+    add_wheel(1., -1.);
+    add_wheel(-1., 1.);
+    add_wheel(-1., -1.);
+}
+
+fn keyboard_input_system(keyboard_input: Res<Input<KeyCode>>, joints: Query<&mut ImpulseJoint>) {
+    if keyboard_input.pressed(KeyCode::Up) {
+        // for joint in joints.iter_mut() {
+        //     joint.data.set_motor_velocity(12., target_vel, factor)
+        // }
+        info!("'UP' currently pressed");
+    }
+
+    if keyboard_input.pressed(KeyCode::Down) {
+        info!("'DOWN' currently pressed");
+    }
+}
 
 fn load_scene_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     // "Spawning" a scene bundle creates a new entity and spawns new instances
@@ -45,7 +108,6 @@ fn load_scene_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     // It enables our scenes to automatically reload in game when we modify their files
     asset_server.watch_for_changes().unwrap();
 }
-
 
 /// A marker component for our shapes so we can query them separately from the ground plane
 #[derive(Component, Reflect, Default)]
@@ -108,11 +170,13 @@ fn setup(
     });
 
     // ground plane
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(shape::Plane { size: 50. }.into()),
-        material: materials.add(Color::SILVER.into()),
-        ..default()
-    });
+    commands
+        .spawn_bundle(PbrBundle {
+            mesh: meshes.add(shape::Plane { size: 50. }.into()),
+            material: materials.add(Color::SILVER.into()),
+            ..default()
+        })
+        .insert(Collider::cuboid(50.0, 0.1, 50.0));
 
     commands.spawn_bundle(Camera3dBundle {
         transform: Transform::from_xyz(0.0, 6., 12.0).looking_at(Vec3::new(0., 1., 0.), Vec3::Y),
@@ -191,19 +255,13 @@ fn update_primitives(
     }
 }
 
-
 fn update_transforms(
     mut commands: Commands,
     mut transforms: Query<
-        (
-            Entity,
-            &schemas::Transform,
-            &mut Transform,
-        ),
+        (Entity, &schemas::Transform, &mut Transform),
         Changed<schemas::Transform>,
     >,
 ) {
-
     for (entity, schemas::Transform(transform), mut t) in transforms.iter_mut() {
         println!("Update transform {:?} {:?}", entity, transform);
         // t.translation.y = transform.translation.y;

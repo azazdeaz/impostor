@@ -3,7 +3,7 @@ use bevy_rapier3d::prelude::{
     Collider, ImpulseJoint, NoUserData, RapierPhysicsPlugin, Restitution, RigidBody,
     SphericalJointBuilder,
 };
-use impostor::schema;
+use impostor_schemas::schemas;
 
 fn main() {
     App::new()
@@ -31,19 +31,20 @@ fn save_scene_system(world: &mut World) {
 
     scene_world
         .spawn()
-        .insert(schema::Primitive {
+        .insert(schemas::Primitive {
             shape: "cube".into(),
         })
+        // .insert(Collider::ball(1.0))
         // .insert(Restitution::coefficient(0.7))
-        .insert(schema::Transform::default())
+        .insert(schemas::Transform::default())
         .with_children(|parent| {
             parent
                 .spawn()
-                .insert(schema::Primitive {
+                .insert(schemas::Primitive {
                     shape: "cube".into(),
                 })
                 // .insert(Restitution::coefficient(0.7))
-                .insert(schema::Transform::default());
+                .insert(schemas::Transform::default());
         });
 
     let type_registry = world.resource::<TypeRegistry>();
