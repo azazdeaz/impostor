@@ -1,5 +1,5 @@
 use core::panic;
-use std::{f32::consts::PI, io::Write};
+use std::{f32::consts::PI};
 
 use bevy::{
     ecs::{archetype::Archetypes, component::Components, entity::Entities},
@@ -35,11 +35,16 @@ fn main() {
         .run();
 }
 
+#[derive(Component)]
+struct LeftWheel {}
+#[derive(Component)]
+struct RightWheel {}
+
 fn create_car(mut commands: Commands) {
     let width = 2.0;
     let length = 4.0;
     let height = 0.4;
-    let wheel_width = 0.5;
+    let wheel_width = 1.2;
     let wheel_radius = 1.0;
 
     let chasis = commands
@@ -51,29 +56,31 @@ fn create_car(mut commands: Commands) {
         .insert(CollisionGroups::new(0b1111, 0b0111))
         .id();
 
-
     let mut add_wheel = |front: f32, left: f32| {
         let joint = RevoluteJointBuilder::new(Vect::X)
-            .motor_velocity(12., 10.)
-                .local_anchor1(Vec3::new(width * front, 0.0, length * left))
-                .local_anchor2(Vec3::new(0.0, 0.0, 0.0));
+            .local_anchor1(Vec3::new(width * left, 0.0, length * front))
+            .local_anchor2(Vec3::new(0.0, 0.0, 0.0));
 
-            let wheel_fl = commands
-                .spawn()
-                .insert(RigidBody::Dynamic)
-                .insert_bundle(TransformBundle::from(Transform::from_xyz(0., 6., 0.)))
-                .with_children(|parent| {
-                    parent
-                        .spawn()
-                        .insert(Collider::cylinder(wheel_width / 2.0, wheel_radius))
-                        .insert(Restitution::coefficient(0.7))
-                        .insert_bundle(TransformBundle::from(Transform::from_rotation(
-                            Quat::from_axis_angle(Vec3::Z, PI / 2.),
-                        )))
-                        .insert(ImpulseJoint::new(chasis, joint))
-                        .insert(CollisionGroups::new(0b1000, 0b1111));
-                })
-                .id();
+        commands
+            .spawn()
+            .insert(RigidBody::Dynamic)
+            .insert_bundle(TransformBundle::from(Transform::from_xyz(0., 6., 0.)))
+            .with_children(|parent| {
+                let mut wheel = parent.spawn();
+                wheel
+                    .insert(Collider::cylinder(wheel_width / 2.0, wheel_radius))
+                    .insert(Restitution::coefficient(0.7))
+                    .insert_bundle(TransformBundle::from(Transform::from_rotation(
+                        Quat::from_axis_angle(Vec3::Z, PI / 2.),
+                    )))
+                    .insert(ImpulseJoint::new(chasis, joint))
+                    .insert(CollisionGroups::new(0b1000, 0b1111));
+                if left > 0. {
+                    wheel.insert(LeftWheel {});
+                } else {
+                    wheel.insert(RightWheel {});
+                }
+            });
     };
 
     add_wheel(1., 1.);
@@ -82,16 +89,39 @@ fn create_car(mut commands: Commands) {
     add_wheel(-1., -1.);
 }
 
-fn keyboard_input_system(keyboard_input: Res<Input<KeyCode>>, joints: Query<&mut ImpulseJoint>) {
+fn keyboard_input_system(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut joints: Query<&mut ImpulseJoint>,
+    left_wheels: Query<Entity, With<LeftWheel>>,
+    right_wheels: Query<Entity, With<RightWheel>>,
+) {
+    let mut speed = (0., 0.);
     if keyboard_input.pressed(KeyCode::Up) {
-        // for joint in joints.iter_mut() {
-        //     joint.data.set_motor_velocity(12., target_vel, factor)
-        // }
-        info!("'UP' currently pressed");
+        speed = (12., 12.);
+    } else if keyboard_input.pressed(KeyCode::Down) {
+        speed = (-12., -12.);
+    } else if keyboard_input.pressed(KeyCode::Left) {
+        speed = (-12., 12.);
+    } else if keyboard_input.pressed(KeyCode::Right) {
+        speed = (12., -12.);
     }
 
-    if keyboard_input.pressed(KeyCode::Down) {
-        info!("'DOWN' currently pressed");
+    for entity in left_wheels.iter() {
+        if let Ok(mut joint) = joints.get_mut(entity) {
+
+            if let Some(joint) = joint.data.as_revolute_mut() {
+                joint.set_motor_velocity(speed.0, 10.);
+            }
+        }
+    }
+   
+    for entity in right_wheels.iter() {
+        if let Ok(mut joint) = joints.get_mut(entity) {
+
+            if let Some(joint) = joint.data.as_revolute_mut() {
+                joint.set_motor_velocity(speed.1, 10.);
+            }
+        }
     }
 }
 
