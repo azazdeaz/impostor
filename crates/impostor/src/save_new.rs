@@ -10,7 +10,6 @@ use impostor_schemas::schemas;
 fn main() {
     let mut type_registry = App::new()
         .register_type::<schemas::Primitive>()
-        .register_type::<schemas::Transform>()
         .register_type::<String>()
         .add_plugins(DefaultPlugins)
         .world
@@ -22,15 +21,13 @@ fn main() {
         .insert(schemas::Primitive {
             shape: "cube".into(),
         })
-        .insert(schemas::Transform::default())
         .with_children(|parent| {
             parent
                 .spawn()
                 .insert(schemas::Primitive {
                     shape: "uvsphere".into(),
-                })
-                // .insert(Restitution::coefficient(0.7))
-                .insert(schemas::Transform::default());
+                });
+                // .insert(Restitution::coefficient(0.7));
         });
     let scene = DynamicScene::from_world(&scene_world, &type_registry);
 

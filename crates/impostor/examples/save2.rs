@@ -5,13 +5,11 @@ use bevy_rapier3d::prelude::{
     Collider, ImpulseJoint, NoUserData, RapierPhysicsPlugin, Restitution, RigidBody,
     SphericalJointBuilder,
 };
-use impostor::schema;
+use impostor_schemas::schemas;
 
 fn main() {
     let mut type_registry = App::new()
-        .register_type::<schema::Primitive>()
-        .register_type::<schema::Transform>()
-        .register_type::<String>()
+        .register_type::<schemas::Primitive>()
         .add_plugins(DefaultPlugins)
         .world
         .resource::<TypeRegistry>().clone();
@@ -19,18 +17,18 @@ fn main() {
     let mut scene_world = World::default();
     scene_world
         .spawn()
-        .insert(schema::Primitive {
+        .insert(schemas::Primitive {
             shape: "cube".into(),
         })
-        .insert(schema::Transform::default())
+        .insert(Transform::default())
         .with_children(|parent| {
             parent
                 .spawn()
-                .insert(schema::Primitive {
+                .insert(schemas::Primitive {
                     shape: "uvsphere".into(),
                 })
                 // .insert(Restitution::coefficient(0.7))
-                .insert(schema::Transform::default());
+                .insert(Transform::default());
         });
     let scene = DynamicScene::from_world(&scene_world, &type_registry);
 

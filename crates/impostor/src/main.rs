@@ -1,14 +1,12 @@
 use core::panic;
-use std::{f32::consts::PI};
+use std::f32::consts::PI;
 
 use bevy::{
     ecs::{archetype::Archetypes, component::Components, entity::Entities},
     prelude::*,
-    reflect::TypeRegistry,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
-    utils::Duration,
 };
-use bevy_inspector_egui::{Inspectable, InspectorPlugin, WorldInspectorPlugin};
+use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
 use impostor_schemas::schemas;
 
@@ -18,9 +16,8 @@ fn main() {
             color: Color::WHITE,
             brightness: 1.0 / 5.0f32,
         })
-        .register_type::<schemas::Primitive>()
-        .register_type::<schemas::Transform>()
         .add_plugins(DefaultPlugins)
+        .add_plugin(schemas::SchemasPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(WorldInspectorPlugin::new())
@@ -50,15 +47,15 @@ fn create_car(mut commands: Commands) {
     let chasis = commands
         .spawn()
         .insert(RigidBody::Dynamic)
-        .insert(Collider::cuboid(width, height, length))
-        .insert(Restitution::coefficient(0.7))
+        .insert(Collider::cuboid(width / 2., height / 2., length / 2.))
+        // .insert(Restitution::coefficient(0.7))
         .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 4.0, 0.0)))
         .insert(CollisionGroups::new(0b1111, 0b0111))
         .id();
 
     let mut add_wheel = |front: f32, left: f32| {
         let joint = RevoluteJointBuilder::new(Vect::X)
-            .local_anchor1(Vec3::new(width * left, 0.0, length * front))
+            .local_anchor1(Vec3::new(width / 2. * left, 0.0, length / 2. * front))
             .local_anchor2(Vec3::new(0.0, 0.0, 0.0));
 
         commands
@@ -69,7 +66,7 @@ fn create_car(mut commands: Commands) {
                 let mut wheel = parent.spawn();
                 wheel
                     .insert(Collider::cylinder(wheel_width / 2.0, wheel_radius))
-                    .insert(Restitution::coefficient(0.7))
+                    // .insert(Restitution::coefficient(0.7))
                     .insert_bundle(TransformBundle::from(Transform::from_rotation(
                         Quat::from_axis_angle(Vec3::Z, PI / 2.),
                     )))
@@ -108,16 +105,14 @@ fn keyboard_input_system(
 
     for entity in left_wheels.iter() {
         if let Ok(mut joint) = joints.get_mut(entity) {
-
             if let Some(joint) = joint.data.as_revolute_mut() {
                 joint.set_motor_velocity(speed.0, 10.);
             }
         }
     }
-   
+
     for entity in right_wheels.iter() {
         if let Ok(mut joint) = joints.get_mut(entity) {
-
             if let Some(joint) = joint.data.as_revolute_mut() {
                 joint.set_motor_velocity(speed.1, 10.);
             }
@@ -282,20 +277,6 @@ fn update_primitives(
         } else {
             // commands.entity(entity).insert(mesh_handle);
         }
-    }
-}
-
-fn update_transforms(
-    mut commands: Commands,
-    mut transforms: Query<
-        (Entity, &schemas::Transform, &mut Transform),
-        Changed<schemas::Transform>,
-    >,
-) {
-    for (entity, schemas::Transform(transform), mut t) in transforms.iter_mut() {
-        println!("Update transform {:?} {:?}", entity, transform);
-        // t.translation.y = transform.translation.y;
-        // commands.entity(entity).insert(transform.clone());
     }
 }
 
