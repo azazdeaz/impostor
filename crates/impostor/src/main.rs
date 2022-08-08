@@ -66,7 +66,7 @@ fn create_car(mut commands: Commands) {
                 let mut wheel = parent.spawn();
                 wheel
                     .insert(Collider::cylinder(wheel_width / 2.0, wheel_radius))
-                    // .insert(Restitution::coefficient(0.7))
+                    .insert(Restitution::coefficient(0.7))
                     .insert_bundle(TransformBundle::from(Transform::from_rotation(
                         Quat::from_axis_angle(Vec3::Z, PI / 2.),
                     )))

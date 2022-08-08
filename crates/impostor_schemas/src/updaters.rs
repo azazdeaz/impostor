@@ -14,6 +14,17 @@ pub fn update_collider_cuboid(
     }
 }
 
+pub fn update_restitutions(
+    mut commands: Commands,
+    query: Query<(Entity, &schemas::Restitution), Changed<schemas::Restitution>>,
+) {
+    for (entity, schemas::Restitution { coefficient }) in query.iter() {
+        commands
+            .entity(entity)
+            .insert(Restitution::coefficient(*coefficient));
+    }
+}
+
 pub fn update_names(
     mut commands: Commands,
     query: Query<(Entity, &schemas::Name), Changed<schemas::Name>>,
@@ -108,24 +119,14 @@ fn update_primitives(
 pub fn update_impulse_joints(
     mut commands: Commands,
     query: Query<(Entity, &schemas::ImpulseJoint), Changed<schemas::ImpulseJoint>>,
-    linkeds: Query<(Entity, &schemas::JointLink)>,
 ) {
     for (entity, schemas::ImpulseJoint { parent, joint }) in query.iter() {
-        println!(">>>>>>>>>connect {:?} with {:?}", parent, entity);
-        let parent = linkeds
-            .iter()
-            .find_map(|(entity, link)| if link == parent { Some(entity) } else { None });
-
-        if let Some(parent) = parent {
-            let data = RevoluteJointBuilder::new(joint.axis)
-                .local_anchor1(joint.local_anchor1)
-                .local_anchor2(joint.local_anchor2);
-            commands
-                .entity(entity)
-                .insert(ImpulseJoint::new(parent, data));
-        } else {
-            println!(">>>>>>>>>no parent");
-        }
+        let data = RevoluteJointBuilder::new(joint.axis)
+            .local_anchor1(joint.local_anchor1)
+            .local_anchor2(joint.local_anchor2);
+        commands
+            .entity(entity)
+            .insert(ImpulseJoint::new(*parent, data));
     }
 }
 
@@ -136,6 +137,7 @@ impl Plugin for UpdatersPlugin {
         app.add_system(update_collider_cuboid)
             .add_system(update_names)
             .add_system(update_rigid_body)
+            .add_system(update_restitutions)
             .add_system(update_primitives)
             .add_system(update_impulse_joints);
     }

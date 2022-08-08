@@ -3,15 +3,6 @@
     entity: 0,
     components: [
       {
-        "type": "impostor_schemas::schemas::JointLink",
-        "tuple_struct": [
-          {
-            "type": "alloc::string::String",
-            "value": "link1",
-          },
-        ],
-      },
-      {
         "type": "impostor_schemas::schemas::Name",
         "tuple_struct": [
           {
@@ -98,19 +89,14 @@
           },
         },
       },
-    ],
-  ),
-  (
-    entity: 2,
-    components: [
       {
-        "type": "bevy_hierarchy::components::parent::Parent",
-        "tuple_struct": [
-          {
-            "type": "bevy_ecs::entity::Entity",
-            "value": 1,
+        "type": "impostor_schemas::schemas::Restitution",
+        "struct": {
+          "coefficient": {
+            "type": "f32",
+            "value": 0.7,
           },
-        ],
+        },
       },
     ],
   ),
@@ -162,16 +148,20 @@
         ],
       },
       {
+        "type": "impostor_schemas::schemas::Restitution",
+        "struct": {
+          "coefficient": {
+            "type": "f32",
+            "value": 0.7,
+          },
+        },
+      },
+      {
         "type": "impostor_schemas::schemas::ImpulseJoint",
         "struct": {
           "parent": {
-            "type": "impostor_schemas::schemas::JointLink",
-            "tuple_struct": [
-              {
-                "type": "alloc::string::String",
-                "value": "link1",
-              },
-            ],
+            "type": "bevy_ecs::entity::Entity",
+            "value": 0,
           },
           "joint": {
             "type": "impostor_schemas::schemas::RevolutJoint",
@@ -230,20 +220,6 @@
             },
           },
         },
-      },
-      {
-        "type": "bevy_hierarchy::components::children::Children",
-        "tuple_struct": [
-          {
-            "type": "smallvec::SmallVec<[bevy_ecs::entity::Entity; 8]>",
-            "list": [
-              {
-                "type": "bevy_ecs::entity::Entity",
-                "value": 2,
-              },
-            ],
-          },
-        ],
       },
     ],
   ),

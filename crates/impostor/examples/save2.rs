@@ -18,7 +18,6 @@ fn main() {
     let mut scene_world = World::default();
     let ent1 = scene_world
         .spawn()
-        .insert(schemas::JointLink("link1".into()))
         .insert(schemas::Name("Link 1".into()))
         .insert(schemas::Primitive {
             shape: "cube".into(),
@@ -30,6 +29,7 @@ fn main() {
         })
         .insert(schemas::RigidBody("Dynamic".into()))
         .insert(Transform::from_xyz(0., 5., 0.))
+        .insert(schemas::Restitution { coefficient: 0.7 })
         .id();
 
     scene_world
@@ -39,14 +39,14 @@ fn main() {
             shape: "cube".into(),
         })
         .insert(schemas::ImpulseJoint {
-            parent: schemas::JointLink("link1".into()),
+            parent: ent1,
             joint: schemas::RevolutJoint {
                 axis: Vec3::X,
                 local_anchor1: Vec3::X,
                 local_anchor2: Vec3::Y,
             },
         })
-        .with_children(|parent| {parent.spawn();})
+        .insert(schemas::Restitution { coefficient: 0.7 })
         .insert(schemas::ColliderCuboid {
             hx: 0.5,
             hy: 0.5,
