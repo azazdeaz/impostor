@@ -3,6 +3,15 @@
     entity: 0,
     components: [
       {
+        "type": "impostor_schemas::schemas::JointLink",
+        "tuple_struct": [
+          {
+            "type": "alloc::string::String",
+            "value": "link1",
+          },
+        ],
+      },
+      {
         "type": "impostor_schemas::schemas::Primitive",
         "struct": {
           "shape": {
@@ -12,64 +21,85 @@
         },
       },
       {
-        "type": "impostor_schemas::schemas::Transform",
+        "type": "impostor_schemas::schemas::ColliderCuboid",
+        "struct": {
+          "hx": {
+            "type": "f32",
+            "value": 0.5,
+          },
+          "hy": {
+            "type": "f32",
+            "value": 0.5,
+          },
+          "hz": {
+            "type": "f32",
+            "value": 0.5,
+          },
+        },
+      },
+      {
+        "type": "impostor_schemas::schemas::RigidBody",
         "tuple_struct": [
           {
-            "type": "bevy_transform::components::transform::Transform",
-            "struct": {
-              "translation": {
-                "type": "glam::f32::vec3::Vec3",
-                "struct": {
-                  "x": {
-                    "type": "f32",
-                    "value": 0.0,
-                  },
-                  "y": {
-                    "type": "f32",
-                    "value": 23.0,
-                  },
-                  "z": {
-                    "type": "f32",
-                    "value": 0.0,
-                  },
-                },
-              },
-              "rotation": {
-                "type": "glam::f32::sse2::quat::Quat",
-                "value": (0.0, 0.0, 0.0, 1.0),
-              },
-              "scale": {
-                "type": "glam::f32::vec3::Vec3",
-                "struct": {
-                  "x": {
-                    "type": "f32",
-                    "value": 1.0,
-                  },
-                  "y": {
-                    "type": "f32",
-                    "value": 1.0,
-                  },
-                  "z": {
-                    "type": "f32",
-                    "value": 1.0,
-                  },
-                },
-              },
-            },
+            "type": "alloc::string::String",
+            "value": "Dynamic",
           },
         ],
       },
       {
-        "type": "bevy_hierarchy::components::children::Children",
+        "type": "bevy_transform::components::transform::Transform",
+        "struct": {
+          "translation": {
+            "type": "glam::f32::vec3::Vec3",
+            "struct": {
+              "x": {
+                "type": "f32",
+                "value": 0.0,
+              },
+              "y": {
+                "type": "f32",
+                "value": 5.0,
+              },
+              "z": {
+                "type": "f32",
+                "value": 0.0,
+              },
+            },
+          },
+          "rotation": {
+            "type": "glam::f32::sse2::quat::Quat",
+            "value": (0.0, 0.0, 0.0, 1.0),
+          },
+          "scale": {
+            "type": "glam::f32::vec3::Vec3",
+            "struct": {
+              "x": {
+                "type": "f32",
+                "value": 1.0,
+              },
+              "y": {
+                "type": "f32",
+                "value": 1.0,
+              },
+              "z": {
+                "type": "f32",
+                "value": 1.0,
+              },
+            },
+          },
+        },
+      },
+    ],
+  ),
+  (
+    entity: 2,
+    components: [
+      {
+        "type": "bevy_hierarchy::components::parent::Parent",
         "tuple_struct": [
           {
-            "type": "smallvec::SmallVec<[bevy_ecs::entity::Entity; 8]>",
-            "list": [
-              {
-                "type": "bevy_ecs::entity::Entity",
-                "value": 1,
-              },
-            ],
+            "type": "bevy_ecs::entity::Entity",
+            "value": 1,
           },
         ],
       },
@@ -83,22 +113,57 @@
         "struct": {
           "shape": {
             "type": "alloc::string::String",
-            "value": "uvsphere",
+            "value": "cube",
           },
         },
       },
       {
-        "type": "impostor_schemas::schemas::Transform",
+        "type": "impostor_schemas::schemas::ColliderCuboid",
+        "struct": {
+          "hx": {
+            "type": "f32",
+            "value": 0.5,
+          },
+          "hy": {
+            "type": "f32",
+            "value": 0.5,
+          },
+          "hz": {
+            "type": "f32",
+            "value": 0.5,
+          },
+        },
+      },
+      {
+        "type": "impostor_schemas::schemas::RigidBody",
         "tuple_struct": [
           {
-            "type": "bevy_transform::components::transform::Transform",
+            "type": "alloc::string::String",
+            "value": "Dynamic",
+          },
+        ],
+      },
+      {
+        "type": "impostor_schemas::schemas::ImpulseJoint",
+        "struct": {
+          "parent": {
+            "type": "impostor_schemas::schemas::JointLink",
+            "tuple_struct": [
+              {
+                "type": "alloc::string::String",
+                "value": "link1",
+              },
+            ],
+          },
+          "joint": {
+            "type": "impostor_schemas::schemas::RevolutJoint",
             "struct": {
-              "translation": {
+              "axis": {
                 "type": "glam::f32::vec3::Vec3",
                 "struct": {
                   "x": {
                     "type": "f32",
-                    "value": 0.0,
+                    "value": 1.0,
                   },
                   "y": {
                     "type": "f32",
@@ -110,11 +175,7 @@
                   },
                 },
               },
-              "rotation": {
-                "type": "glam::f32::sse2::quat::Quat",
-                "value": (0.0, 0.0, 0.0, 1.0),
-              },
-              "scale": {
+              "local_anchor1": {
                 "type": "glam::f32::vec3::Vec3",
                 "struct": {
                   "x": {
@@ -123,24 +184,46 @@
                   },
                   "y": {
                     "type": "f32",
+                    "value": 0.0,
+                  },
+                  "z": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                },
+              },
+              "local_anchor2": {
+                "type": "glam::f32::vec3::Vec3",
+                "struct": {
+                  "x": {
+                    "type": "f32",
+                    "value": 0.0,
+                  },
+                  "y": {
+                    "type": "f32",
                     "value": 1.0,
                   },
                   "z": {
                     "type": "f32",
-                    "value": 1.0,
+                    "value": 0.0,
                   },
                 },
               },
             },
           },
-        ],
+        },
       },
       {
-        "type": "bevy_hierarchy::components::parent::Parent",
+        "type": "bevy_hierarchy::components::children::Children",
         "tuple_struct": [
           {
-            "type": "bevy_ecs::entity::Entity",
-            "value": 0,
+            "type": "smallvec::SmallVec<[bevy_ecs::entity::Entity; 8]>",
+            "list": [
+              {
+                "type": "bevy_ecs::entity::Entity",
+                "value": 2,
+              },
+            ],
           },
         ],
       },

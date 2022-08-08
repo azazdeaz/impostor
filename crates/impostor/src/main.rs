@@ -8,7 +8,7 @@ use bevy::{
 };
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
-use impostor_schemas::schemas;
+use impostor_schemas::{schemas, updaters::UpdatersPlugin};
 
 fn main() {
     App::new()
@@ -18,14 +18,14 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugin(schemas::SchemasPlugin)
+        .add_plugin(UpdatersPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)
-        // .add_startup_system(load_scene_system)
-        .add_system(update_primitives)
-        .add_startup_system(create_car)
-        .add_system(keyboard_input_system)
+        .add_startup_system(load_scene_system)
+        // .add_startup_system(create_car)
+        // .add_system(keyboard_input_system)
         // .add_system(update_transforms)
         // .add_system(rotate)
         .add_system(inspect)
@@ -214,71 +214,7 @@ struct DebugMaterial {
     handle: Handle<StandardMaterial>,
 }
 
-fn update_primitives(
-    mut commands: Commands,
-    mut primitives: Query<
-        (
-            Entity,
-            &schemas::Primitive,
-            Option<&mut Handle<Mesh>>,
-            Added<schemas::Primitive>,
-        ),
-        Changed<schemas::Primitive>,
-    >,
-    mut material: Query<&DebugMaterial>,
-    mut meshes: ResMut<Assets<Mesh>>,
-) {
-    let material = material.get_single();
-    if material.is_err() {
-        return;
-    }
-    let material = material.unwrap();
 
-    for (entity, primitive, mesh_handle, is_added) in primitives.iter() {
-        println!("Update primitive {:?} {}", entity, primitive.shape);
-
-        let new_mesh: Mesh = match &*primitive.shape {
-            "cube" => shape::Cube::default().into(),
-            "box" => shape::Box::default().into(),
-            "capsule" => shape::Capsule::default().into(),
-            "torus" => shape::Torus::default().into(),
-            "icosphere" => shape::Icosphere::default().into(),
-            "uvsphere" => shape::UVSphere::default().into(),
-            _ => shape::Icosphere::default().into(),
-        };
-
-        let mesh_handle = if let Some(mesh_handle) = mesh_handle {
-            *meshes.get_mut(mesh_handle).unwrap() = new_mesh;
-            mesh_handle.clone()
-        } else {
-            let handle = meshes.add(new_mesh);
-            commands.entity(entity).insert(handle.clone());
-            handle
-        };
-
-        if is_added {
-            commands
-                .entity(entity)
-                // .insert_bundle(PbrBundle {
-                //     mesh: mesh_handle,
-                //     material: material.handle.clone(),
-                //     transform: transform.clone()    ,
-                //     ..default()
-                // })
-                .insert_bundle((
-                    mesh_handle,
-                    material.handle.clone(),
-                    GlobalTransform::default(),
-                    Visibility::default(),
-                    Transform::default(),
-                    ComputedVisibility::default(),
-                ))
-                .insert(Shape);
-        } else {
-            // commands.entity(entity).insert(mesh_handle);
-        }
-    }
-}
 
 fn rotate(mut query: Query<&mut Transform, With<schemas::Primitive>>, time: Res<Time>) {
     for mut transform in &mut query {
