@@ -60,17 +60,22 @@ pub struct RevolutJoint {
 #[reflect(Component)]
 pub struct Tag(pub String);
 
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct Name(pub String);
+
 pub struct SchemasPlugin;
 
 impl Plugin for SchemasPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Primitive>()
-            .register_type::<ColliderCuboid>()
+        app.register_type::<ColliderCuboid>()
             .register_type::<ColliderCylinder>()
             .register_type::<ImpulseJoint>()
+            .register_type::<JointLink>()
+            .register_type::<Name>()
+            .register_type::<Primitive>()
             .register_type::<RevolutJoint>()
             .register_type::<RigidBody>()
-            .register_type::<JointLink>()
             .register_type::<Tag>();
     }
 }

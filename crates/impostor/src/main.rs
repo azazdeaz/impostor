@@ -123,11 +123,13 @@ fn keyboard_input_system(
 fn load_scene_system(mut commands: Commands, asset_server: Res<AssetServer>) {
     // "Spawning" a scene bundle creates a new entity and spawns new instances
     // of the given scene's entities as children of that entity.
-    commands.spawn_bundle(DynamicSceneBundle {
-        // Scenes are loaded just like any other asset.
-        scene: asset_server.load("scenes/start_scene.scn.ron"),
-        ..default()
-    });
+    commands
+        .spawn_bundle(DynamicSceneBundle {
+            // Scenes are loaded just like any other asset.
+            scene: asset_server.load("scenes/start_scene.scn.ron"),
+            ..default()
+        })
+        .insert(Name::new("Loaded scene"));
 
     // This tells the AssetServer to watch for changes to assets.
     // It enables our scenes to automatically reload in game when we modify their files
@@ -213,8 +215,6 @@ fn setup(
 struct DebugMaterial {
     handle: Handle<StandardMaterial>,
 }
-
-
 
 fn rotate(mut query: Query<&mut Transform, With<schemas::Primitive>>, time: Res<Time>) {
     for mut transform in &mut query {

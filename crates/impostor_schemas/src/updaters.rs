@@ -14,6 +14,15 @@ pub fn update_collider_cuboid(
     }
 }
 
+pub fn update_names(
+    mut commands: Commands,
+    query: Query<(Entity, &schemas::Name), Changed<schemas::Name>>,
+) {
+    for (entity, schemas::Name(name)) in query.iter() {
+        commands.entity(entity).insert(Name::new(name.clone()));
+    }
+}
+
 pub fn update_rigid_body(
     mut commands: Commands,
     query: Query<(Entity, &schemas::RigidBody), Changed<schemas::RigidBody>>,
@@ -32,7 +41,7 @@ pub fn update_rigid_body(
 
 fn update_primitives(
     mut commands: Commands,
-    mut primitives: Query<
+    primitives: Query<
         (
             Entity,
             &schemas::Primitive,
@@ -114,9 +123,7 @@ pub fn update_impulse_joints(
             commands
                 .entity(entity)
                 .insert(ImpulseJoint::new(parent, data));
-        }
-        else {
-
+        } else {
             println!(">>>>>>>>>no parent");
         }
     }
@@ -127,6 +134,7 @@ pub struct UpdatersPlugin;
 impl Plugin for UpdatersPlugin {
     fn build(&self, app: &mut App) {
         app.add_system(update_collider_cuboid)
+            .add_system(update_names)
             .add_system(update_rigid_body)
             .add_system(update_primitives)
             .add_system(update_impulse_joints);
