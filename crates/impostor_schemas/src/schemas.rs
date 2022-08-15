@@ -5,6 +5,11 @@ use bevy::{
     },
     prelude::*,
 };
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct Editable {}
+
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct Primitive {
@@ -86,6 +91,7 @@ impl Plugin for SchemasPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ColliderCuboid>()
             .register_type::<ColliderCylinder>()
+            .register_type::<Editable>()
             .register_type::<ImpulseJoint>()
             .register_type::<Name>()
             .register_type::<Primitive>()

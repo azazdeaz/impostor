@@ -19,6 +19,7 @@ fn main() {
     let ent1 = scene_world
         .spawn()
         .insert(schemas::Name("Link 1".into()))
+        .insert(schemas::Editable::default())
         .insert(schemas::Primitive {
             shape: "cube".into(),
         })
@@ -34,6 +35,7 @@ fn main() {
 
     scene_world
         .spawn()
+        .insert(schemas::Editable::default())
         .insert(schemas::Name("Link 2".into()))
         .insert(schemas::Primitive {
             shape: "cube".into(),

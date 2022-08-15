@@ -12,6 +12,10 @@
         ],
       },
       {
+        "type": "impostor_schemas::schemas::Editable",
+        "struct": {},
+      },
+      {
         "type": "impostor_schemas::schemas::Primitive",
         "struct": {
           "shape": {
@@ -111,6 +115,10 @@
             "value": "Link 2",
           },
         ],
+      },
+      {
+        "type": "impostor_schemas::schemas::Editable",
+        "struct": {},
       },
       {
         "type": "impostor_schemas::schemas::Primitive",

@@ -36,15 +36,15 @@ fn save_scene_system(world: &mut World) {
         })
         // .insert(Collider::ball(1.0))
         // .insert(Restitution::coefficient(0.7))
-        .insert(schemas::Transform::default())
+        // .insert(schemas::Transform::default())
         .with_children(|parent| {
             parent
                 .spawn()
                 .insert(schemas::Primitive {
                     shape: "cube".into(),
-                })
+                });
                 // .insert(Restitution::coefficient(0.7))
-                .insert(schemas::Transform::default());
+                // .insert(schemas::Transform::default());
         });
 
     let type_registry = world.resource::<TypeRegistry>();

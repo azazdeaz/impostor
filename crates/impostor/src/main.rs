@@ -6,22 +6,36 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_egui::EguiPlugin;
+use bevy_inspector_egui::{WorldInspectorPlugin, WorldInspectorParams};
 use bevy_rapier3d::prelude::*;
-use impostor_schemas::{schemas, updaters::UpdatersPlugin};
+use impostor_schemas::{schemas, updaters::UpdatersPlugin, ui};
 
 fn main() {
+
+    let mut world_inspector_params = WorldInspectorParams::default();
+    world_inspector_params.ignore_component::<Collider>();
+    world_inspector_params.ignore_component::<RigidBody>();
+    world_inspector_params.ignore_component::<Restitution>();
+    world_inspector_params.ignore_component::<RapierRigidBodyHandle>();
+    world_inspector_params.ignore_component::<RapierColliderHandle>();
+    world_inspector_params.ignore_component::<ComputedVisibility>();
+    world_inspector_params.ignore_component::<GlobalTransform>();
+
     App::new()
         .insert_resource(AmbientLight {
             color: Color::WHITE,
             brightness: 1.0 / 5.0f32,
         })
+        .insert_resource(world_inspector_params)
         .add_plugins(DefaultPlugins)
+        .add_plugin(EguiPlugin)
         .add_plugin(schemas::SchemasPlugin)
+        .add_system(ui::schemas_ui)
         .add_plugin(UpdatersPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
-        .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(WorldInspectorPlugin::new().filter::<With<schemas::Editable>>())
         .add_startup_system(setup)
         .add_startup_system(load_scene_system)
         // .add_startup_system(create_car)
@@ -129,7 +143,8 @@ fn load_scene_system(mut commands: Commands, asset_server: Res<AssetServer>) {
             scene: asset_server.load("scenes/start_scene.scn.ron"),
             ..default()
         })
-        .insert(Name::new("Loaded scene"));
+        .insert(Name::new("Loaded scene"))
+        .insert(schemas::Editable::default());
 
     // This tells the AssetServer to watch for changes to assets.
     // It enables our scenes to automatically reload in game when we modify their files
