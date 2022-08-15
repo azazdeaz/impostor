@@ -14,6 +14,42 @@ pub fn update_collider_cuboid(
     }
 }
 
+pub fn update_collider_cylinder(
+    mut commands: Commands,
+    query: Query<(Entity, &schemas::ColliderCylinder), Changed<schemas::ColliderCylinder>>,
+) {
+    for (
+        entity,
+        schemas::ColliderCylinder {
+            half_height,
+            radius,
+        },
+    ) in query.iter()
+    {
+        commands
+            .entity(entity)
+            .insert(Collider::cylinder(*half_height, *radius));
+    }
+}
+
+pub fn update_collision_groups(
+    mut commands: Commands,
+    query: Query<(Entity, &schemas::CollisionGroups), Changed<schemas::CollisionGroups>>,
+) {
+    for (
+        entity,
+        schemas::CollisionGroups {
+            memberships,
+            filters,
+        },
+    ) in query.iter()
+    {
+        commands
+            .entity(entity)
+            .insert(CollisionGroups::new(*memberships, *filters));
+    }
+}
+
 pub fn update_restitutions(
     mut commands: Commands,
     query: Query<(Entity, &schemas::Restitution), Changed<schemas::Restitution>>,
@@ -130,15 +166,36 @@ pub fn update_impulse_joints(
     }
 }
 
+pub fn update_transform(
+    mut commands: Commands,
+    query: Query<
+        (Entity, &schemas::Transform, Added<schemas::Transform>),
+        Changed<schemas::Transform>,
+    >,
+) {
+    for (entity, schemas::Transform(transform), is_added) in query.iter() {
+        if is_added {
+            commands
+                .entity(entity)
+                .insert_bundle(TransformBundle::from_transform(*transform));
+        } else {
+            commands.entity(entity).insert(*transform);
+        }
+    }
+}
+
 pub struct UpdatersPlugin;
 
 impl Plugin for UpdatersPlugin {
     fn build(&self, app: &mut App) {
         app.add_system(update_collider_cuboid)
+            .add_system(update_collider_cylinder)
+            .add_system(update_collision_groups)
             .add_system(update_names)
             .add_system(update_rigid_body)
             .add_system(update_restitutions)
             .add_system(update_primitives)
-            .add_system(update_impulse_joints);
+            .add_system(update_impulse_joints)
+            .add_system(update_transform);
     }
 }

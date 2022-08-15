@@ -12,6 +12,10 @@ pub struct Editable {}
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
+pub struct Transform(pub bevy::prelude::Transform);
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct Primitive {
     pub shape: String,
 }
@@ -32,13 +36,34 @@ pub struct ColliderCuboid {
     pub hy: f32,
     pub hz: f32,
 }
+impl ColliderCuboid {
+    pub fn new(hx: f32, hy: f32, hz: f32) -> Self {
+        Self { hx, hy, hz}
+    }
+}
+
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub struct ColliderCylinder {
     pub half_height: f32,
     pub radius: f32,
 }
+impl ColliderCylinder {
+    pub fn new(half_height: f32, radius: f32) -> Self {
+        Self { half_height, radius}
+    }
+}
 
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct CollisionGroups {
+    pub memberships: u32,
+    pub filters: u32,
+}impl CollisionGroups {
+    pub fn new(memberships: u32, filters: u32) -> Self {
+        Self { memberships, filters}
+    }
+}
 
 #[derive(Component, Reflect)]
 #[reflect(Component, MapEntities)]
@@ -91,6 +116,7 @@ impl Plugin for SchemasPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ColliderCuboid>()
             .register_type::<ColliderCylinder>()
+            .register_type::<CollisionGroups>()
             .register_type::<Editable>()
             .register_type::<ImpulseJoint>()
             .register_type::<Name>()
@@ -98,6 +124,7 @@ impl Plugin for SchemasPlugin {
             .register_type::<RevolutJoint>()
             .register_type::<Restitution>()
             .register_type::<RigidBody>()
-            .register_type::<Tag>();
+            .register_type::<Tag>()
+            .register_type::<Transform>();
     }
 }

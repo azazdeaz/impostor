@@ -15,10 +15,13 @@ fn main() {
 
     let mut world_inspector_params = WorldInspectorParams::default();
     world_inspector_params.ignore_component::<Collider>();
+    world_inspector_params.ignore_component::<CollisionGroups>();
     world_inspector_params.ignore_component::<RigidBody>();
     world_inspector_params.ignore_component::<Restitution>();
     world_inspector_params.ignore_component::<RapierRigidBodyHandle>();
     world_inspector_params.ignore_component::<RapierColliderHandle>();
+    world_inspector_params.ignore_component::<RapierImpulseJointHandle>();
+    world_inspector_params.ignore_component::<ImpulseJoint>();
     world_inspector_params.ignore_component::<ComputedVisibility>();
     world_inspector_params.ignore_component::<GlobalTransform>();
 
