@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 impostor_schemas = { path = "../../crates/impostor_schemas" }
+impostor_teleop = { path = "../../crates/impostor_teleop" }
 bevy = {version = "0.8.0", features=["jpeg"]}
 # bevy_config_cam = { version = "0.3.0"}
 bevy_rapier3d = { version = "0.16.0", features = [ "simd-stable", "debug-render", "serde-serialize" ] }

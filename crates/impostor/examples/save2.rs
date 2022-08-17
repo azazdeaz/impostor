@@ -1,4 +1,4 @@
-use std::{io::Write, f32::consts::PI};
+use std::{f32::consts::PI, io::Write};
 
 use bevy::{prelude::*, reflect::TypeRegistry};
 use bevy_rapier3d::prelude::{
@@ -60,7 +60,6 @@ fn main() {
 
     let scene = DynamicScene::from_world(&scene_world, &type_registry);
 
-
     info!("{}", scene.serialize_ron(&type_registry).unwrap());
 
     let mut file =
@@ -68,8 +67,6 @@ fn main() {
     file.write_all(scene.serialize_ron(&type_registry).unwrap().as_bytes())
         .unwrap();
 }
-
-
 
 fn create_car(commands: &mut World) {
     let width = 2.0;
@@ -82,39 +79,52 @@ fn create_car(commands: &mut World) {
         .spawn()
         .insert(schemas::Name("Chasis".into()))
         .insert(schemas::RigidBody("Dynamic".into()))
-        .insert(schemas::ColliderCuboid::new(width / 2., height / 2., length / 2.))
+        .insert(schemas::ColliderCuboid::new(
+            width / 2.,
+            height / 2.,
+            length / 2.,
+        ))
         // .insert(Restitution::coefficient(0.7))
         .insert(schemas::Transform(Transform::from_xyz(0.0, 4.0, 0.0)))
         .insert(schemas::CollisionGroups::new(0b1111, 0b0111))
         .id();
 
     let mut add_wheel = |front: f32, left: f32| {
-
-        commands
-            .spawn()
+        let mut wheel = commands.spawn();
+        wheel
             .insert(schemas::Name(format!("Wheel {} {}", front, left)))
             .insert(schemas::RigidBody("Dynamic".into()))
-            .insert(schemas::ImpulseJoint { parent: chasis, joint: schemas::RevolutJoint { 
-                axis: Vec3::X, 
-                local_anchor1: Vec3::new((width / 2. + wheel_width * 0.6) * left, 0.0, length / 2. * front), 
-                local_anchor2: Vec3::new(0.0, 0.0, 0.0) } 
+            .insert(schemas::ImpulseJoint {
+                parent: chasis,
+                joint: schemas::RevolutJoint {
+                    axis: Vec3::X,
+                    local_anchor1: Vec3::new(
+                        (width / 2. + wheel_width * 0.6) * left,
+                        0.0,
+                        length / 2. * front,
+                    ),
+                    local_anchor2: Vec3::new(0.0, 0.0, 0.0),
+                },
             })
             .insert(schemas::Transform(Transform::from_xyz(0., 6., 0.)))
             .with_children(|parent| {
-                let mut wheel = parent.spawn();
-                wheel
-                    .insert(schemas::ColliderCylinder::new(wheel_width / 2.0, wheel_radius))
-                    .insert(schemas::Restitution{coefficient: 0.7})
+                parent
+                    .spawn()
+                    .insert(schemas::ColliderCylinder::new(
+                        wheel_width / 2.0,
+                        wheel_radius,
+                    ))
+                    .insert(schemas::Restitution { coefficient: 0.7 })
                     .insert(schemas::Transform(Transform::from_rotation(
                         Quat::from_axis_angle(Vec3::Z, PI / 2.),
                     )))
                     .insert(schemas::CollisionGroups::new(0b1000, 0b1111));
-                if left > 0. {
-                    wheel.insert(schemas::Tag("LeftWheel".into()));
-                } else {
-                    wheel.insert(schemas::Tag("RightWheel".into()));
-                }
             });
+        if left > 0. {
+            wheel.insert(schemas::Tag("LeftWheel".into()));
+        } else {
+            wheel.insert(schemas::Tag("RightWheel".into()));
+        }
     };
 
     add_wheel(1., 1.);

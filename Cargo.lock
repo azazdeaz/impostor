@@ -995,6 +995,7 @@ dependencies = [
  "bevy_egui",
  "bevy_rapier3d",
  "impostor_schemas",
+ "impostor_teleop",
  "itertools",
  "nalgebra 0.30.1",
  "rand",
@@ -1980,6 +1981,15 @@ dependencies = [
  "bevy",
  "bevy_egui",
  "bevy_rapier3d",
+]
+
+[[package]]
+name = "impostor_teleop"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_rapier3d",
+ "impostor_schemas",
 ]
 
 [[package]]

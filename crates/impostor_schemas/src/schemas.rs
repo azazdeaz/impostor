@@ -102,9 +102,15 @@ pub struct Restitution {
     pub coefficient: f32,
 }
 
-#[derive(Component, Reflect, Default)]
-#[reflect(Component)]
+#[derive(Component, Reflect, Default, Debug, Eq, PartialEq, Clone)]
+#[reflect(Component, PartialEq)]
 pub struct Tag(pub String);
+
+impl From<&str> for Tag {
+    fn from(tag: &str) -> Self {
+        Self(tag.into())
+    }
+}
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]

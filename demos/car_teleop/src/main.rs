@@ -7,12 +7,11 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use bevy_egui::EguiPlugin;
-use bevy_inspector_egui::{WorldInspectorPlugin, WorldInspectorParams};
+use bevy_inspector_egui::{WorldInspectorParams, WorldInspectorPlugin};
 use bevy_rapier3d::prelude::*;
-use impostor_schemas::{schemas, updaters::UpdatersPlugin, ui};
+use impostor_schemas::{schemas, ui, updaters::UpdatersPlugin};
 
 fn main() {
-
     let mut world_inspector_params = WorldInspectorParams::default();
     world_inspector_params.ignore_component::<Collider>();
     world_inspector_params.ignore_component::<CollisionGroups>();
@@ -21,7 +20,7 @@ fn main() {
     world_inspector_params.ignore_component::<RapierRigidBodyHandle>();
     world_inspector_params.ignore_component::<RapierColliderHandle>();
     world_inspector_params.ignore_component::<RapierImpulseJointHandle>();
-    world_inspector_params.ignore_component::<ImpulseJoint>();
+    // world_inspector_params.ignore_component::<ImpulseJoint>();
     world_inspector_params.ignore_component::<ComputedVisibility>();
     world_inspector_params.ignore_component::<GlobalTransform>();
 
@@ -34,6 +33,10 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
         .add_plugin(schemas::SchemasPlugin)
+        .add_plugin(impostor_teleop::TeleopPlugin::new(
+            "LeftWheel".into(),
+            "RightWheel".into(),
+        ))
         .add_system(ui::schemas_ui)
         .add_plugin(UpdatersPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
