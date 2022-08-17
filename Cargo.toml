@@ -1,3 +1,9 @@
 [workspace]
 members = ["crates/*", "demos/*"]
 resolver = "2"
+
+[profile.dev.package.bevy_rapier3d]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1

@@ -994,6 +994,8 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_egui",
  "bevy_rapier3d",
+ "impostor_editor_camera",
+ "impostor_plant",
  "impostor_schemas",
  "impostor_teleop",
  "itertools",
@@ -1967,6 +1969,25 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_egui",
+ "bevy_rapier3d",
+ "impostor_schemas",
+ "itertools",
+ "nalgebra 0.30.1",
+ "rand",
+]
+
+[[package]]
+name = "impostor_editor_camera"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "impostor_plant"
+version = "0.1.0"
+dependencies = [
+ "bevy",
  "bevy_rapier3d",
  "impostor_schemas",
  "itertools",
