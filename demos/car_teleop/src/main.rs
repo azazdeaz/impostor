@@ -25,6 +25,7 @@ fn main() {
     world_inspector_params.ignore_component::<GlobalTransform>();
 
     App::new()
+        .insert_resource(Msaa { samples: 4 })
         .insert_resource(AmbientLight {
             color: Color::WHITE,
             brightness: 1.0 / 5.0f32,
@@ -179,4 +180,3 @@ fn setup(
         })
         .insert(Collider::cuboid(50.0, 0.1, 50.0));
 }
-
