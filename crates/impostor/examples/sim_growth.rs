@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::schedule::ShouldRun,
+    ecs::{entity, schedule::ShouldRun},
     prelude::*,
     render::mesh::{
         skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
@@ -12,8 +12,9 @@ use bevy_rapier3d::{
     rapier::prelude::{JointAxis, MotorModel},
 };
 use itertools::Itertools;
-use std::rc::Rc;
-use std::{cell::RefCell, fmt};
+use ptree::{TreeBuilder, print_tree};
+use std::{cell::RefCell, collections::VecDeque, fmt};
+use std::{f32::consts::PI, rc::Rc};
 
 fn main() {
     App::new()
@@ -32,7 +33,8 @@ fn main() {
                 .with_system(count_grow_steps)
                 .with_system(grow)
                 .with_system(branch_out)
-                .with_system(extend),
+                .with_system(extend)
+                .with_system(print_structure),
         )
         .add_system(update_mesh)
         .add_system(add_skeleton)
@@ -176,12 +178,19 @@ fn branch_out(
     lengths: Query<(Entity, &Length, Option<&PrevAxe>)>,
 ) {
     let min_length_between_branches = 5.0; // TODO move this to config resource
-    
+
     for root_axe in roots.iter() {
         let mut this_axe = root_axe;
         let mut length_without_branch = 0.0;
         let mut branch_out_from = Vec::<Entity>::new();
-        while let Ok((entity, Length(length), prev)) = lengths.get(this_axe) {
+        while let Ok((entity, Length(length), _)) = lengths.get(this_axe) {
+            println!(
+                "this {:?} sumlength {}, candidates {:?}",
+                this_axe.id(),
+                length_without_branch,
+                branch_out_from
+            );
+
             let has_branch_starting = lengths.iter().any(|(entity, _, prev)| {
                 roots.contains(entity)
                     && prev
@@ -204,34 +213,35 @@ fn branch_out(
             }
 
             if has_branch_starting {
+                println!("reset branchinf");
                 length_without_branch = 0.0;
                 branch_out_from.clear();
             }
 
             if let Some(next_axe) = next_axe {
                 this_axe = next_axe;
-            }
-            else {
-                break
+            } else {
+                break;
             }
         }
 
         for new_root_node in branch_out_from.iter() {
+            println!("Add branch to {:?}", new_root_node);
             commands
-                    .spawn()
-                    .insert(Name::new("Stem Node"))
-                    .insert_bundle(StemBundle {
-                        stem: Stem {
-                            order: 1,//TODO
-                            max_length: 4.0,
-                            direction: Quat::from_rotation_y(2.0),
-                        },
-                        length: Length(0.2),
-                        radius: Radius(0.001),
-                        ..Default::default()
-                    })
-                    .insert(AxisRoot {})
-                    .insert(PrevAxe(*new_root_node));
+                .spawn()
+                .insert(Name::new("Stem Node"))
+                .insert_bundle(StemBundle {
+                    stem: Stem {
+                        order: 1, //TODO
+                        max_length: 4.0,
+                        direction: Quat::from_euler(EulerRot::YZX, 0.0, 0.5, 0.0),
+                    },
+                    length: Length(0.2),
+                    radius: Radius(0.001),
+                    ..Default::default()
+                })
+                .insert(AxisRoot {})
+                .insert(PrevAxe(*new_root_node));
         }
     }
 }
@@ -280,7 +290,7 @@ fn add_skeleton(
 
         let mut next_step = Some((base, root));
         while let Some((prev_axe, this_axe)) = next_step {
-            if let Ok((_, _, Length(length), Radius(radius), _)) = q_stems.get(this_axe) {
+            if let Ok((_, stem, Length(length), Radius(radius), _)) = q_stems.get(this_axe) {
                 next_step = q_stems
                     .iter()
                     .find(|(_, _, _, _, prev_axe)| {
@@ -291,7 +301,7 @@ fn add_skeleton(
                     .and_then(|stem| Some((this_axe, stem.0)));
 
                 let transform = Transform::from_xyz(0.0, *length, 0.0);
-                let (rot_y, rot_z, rot_x) = (0.0, 0.0, 0.0); //transform.rotation.to_euler(EulerRot::YZX);
+                let (rot_y, rot_z, rot_x) = stem.direction.to_euler(EulerRot::YZX);
                 println!("rot_x {} rot_y {} rot_z {}", rot_x, rot_y, rot_z);
 
                 // next_step =
@@ -374,6 +384,33 @@ fn update_mesh(
             }
         }
     }
+}
+
+fn print_structure(
+    roots: Query<Entity, (With<AxisRoot>, Without<PrevAxe>)>,
+    stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
+) {
+    let mut tree = TreeBuilder::new("tree".to_string());
+
+    fn add_node(
+        entity: Entity,
+        mut tree: &mut TreeBuilder,
+        stems: &Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
+    ) {
+        let (_, (_, Length(length), Radius(radius)), _) = stems.get(entity).unwrap();
+        tree.begin_child(format!("{:?} len:{:.2} r:{:.2}", entity, length, radius));
+        stems
+            .iter()
+            .filter_map(|(child, _, prev)| {
+                prev.and_then(|prev| if prev.0 == entity { Some(child) } else { None })
+            })
+            .for_each(|next| add_node(next, &mut tree, &stems));
+        tree.end_child();
+    };
+    for root in roots.iter() {
+        add_node(root, &mut tree, &stems);
+    }
+    print_tree(&tree.build()).ok();
 }
 
 fn setup_plant(
