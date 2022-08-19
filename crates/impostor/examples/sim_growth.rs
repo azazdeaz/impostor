@@ -12,7 +12,8 @@ use bevy_rapier3d::{
     rapier::prelude::{JointAxis, MotorModel},
 };
 use itertools::Itertools;
-use ptree::{TreeBuilder, print_tree};
+use ptree::{print_tree, TreeBuilder};
+use rand::Rng;
 use std::{cell::RefCell, collections::VecDeque, fmt};
 use std::{f32::consts::PI, rc::Rc};
 
@@ -145,7 +146,7 @@ fn grow(mut commands: Commands, query: Query<(Entity, Option<&Parent>, &Radius, 
 fn extend(
     mut commands: Commands,
     query: Query<(Entity, &Stem, &Length)>,
-    prev_axes: Query<&PrevAxe>,
+    prev_axes: Query<&PrevAxe, Without<AxisRoot>>,
 ) {
     let end_stems = query
         .iter()
@@ -153,7 +154,7 @@ fn extend(
 
     for (id, stem, Length(length)) in end_stems {
         if length.clone() > stem.max_length * 0.8 {
-            let next = commands
+            commands
                 .spawn()
                 .insert(Name::new("Stem Node"))
                 .insert_bundle(StemBundle {
@@ -166,8 +167,7 @@ fn extend(
                     radius: Radius(0.001),
                     ..Default::default()
                 })
-                .insert(PrevAxe(id))
-                .id();
+                .insert(PrevAxe(id));
         }
     }
 }
@@ -227,6 +227,7 @@ fn branch_out(
 
         for new_root_node in branch_out_from.iter() {
             println!("Add branch to {:?}", new_root_node);
+            let mut rng = rand::thread_rng();
             commands
                 .spawn()
                 .insert(Name::new("Stem Node"))
@@ -234,7 +235,12 @@ fn branch_out(
                     stem: Stem {
                         order: 1, //TODO
                         max_length: 4.0,
-                        direction: Quat::from_euler(EulerRot::YZX, 0.0, 0.5, 0.0),
+                        direction: Quat::from_euler(
+                            EulerRot::XZY,
+                            0.0,
+                            PI / 2.0,
+                            rng.gen::<f32>() * PI * 2.0,
+                        ),
                     },
                     length: Length(0.2),
                     radius: Radius(0.001),
@@ -273,7 +279,7 @@ fn add_skeleton(
     mut commands: Commands,
     mut grow_steps: ResMut<GrowSteps>,
     q_root: Query<Entity, With<AxisRoot>>,
-    q_stems: Query<(Entity, &Stem, &Length, &Radius, Option<&PrevAxe>)>,
+    q_stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
 ) {
     if !grow_steps.is_done() || grow_steps.skeleton_updated {
         return;
@@ -281,19 +287,24 @@ fn add_skeleton(
     grow_steps.set_skeleton_updated();
 
     for root in q_root.iter() {
-        let base = commands
-            .spawn()
-            .insert(RigidBody::Fixed)
-            .insert(GlobalTransform::identity())
-            .insert(Transform::from_xyz(0.0, 0.0, 0.0))
-            .id();
+        let prev_axe = q_stems.get(root).unwrap().2;
+        let base = if let Some(prev_axe) = prev_axe {
+            prev_axe.0
+        } else {
+            commands
+                .spawn()
+                .insert(RigidBody::Fixed)
+                .insert(GlobalTransform::identity())
+                .insert(Transform::from_xyz(0.0, 0.0, 0.0))
+                .id()
+        };
 
         let mut next_step = Some((base, root));
         while let Some((prev_axe, this_axe)) = next_step {
-            if let Ok((_, stem, Length(length), Radius(radius), _)) = q_stems.get(this_axe) {
+            if let Ok((_, (stem, Length(length), Radius(radius)), _)) = q_stems.get(this_axe) {
                 next_step = q_stems
                     .iter()
-                    .find(|(_, _, _, _, prev_axe)| {
+                    .find(|(_, _, prev_axe)| {
                         prev_axe
                             .and_then(|axe| Some(axe.0 == this_axe))
                             .unwrap_or(false)
