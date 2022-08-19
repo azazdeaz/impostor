@@ -31,6 +31,7 @@ fn main() {
                 .with_run_criteria(run_if_growing)
                 .with_system(count_grow_steps)
                 .with_system(grow)
+                .with_system(branch_out)
                 .with_system(extend),
         )
         .add_system(update_mesh)
@@ -169,33 +170,71 @@ fn extend(
     }
 }
 
-// fn branch_out(
-//     mut commands: Commands,
-//     query: Query<(Entity, &Stem, &Length, Option<&mut Branches>)>,
-// ) {
-//     for (id, stem, Length(length), branches) in query.iter() {
-//         if *length > stem.max_length * 0.8 {
-//             let next = commands
-//                 .spawn()
-//                 .insert(Name::new("Stem Node"))
-//                 .insert_bundle(StemBundle {
-//                     stem: Stem {
-//                         order: stem.order,
-//                         max_length: 4.0,
-//                         direction: Quat::default(),
-//                     },
-//                     length: Length(0.2),
-//                     radius: Radius(0.001),
-//                     ..Default::default()
-//                 })
-//                 .id();
-//             commands
-//                 .entity(id)
-//                 .push_children(&[next])
-//                 .insert(NextAxe(next));
-//         }
-//     }
-// }
+fn branch_out(
+    mut commands: Commands,
+    roots: Query<Entity, With<AxisRoot>>,
+    lengths: Query<(Entity, &Length, Option<&PrevAxe>)>,
+) {
+    let min_length_between_branches = 5.0; // TODO move this to config resource
+    
+    for root_axe in roots.iter() {
+        let mut this_axe = root_axe;
+        let mut length_without_branch = 0.0;
+        let mut branch_out_from = Vec::<Entity>::new();
+        while let Ok((entity, Length(length), prev)) = lengths.get(this_axe) {
+            let has_branch_starting = lengths.iter().any(|(entity, _, prev)| {
+                roots.contains(entity)
+                    && prev
+                        .and_then(|prev| Some(prev.0 == this_axe))
+                        .unwrap_or(false)
+            });
+            let next_axe = lengths.iter().find_map(|(entity, _, prev)| {
+                prev.and_then(|prev| {
+                    if prev.0 == this_axe {
+                        Some(entity)
+                    } else {
+                        None
+                    }
+                })
+            });
+
+            length_without_branch += length;
+            if length_without_branch > min_length_between_branches {
+                branch_out_from.push(entity);
+            }
+
+            if has_branch_starting {
+                length_without_branch = 0.0;
+                branch_out_from.clear();
+            }
+
+            if let Some(next_axe) = next_axe {
+                this_axe = next_axe;
+            }
+            else {
+                break
+            }
+        }
+
+        for new_root_node in branch_out_from.iter() {
+            commands
+                    .spawn()
+                    .insert(Name::new("Stem Node"))
+                    .insert_bundle(StemBundle {
+                        stem: Stem {
+                            order: 1,//TODO
+                            max_length: 4.0,
+                            direction: Quat::from_rotation_y(2.0),
+                        },
+                        length: Length(0.2),
+                        radius: Radius(0.001),
+                        ..Default::default()
+                    })
+                    .insert(AxisRoot {})
+                    .insert(PrevAxe(*new_root_node));
+        }
+    }
+}
 
 // fn branch_out(q_root: Query<(Entity, &NextAxe), (With<AxisRoot>, With)>, q_stem: Query<(&Stem, &NextAxe)>) {
 //     for root in q_root.iter() {
@@ -223,7 +262,7 @@ fn extend(
 fn add_skeleton(
     mut commands: Commands,
     mut grow_steps: ResMut<GrowSteps>,
-    q_root: Query<Entity, (With<AxisRoot>)>,
+    q_root: Query<Entity, With<AxisRoot>>,
     q_stems: Query<(Entity, &Stem, &Length, &Radius, Option<&PrevAxe>)>,
 ) {
     if !grow_steps.is_done() || grow_steps.skeleton_updated {
@@ -264,9 +303,9 @@ fn add_skeleton(
                     SphericalJointBuilder::new()
                         .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
                         .local_anchor2(Vec3::new(0.0, -length, 0.0))
-                        .motor_position(JointAxis::AngX, rot_x, 200.0 * radius, 100.0)
-                        .motor_position(JointAxis::AngY, rot_y, 200.0 * radius, 100.0)
-                        .motor_position(JointAxis::AngZ, rot_z, 200.0 * radius, 100.0)
+                        .motor_position(JointAxis::AngX, rot_x, 400.0 * radius, 100.0)
+                        .motor_position(JointAxis::AngY, rot_y, 400.0 * radius, 100.0)
+                        .motor_position(JointAxis::AngZ, rot_z, 400.0 * radius, 100.0)
                         .motor_model(JointAxis::AngX, MotorModel::ForceBased)
                         .motor_model(JointAxis::AngY, MotorModel::ForceBased)
                         .motor_model(JointAxis::AngZ, MotorModel::ForceBased)
@@ -318,11 +357,18 @@ fn update_mesh(
         let mut prev = Some(root);
         while let Some(stem_id) = prev {
             prev = if let Ok((entity, info, _)) = q_stems.get(stem_id) {
-                println!("STEM {:?} length: {:?} radius: {:?}", info.0, info.1, info.2);
-                q_stems.iter().find(|(_, _, prev_axe)| {
-                    prev_axe.and_then(|prev_axe| Some(prev_axe.0 == entity)).unwrap_or(false)
-                })
-                .and_then(|(entity, _, _)| Some(entity))
+                println!(
+                    "STEM {:?} length: {:?} radius: {:?}",
+                    info.0, info.1, info.2
+                );
+                q_stems
+                    .iter()
+                    .find(|(_, _, prev_axe)| {
+                        prev_axe
+                            .and_then(|prev_axe| Some(prev_axe.0 == entity))
+                            .unwrap_or(false)
+                    })
+                    .and_then(|(entity, _, _)| Some(entity))
             } else {
                 None
             }
