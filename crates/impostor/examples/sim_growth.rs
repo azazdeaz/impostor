@@ -23,13 +23,16 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .insert_resource(GrowSteps::from_steps(20))
         .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
+        .insert_resource(PlantConfig::default())
+        .add_plugin(InspectorPlugin::<PlantConfig>::new_insert_manually())
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
-        .add_startup_system(setup_plant)
+        // .add_startup_system(setup_plant)
         .add_startup_system(setup_scene)
         .add_system_set(
             SystemSet::new()
+                .label("grow")
                 .with_run_criteria(run_if_growing)
                 .with_system(count_grow_steps)
                 .with_system(grow)
@@ -37,6 +40,8 @@ fn main() {
                 .with_system(extend)
                 .with_system(print_structure),
         )
+        .add_stage_after(CoreStage::Update, "prune", SystemStage::single_threaded())
+        .add_system_to_stage("prune", resetPlant)
         .add_system(update_mesh)
         .add_system(add_skeleton)
         .register_type::<Stem>()
@@ -61,6 +66,11 @@ impl GrowSteps {
             skeleton_updated: false,
         }
     }
+    fn reset(&mut self) {
+        self.current = 0;
+        self.mesh_updated = false;
+        self.skeleton_updated = false;
+    }
     fn step(&mut self) {
         self.current += 1;
         self.mesh_updated = false;
@@ -73,6 +83,53 @@ impl GrowSteps {
     }
     fn set_skeleton_updated(&mut self) {
         self.skeleton_updated = true;
+    }
+}
+
+#[derive(Inspectable)]
+struct PlantConfig {
+    stiffness: f32,
+    damping: f32,
+    max_node_length: f32,
+}
+impl Default for PlantConfig {
+    fn default() -> Self {
+        Self {
+            stiffness: 2000.0,
+            damping: 1500.0,
+            max_node_length: 4.0,
+        }
+    }
+}
+
+fn resetPlant(
+    mut commands: Commands,
+    plant_config: Res<PlantConfig>,
+    mut grow_steps: ResMut<GrowSteps>,
+    stems: Query<Entity, (With<Stem>)>,
+) {
+    if plant_config.is_changed() {
+        println!("RESET PLANT");
+        grow_steps.reset();
+        stems
+            .iter()
+            .for_each(|entity| commands.entity(entity).despawn_recursive());
+
+        // Start the new plant
+        commands
+            .spawn()
+            .insert(Name::new("Root Node"))
+            .insert_bundle(StemBundle {
+                stem: Stem {
+                    order: 0,
+                    max_length: plant_config.max_node_length,
+                    direction: Quat::default(),
+                },
+                length: Length(0.2),
+                radius: Radius(0.001),
+                ..Default::default()
+            })
+            .insert(AxisRoot {});
     }
 }
 
@@ -91,6 +148,7 @@ fn count_grow_steps(mut grow_steps: ResMut<GrowSteps>) {
 
 #[derive(Component)]
 struct AxisRoot {}
+
 #[derive(Component)]
 struct PrevAxe(Entity);
 #[derive(Component, Debug)]
@@ -145,6 +203,7 @@ fn grow(mut commands: Commands, query: Query<(Entity, Option<&Parent>, &Radius, 
 
 fn extend(
     mut commands: Commands,
+    plant_config: Res<PlantConfig>,
     query: Query<(Entity, &Stem, &Length)>,
     prev_axes: Query<&PrevAxe, Without<AxisRoot>>,
 ) {
@@ -160,7 +219,7 @@ fn extend(
                 .insert_bundle(StemBundle {
                     stem: Stem {
                         order: stem.order,
-                        max_length: 4.0,
+                        max_length: plant_config.max_node_length,
                         direction: Quat::default(),
                     },
                     length: Length(0.2),
@@ -280,6 +339,7 @@ fn add_skeleton(
     mut grow_steps: ResMut<GrowSteps>,
     q_root: Query<Entity, With<AxisRoot>>,
     q_stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
+    plant_config: Res<PlantConfig>,
 ) {
     if !grow_steps.is_done() || grow_steps.skeleton_updated {
         return;
@@ -324,9 +384,24 @@ fn add_skeleton(
                     SphericalJointBuilder::new()
                         .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
                         .local_anchor2(Vec3::new(0.0, -length, 0.0))
-                        .motor_position(JointAxis::AngX, rot_x, 400.0 * radius, 100.0)
-                        .motor_position(JointAxis::AngY, rot_y, 400.0 * radius, 100.0)
-                        .motor_position(JointAxis::AngZ, rot_z, 400.0 * radius, 100.0)
+                        .motor_position(
+                            JointAxis::AngX,
+                            rot_x,
+                            plant_config.stiffness * radius,
+                            plant_config.damping,
+                        )
+                        .motor_position(
+                            JointAxis::AngY,
+                            rot_y,
+                            plant_config.stiffness * radius,
+                            plant_config.damping,
+                        )
+                        .motor_position(
+                            JointAxis::AngZ,
+                            rot_z,
+                            plant_config.stiffness * radius,
+                            plant_config.damping,
+                        )
                         .motor_model(JointAxis::AngX, MotorModel::ForceBased)
                         .motor_model(JointAxis::AngY, MotorModel::ForceBased)
                         .motor_model(JointAxis::AngZ, MotorModel::ForceBased)
