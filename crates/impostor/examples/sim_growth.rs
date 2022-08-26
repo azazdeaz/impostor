@@ -38,6 +38,7 @@ fn main() {
                 .with_system(grow)
                 .with_system(branch_out)
                 .with_system(extend)
+                .with_system(update_strength)
                 .with_system(print_structure),
         )
         .add_stage_after(CoreStage::Update, "prune", SystemStage::single_threaded())
@@ -154,10 +155,17 @@ struct PrevAxe(Entity);
 #[derive(Component, Debug)]
 struct Branches(Vec<Entity>);
 
-#[derive(Component, Debug)]
+
+#[derive(Reflect, Default, Component, Debug)]
+#[reflect(Component)]
 struct Length(f32);
-#[derive(Component, Debug)]
+#[derive(Reflect, Default, Component, Debug)]
+#[reflect(Component)]
 struct Radius(f32);
+
+#[derive(Reflect, Default, Component, Debug)]
+#[reflect(Component)]
+struct Strength(f32);
 
 #[derive(Reflect, Default, Component, Debug, Clone)]
 #[reflect(Component)]
@@ -229,6 +237,35 @@ fn extend(
                 .insert(PrevAxe(id));
         }
     }
+}
+
+fn update_strength(
+    mut commands: Commands,
+    roots: Query<Entity, With<Stem>>,
+    stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
+) {
+    let mut tree = TreeBuilder::new("tree".to_string());
+
+    fn weight_above(
+        entity: Entity,
+        mut tree: &mut TreeBuilder,
+        stems: &Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
+    ) -> f32 {
+        let (_, (_, Length(length), Radius(radius)), _) = stems.get(entity).unwrap();
+        let stem_weight = radius * length;
+        let children_weight: f32 = stems
+            .iter()
+            .filter_map(|(child, _, prev)| {
+                prev.and_then(|prev| if prev.0 == entity { Some(child) } else { None })
+            })
+            .map(|next| weight_above(next, &mut tree, &stems)).sum();
+        stem_weight + children_weight
+    };
+    for root in roots.iter() {
+        let weight = weight_above(root, &mut tree, &stems);
+        commands.entity(root).insert(Strength(weight));
+    }
+    print_tree(&tree.build()).ok();
 }
 
 fn branch_out(
@@ -338,7 +375,7 @@ fn add_skeleton(
     mut commands: Commands,
     mut grow_steps: ResMut<GrowSteps>,
     q_root: Query<Entity, With<AxisRoot>>,
-    q_stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
+    q_stems: Query<(Entity, (&Stem, &Length, &Radius, &Strength), Option<&PrevAxe>)>,
     plant_config: Res<PlantConfig>,
 ) {
     if !grow_steps.is_done() || grow_steps.skeleton_updated {
@@ -361,7 +398,7 @@ fn add_skeleton(
 
         let mut next_step = Some((base, root));
         while let Some((prev_axe, this_axe)) = next_step {
-            if let Ok((_, (stem, Length(length), Radius(radius)), _)) = q_stems.get(this_axe) {
+            if let Ok((_, (stem, Length(length), Radius(radius), Strength(strength)), _)) = q_stems.get(this_axe) {
                 next_step = q_stems
                     .iter()
                     .find(|(_, _, prev_axe)| {
@@ -387,19 +424,19 @@ fn add_skeleton(
                         .motor_position(
                             JointAxis::AngX,
                             rot_x,
-                            plant_config.stiffness * radius,
+                            plant_config.stiffness * strength,
                             plant_config.damping,
                         )
                         .motor_position(
                             JointAxis::AngY,
                             rot_y,
-                            plant_config.stiffness * radius,
+                            plant_config.stiffness * strength,
                             plant_config.damping,
                         )
                         .motor_position(
                             JointAxis::AngZ,
                             rot_z,
-                            plant_config.stiffness * radius,
+                            plant_config.stiffness * strength,
                             plant_config.damping,
                         )
                         .motor_model(JointAxis::AngX, MotorModel::ForceBased)
