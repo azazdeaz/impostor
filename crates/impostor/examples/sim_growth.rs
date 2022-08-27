@@ -21,7 +21,7 @@ fn main() {
     App::new()
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
-        .insert_resource(GrowSteps::from_steps(20))
+        .insert_resource(GrowSteps::from_steps(40))
         .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
         .insert_resource(PlantConfig::default())
         .add_plugin(InspectorPlugin::<PlantConfig>::new_insert_manually())
@@ -46,6 +46,9 @@ fn main() {
         .add_system(update_mesh)
         .add_system(add_skeleton)
         .register_type::<Stem>()
+        .register_type::<Radius>()
+        .register_type::<Length>()
+        .register_type::<Strength>()
         .run();
 }
 
@@ -98,7 +101,7 @@ impl Default for PlantConfig {
         Self {
             stiffness: 2000.0,
             damping: 1500.0,
-            max_node_length: 4.0,
+            max_node_length: 2.0,
         }
     }
 }
@@ -270,6 +273,7 @@ fn update_strength(
 
 fn branch_out(
     mut commands: Commands,
+    plant_config: Res<PlantConfig>,
     roots: Query<Entity, With<AxisRoot>>,
     lengths: Query<(Entity, &Length, Option<&PrevAxe>)>,
 ) {
@@ -330,7 +334,7 @@ fn branch_out(
                 .insert_bundle(StemBundle {
                     stem: Stem {
                         order: 1, //TODO
-                        max_length: 4.0,
+                        max_length: plant_config.max_node_length,
                         direction: Quat::from_euler(
                             EulerRot::XZY,
                             0.0,
@@ -391,8 +395,7 @@ fn add_skeleton(
             commands
                 .spawn()
                 .insert(RigidBody::Fixed)
-                .insert(GlobalTransform::identity())
-                .insert(Transform::from_xyz(0.0, 0.0, 0.0))
+                .insert_bundle(TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)))
                 .id()
         };
 
@@ -425,23 +428,26 @@ fn add_skeleton(
                             JointAxis::AngX,
                             rot_x,
                             plant_config.stiffness * strength,
-                            plant_config.damping,
+                            plant_config.damping * strength,
                         )
                         .motor_position(
                             JointAxis::AngY,
                             rot_y,
-                            plant_config.stiffness * strength,
-                            plant_config.damping,
+                            plant_config.stiffness * strength * 10.0,
+                            plant_config.damping * strength * 10.0,
                         )
                         .motor_position(
                             JointAxis::AngZ,
                             rot_z,
                             plant_config.stiffness * strength,
-                            plant_config.damping,
+                            plant_config.damping * strength,
                         )
-                        .motor_model(JointAxis::AngX, MotorModel::ForceBased)
-                        .motor_model(JointAxis::AngY, MotorModel::ForceBased)
-                        .motor_model(JointAxis::AngZ, MotorModel::ForceBased)
+                        .motor_model(JointAxis::AngX, MotorModel::AccelerationBased)
+                        .motor_model(JointAxis::AngY, MotorModel::AccelerationBased)
+                        .motor_model(JointAxis::AngZ, MotorModel::AccelerationBased)
+                        .limits(JointAxis::AngX, [-0.0, 0.0])
+                        .limits(JointAxis::AngY, [-0.0, 0.0])
+                        .limits(JointAxis::AngZ, [-0.0, 0.0])
                         .into()
                 } else {
                     FixedJointBuilder::new()
@@ -453,12 +459,12 @@ fn add_skeleton(
                 commands
                     .entity(this_axe)
                     .insert(RigidBody::Dynamic)
-                    .insert(transform)
+                    .insert_bundle(TransformBundle::from_transform(transform))
                     .insert(GlobalTransform::identity())
                     .with_children(|children| {
                         children
                             .spawn()
-                            .insert(Collider::capsule_y(length / 2.0, *radius))
+                            .insert(Collider::capsule_y(length / 2.0, *radius* 0.2))
                             .insert(CollisionGroups::new(0b1000, 0b0100))
                             .insert(Transform::from_xyz(0.0, -length / 2.0, 0.0));
                     })
