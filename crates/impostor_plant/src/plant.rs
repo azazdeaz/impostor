@@ -273,12 +273,12 @@ fn create_stem_skeleton(
             .motor_position(JointAxis::AngX, rot_x, 90000.0 * *r, 10000.0)
             .motor_position(JointAxis::AngY, rot_y, 90000.0 * *r, 10000.0)
             .motor_position(JointAxis::AngZ, rot_z, 90000.0 * *r, 10000.0)
-            .motor_model(JointAxis::AngX, MotorModel::ForceBased)
-            .motor_model(JointAxis::AngY, MotorModel::ForceBased)
-            .motor_model(JointAxis::AngZ, MotorModel::ForceBased)
-            .limits(JointAxis::AngX, [-0.0, 0.0])
-            .limits(JointAxis::AngY, [-0.0, 0.0])
-            .limits(JointAxis::AngZ, [-0.0, 0.0]);
+            .motor_model(JointAxis::AngX, MotorModel::AccelerationBased)
+            .motor_model(JointAxis::AngY, MotorModel::AccelerationBased)
+            .motor_model(JointAxis::AngZ, MotorModel::AccelerationBased)
+            .limits(JointAxis::AngX, [rot_x, rot_x])
+            .limits(JointAxis::AngY, [rot_y, rot_y])
+            .limits(JointAxis::AngZ, [rot_z, rot_z]);
         commands
             .entity(section)
             .insert(ImpulseJoint::new(prev_section, rapier_joint));

@@ -104,7 +104,7 @@ impl Default for PlantConfig {
             stiffness: 2000.0,
             damping: 1500.0,
             max_node_length: 2.0,
-            max_radius: 1.0,
+            max_radius: 2.0,
         }
     }
 }
@@ -113,7 +113,7 @@ fn resetPlant(
     mut commands: Commands,
     plant_config: Res<PlantConfig>,
     mut grow_steps: ResMut<GrowSteps>,
-    stems: Query<Entity, (With<Stem>)>,
+    stems: Query<Entity, With<Stem>>
 ) {
     if plant_config.is_changed() {
         println!("RESET PLANT");
@@ -341,8 +341,8 @@ fn branch_out(
                         direction: Quat::from_euler(
                             EulerRot::XZY,
                             0.0,
-                            PI / 2.0,
-                            rng.gen::<f32>() * PI * 2.0,
+                            0.0,//PI / 4.0,
+                            0.0//rng.gen::<f32>() * PI * 2.0,
                         ),
                     },
                     length: Length(0.2),
@@ -445,12 +445,12 @@ fn add_skeleton(
                             plant_config.stiffness * strength,
                             plant_config.damping * strength,
                         )
-                        .motor_model(JointAxis::AngX, MotorModel::AccelerationBased)
-                        .motor_model(JointAxis::AngY, MotorModel::AccelerationBased)
-                        .motor_model(JointAxis::AngZ, MotorModel::AccelerationBased)
-                        .limits(JointAxis::AngX, [-0.0, 0.0])
-                        .limits(JointAxis::AngY, [-0.0, 0.0])
-                        .limits(JointAxis::AngZ, [-0.0, 0.0])
+                        .motor_model(JointAxis::AngX, MotorModel::ForceBased)
+                        .motor_model(JointAxis::AngY, MotorModel::ForceBased)
+                        .motor_model(JointAxis::AngZ, MotorModel::ForceBased)
+                        .limits(JointAxis::AngX, [rot_x, rot_x])
+                        .limits(JointAxis::AngY, [rot_y, rot_y])
+                        .limits(JointAxis::AngZ, [rot_z, rot_z])
                         .into()
                 } else {
                     FixedJointBuilder::new()
@@ -467,7 +467,7 @@ fn add_skeleton(
                     .with_children(|children| {
                         children
                             .spawn()
-                            .insert(Collider::capsule_y(length / 2.0, *radius* 0.2))
+                            .insert(Collider::capsule_y(length / 2.0, *radius))
                             .insert(CollisionGroups::new(0b1000, 0b0100))
                             .insert(Transform::from_xyz(0.0, -length / 2.0, 0.0));
                     })
