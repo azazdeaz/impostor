@@ -104,7 +104,7 @@ impl Default for PlantConfig {
             stiffness: 2000.0,
             damping: 1500.0,
             max_node_length: 2.0,
-            max_radius: 2.0,
+            max_radius: 1.2,
         }
     }
 }
@@ -331,6 +331,7 @@ fn branch_out(
         for new_root_node in branch_out_from.iter() {
             println!("Add branch to {:?}", new_root_node);
             let mut rng = rand::thread_rng();
+            let angle = rng.gen::<f32>() * PI * 2.0;
             commands
                 .spawn()
                 .insert(Name::new("Stem Node"))
@@ -341,8 +342,8 @@ fn branch_out(
                         direction: Quat::from_euler(
                             EulerRot::XZY,
                             0.0,
-                            0.0,//PI / 4.0,
-                            0.0//rng.gen::<f32>() * PI * 2.0,
+                            PI / 4.0,
+                            angle,
                         ),
                     },
                     length: Length(0.2),
@@ -351,6 +352,26 @@ fn branch_out(
                 })
                 .insert(AxisRoot {})
                 .insert(PrevAxe(*new_root_node));
+                commands
+                    .spawn()
+                    .insert(Name::new("Stem Node"))
+                    .insert_bundle(StemBundle {
+                        stem: Stem {
+                            order: 1, //TODO
+                            max_length: plant_config.max_node_length,
+                            direction: Quat::from_euler(
+                                EulerRot::XZY,
+                                0.0,
+                                PI / 4.0,
+                                angle + PI,
+                            ),
+                        },
+                        length: Length(0.2),
+                        radius: Radius(0.001),
+                        ..Default::default()
+                    })
+                    .insert(AxisRoot {})
+                    .insert(PrevAxe(*new_root_node));
         }
     }
 }
@@ -476,6 +497,14 @@ fn add_skeleton(
         }
     }
 }
+
+// fn update_joint_forces(mut joints: Query<(&mut ImpulseJoint, &Strength)>) {
+//     for (mut joint, Strength(strength)) in joints.iter_mut() {
+//         joint.data.as_spherical_mut().and_then(|joint| {
+//             joint.
+//         })
+//     }
+// }
 
 fn update_mesh(
     mut commands: Commands,

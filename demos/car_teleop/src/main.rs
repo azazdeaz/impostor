@@ -42,12 +42,12 @@ fn main() {
         .add_system(ui::schemas_ui)
         .add_plugin(UpdatersPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugin(RapierDebugRenderPlugin::default())
+        // .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(WorldInspectorPlugin::new().filter::<With<schemas::Editable>>())
         .add_startup_system(setup)
         // .add_startup_system(load_scene_system)
         .add_startup_system(impostor_plant::create_demo_plant)
-        .add_plugin(impostor_plant::PlantPlugin)
+        // .add_plugin(impostor_plant::PlantPlugin)
         // .add_startup_system(create_car)
         // .add_system(keyboard_input_system)
         // .add_system(update_transforms)
@@ -171,7 +171,7 @@ fn setup(
     // ground plane
     commands
         .spawn_bundle(PbrBundle {
-            mesh: meshes.add(shape::Plane { size: 50. }.into()),
+            mesh: meshes.add(shape::Plane { size: 500. }.into()),
             material: materials.add(Color::SILVER.into()),
             ..default()
         })

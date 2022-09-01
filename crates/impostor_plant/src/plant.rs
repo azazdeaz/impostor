@@ -7,7 +7,7 @@ use bevy::{
 };
 use bevy_rapier3d::{
     prelude::*,
-    rapier::prelude::{JointAxis, MotorModel},
+    rapier::prelude::{JointAxis, MotorModel}, na::coordinates::X,
 };
 use itertools::Itertools;
 
@@ -21,7 +21,7 @@ fn create_mesh_stem(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     skinned_mesh_inverse_bindposes_assets: &mut ResMut<Assets<SkinnedMeshInverseBindposes>>,
-    asset_server: Res<AssetServer>,
+    asset_server: &Res<AssetServer>,
 ) {
     use std::f32::consts::PI;
     let enable_wireframe = false;
@@ -35,11 +35,6 @@ fn create_mesh_stem(
     let levels = (d * resolution) as usize + 1;
     let level_height = d as f32 / levels as f32;
     let vertex_count = (levels + 1) * (ring_resolution + 1);
-    println!("joints.len() {}", joints.len());
-    println!("vertex_count {}", vertex_count);
-    println!("levels {}", levels);
-    println!("level_height {}", level_height);
-    println!("d {}", d);
     let mut positions = Vec::with_capacity(vertex_count);
     let mut normals = Vec::with_capacity(vertex_count);
     let mut uvs = Vec::with_capacity(vertex_count);
@@ -50,15 +45,10 @@ fn create_mesh_stem(
         .map(|i| {
             let translation =
                 (from + (to - from) * (i as f32 / (joints.len() - 1) as f32)) * Vec3::splat(-1.0);
-            println!("T {:?}", translation);
             Mat4::from_translation(translation)
         })
         .collect_vec();
-    println!(
-        "Inverse bind poses {} {:?}",
-        inverse_bindposes.len(),
-        inverse_bindposes
-    );
+
     let inverse_bindposes = skinned_mesh_inverse_bindposes_assets
         .add(SkinnedMeshInverseBindposes::from(inverse_bindposes));
     // let inverse_bindposes =
@@ -73,7 +63,6 @@ fn create_mesh_stem(
         let level = (n / (ring_resolution + 1)) as f32;
         let step = (n % (ring_resolution + 1)) as f32;
         let y = level * level_height;
-        println!("y {} level {} level_height {}", y, level, level_height);
         let theta = (step / ring_resolution as f32) * PI * 2.0;
 
         let level_p = level as f32 / levels as f32;
@@ -100,10 +89,10 @@ fn create_mesh_stem(
         // joint_indices.push([0u16, 1, 2, 3]);
 
         // 0..1.0 place of vertex btwn the two joints
-        let joint_p = (level_p * (joints.len()-1) as f32) % 1.0;
+        let joint_p = (level_p * (joints.len() - 1) as f32) % 1.0;
         let mut w0 = 1.0 - joint_p;
         let mut w1 = joint_p;
-        println!("n {} level_p {}, joint_p: {}, w0 {}, w1 {}",n, level_p, joint_p, w0, w1);
+
         // normalize weights
         // let sum = w0 + w1;
         // w0 /= sum;
@@ -118,7 +107,7 @@ fn create_mesh_stem(
     } else {
         Vec::with_capacity(quad_count * 6)
     };
-    for n in (quad_count/levels*0)..(quad_count/levels*levels) {
+    for n in (quad_count / levels * 0)..(quad_count / levels * levels) {
         let res = ring_resolution as u32;
         // number of vertices at one level
         let level_up = res + 1;
@@ -134,8 +123,7 @@ fn create_mesh_stem(
         let d = start + step1;
         let e = start + step1 + level_up;
         let f = start + step2 + level_up;
-        println!("n {}\ta:{}|{:?}\tb:{}|{:?}\tc:{}|{:?}", n, a, positions[a as usize], b, positions[b as usize], c, positions[c as usize]);
-        println!("n {}\ta:{:?}|{:?}\tb:{:?}|{:?}\tc:{:?}|{:?}", n, joint_indices[a as usize], joint_weights[a as usize], joint_indices[b as usize], joint_weights[b as usize], joint_indices[c as usize], joint_weights[c as usize]);
+
         if enable_wireframe {
             indices.extend_from_slice(&[a, b, b, c, c, a, d, e, e, f, f, d])
         } else {
@@ -167,21 +155,21 @@ fn create_mesh_stem(
     //  as well as `SkinnedMeshJoint` array in the `SkinnedMesh` component.
     // This means that a maximum of 4 joints can affect a single vertex.
 
-    println!(
-        "\n\njoint_indices: {} {:?}",
-        joint_indices.len(),
-        joint_indices
-    );
+    // println!(
+    //     "\n\njoint_indices: {} {:?}",
+    //     joint_indices.len(),
+    //     joint_indices
+    // );
     mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, joint_indices);
 
     // Set mesh vertex joint weights for mesh skinning.
     // Each vertex gets 4 joint weights corresponding to the 4 joint indices assigned to it.
     // The sum of these weights should equal to 1.
-    println!(
-        "\n\njoint_weights: {} {:?}",
-        joint_weights.len(),
-        joint_weights
-    );
+    // println!(
+    //     "\n\njoint_weights: {} {:?}",
+    //     joint_weights.len(),
+    //     joint_weights
+    // );
     mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, joint_weights);
 
     // Tell bevy to construct triangles from a list of vertex indices,
@@ -220,8 +208,7 @@ fn create_mesh_stem(
         .insert(SkinnedMesh {
             inverse_bindposes: inverse_bindposes.clone(),
             joints: joints,
-        })
-        ;
+        });
 }
 
 fn create_stem_skeleton(
@@ -231,20 +218,24 @@ fn create_stem_skeleton(
     prev_section_height: f32,
     rotation: Quat,
     radius: (f32, f32),
+    start_pos: Option<(f32, f32)>
 ) -> Vec<Entity> {
     let joint_height = 1.0;
     let mut prev_section = prev_section;
     let mut prev_section_height = prev_section_height;
     let mut sections = Vec::with_capacity(joint_count as usize + 1);
+    let (start_x, start_z) = start_pos.unwrap_or_default();
 
-    let draft = (0..joint_count+1).map(|i| {
-        let transform =
-            Transform::from_xyz(0.0, joint_height * (i as f32), 0.0).with_rotation(rotation);
+    let draft = (0..joint_count + 1)
+        .map(|i| {
+            let transform =
+                Transform::from_xyz(start_x, joint_height * (i as f32), start_z).with_rotation(rotation);
 
-        let r = radius.0 + (radius.1 - radius.0) * (i as f32 / (joint_count - 1) as f32);
-        (transform, r)
-    }).collect_vec();
-    let (draft_end, draft_joints) =  draft.split_last().unwrap();
+            let r = radius.0 + (radius.1 - radius.0) * (i as f32 / (joint_count - 1) as f32);
+            (transform, r)
+        })
+        .collect_vec();
+    let (draft_end, draft_joints) = draft.split_last().unwrap();
 
     for (i, (transform, r)) in draft_joints.iter().enumerate() {
         let (rot_y, rot_z, rot_x) = if i == 0 {
@@ -292,7 +283,8 @@ fn create_stem_skeleton(
     let end_joint = FixedJointBuilder::new()
         .local_anchor1(Vec3::new(0.0, prev_section_height, 0.0))
         .local_anchor2(Vec3::new(0.0, 0.0, 0.0));
-    let end_section = commands.spawn()
+    let end_section = commands
+        .spawn()
         .insert(RigidBody::Dynamic)
         .insert(draft_end.0)
         .insert(GlobalTransform::identity())
@@ -312,60 +304,69 @@ pub fn create_demo_plant(
     mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     asset_server: Res<AssetServer>,
 ) {
-    let root = commands
-        .spawn()
-        .insert(RigidBody::Fixed)
-        .insert(GlobalTransform::identity())
-        .insert(Transform::from_xyz(0.0, 0.0, 0.0))
-        .id();
+    for ix in -6..6 {
+        for iz in -6..6 {
+            let start_x = ix as f32 * 12.0;
+            let start_z = iz as f32 * 12.0;
+            let root = commands
+                .spawn()
+                .insert(RigidBody::Fixed)
+                .insert(GlobalTransform::identity())
+                .insert(Transform::from_xyz(start_x, 0.0, start_z))
+                .id();
 
+            let joints = create_stem_skeleton(
+                &mut commands,
+                14,
+                root,
+                0.0,
+                Quat::from_euler(EulerRot::YZX, 0.0, 0.0, 0.0),
+                (0.6, 0.4),
+                Some((start_x, start_z)),
+            );
 
-    let joints = create_stem_skeleton(
-        &mut commands,
-        14,
-        root,
-        0.0,
-        Quat::from_euler(EulerRot::YZX, 0.0, 0.0, 0.0),
-        (0.6, 0.4),
-    );
+            create_stem_skeleton(
+                &mut commands,
+                8,
+                joints[1],
+                0.0,
+                Quat::from_euler(EulerRot::YZX, 0.0, 0.5, 0.0),
+                (0.5, 0.2),
+                Some((start_x, start_z)),
+            );
 
-    create_stem_skeleton(
-        &mut commands,
-        8,
-        joints[1],
-        0.0,
-        Quat::from_euler(EulerRot::YZX, 0.0, 0.5, 0.0),
-        (0.5, 0.2),
-    );
-    
-    create_stem_skeleton(
-        &mut commands,
-        8,
-        joints[2],
-        0.0,
-        Quat::from_euler(EulerRot::YZX, 0.0, -0.2, 0.0),
-        (0.42, 0.14),
-    );    
+            create_stem_skeleton(
+                &mut commands,
+                8,
+                joints[2],
+                0.0,
+                Quat::from_euler(EulerRot::YZX, 0.0, -0.2, 0.0),
+                (0.42, 0.14),
+                Some((start_x, start_z)),
+            );
 
-    create_stem_skeleton(
-        &mut commands,
-        8,
-        joints[1],
-        0.0,
-        Quat::from_euler(EulerRot::YZX, 0.0, -0.2, 0.0),
-        (0.36, 0.09),
-    );
+            create_stem_skeleton(
+                &mut commands,
+                8,
+                joints[1],
+                0.0,
+                Quat::from_euler(EulerRot::YZX, 0.0, -0.2, 0.0),
+                (0.36, 0.09),
+                Some((start_x, start_z)),
+            );
 
-    create_mesh_stem(
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::new(0.0, 16.0, 0.0),
-        0.6,
-        0.4,
-        joints,
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &mut skinned_mesh_inverse_bindposes_assets,
-        asset_server,
-    );
+            create_mesh_stem(
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 16.0, 0.0),
+                0.6,
+                0.4,
+                joints,
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                &mut skinned_mesh_inverse_bindposes_assets,
+                &asset_server,
+            );
+        }
+    }
 }
