@@ -32,7 +32,6 @@ fn keyboard_input_system(
     } else if keyboard_input.pressed(KeyCode::Right) {
         speed = (12., -12.);
     }
-    println!("SPEEED {:?} {}", speed, joints.iter().len());
 
     for (mut joint, tag) in joints.iter_mut() {
         if let Some(joint) = joint.data.as_revolute_mut() {

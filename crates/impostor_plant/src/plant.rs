@@ -304,8 +304,8 @@ pub fn create_demo_plant(
     mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     asset_server: Res<AssetServer>,
 ) {
-    for ix in -6..6 {
-        for iz in -6..6 {
+    for ix in -1..1 {
+        for iz in -1..1 {
             let start_x = ix as f32 * 12.0;
             let start_z = iz as f32 * 12.0;
             let root = commands
@@ -355,18 +355,18 @@ pub fn create_demo_plant(
                 Some((start_x, start_z)),
             );
 
-            create_mesh_stem(
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(0.0, 16.0, 0.0),
-                0.6,
-                0.4,
-                joints,
-                &mut commands,
-                &mut meshes,
-                &mut materials,
-                &mut skinned_mesh_inverse_bindposes_assets,
-                &asset_server,
-            );
+            // create_mesh_stem(
+            //     Vec3::new(0.0, 0.0, 0.0),
+            //     Vec3::new(0.0, 16.0, 0.0),
+            //     0.6,
+            //     0.4,
+            //     joints,
+            //     &mut commands,
+            //     &mut meshes,
+            //     &mut materials,
+            //     &mut skinned_mesh_inverse_bindposes_assets,
+            //     &asset_server,
+            // );
         }
     }
 }
