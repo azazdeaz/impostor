@@ -21,7 +21,7 @@ pub struct PlantPlugin;
 
 impl Plugin for PlantPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(GrowSteps::from_steps(40))
+        app.insert_resource(GrowSteps::from_steps(80))
             .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
             .insert_resource(PlantConfig::default())
             .add_plugin(InspectorPlugin::<PlantConfig>::new_insert_manually())
@@ -139,8 +139,15 @@ fn resetPlant(
     }
 }
 
-fn run_if_growing(grow_steps: Res<GrowSteps>, joints: Query<&Sleeping>) -> ShouldRun {
-    let still_moving = joints.iter().any(|joint| !joint.sleeping);
+fn run_if_growing(grow_steps: Res<GrowSteps>, joints: Query<&Velocity>) -> ShouldRun {
+    let still_moving = joints.iter().any(|velocity| {
+        let sq_linvel = velocity.linvel.length_squared();
+        let sq_angvel = velocity.angvel.length_squared();
+        println!("LIN {:?} {:?}", sq_linvel, velocity.linvel);
+        println!("ANG {:?} {:?}", sq_angvel, velocity.angvel);
+        sq_linvel > 0.8 || sq_angvel > 1.0
+    });
+    println!("MOVING {}", still_moving);
     if still_moving || grow_steps.is_done() {
         ShouldRun::No
     } else {
@@ -650,9 +657,29 @@ fn update_joint_forces(
                 Transform::default()
             };
             println!(">> initial transform: {:?}", initial_transform);
+
+            commands
+                .spawn()
+                .insert(RigidBody::Fixed)
+                .insert(Collider::ball(0.2))
+                .insert(CollisionGroups::new(0b0000, 0b0000))
+                .insert_bundle(TransformBundle::from_transform(initial_transform))
+                // .insert_bundle(TransformBundle::from_transform(initial_transform))
+                .with_children(|children| {
+                    children
+                        .spawn()
+                        .insert(Collider::capsule_y(length / 2.0, *radius))
+                        .insert(CollisionGroups::new(0b0000, 0b0000))
+                        .insert_bundle(TransformBundle::from_transform(Transform::from_xyz(
+                            0.0,
+                            -length / 2.0,
+                            0.0,
+                        )));
+                });
+
             commands
                 .entity(this_axe)
-                .insert(Sleeping::default())
+                .insert(Velocity::default())
                 .insert(RigidBody::Dynamic)
                 .insert(Collider::ball(0.2))
                 .insert(CollisionGroups::new(0b0000, 0b0000))
@@ -662,7 +689,7 @@ fn update_joint_forces(
                     children
                         .spawn()
                         .insert(Collider::capsule_y(length / 2.0, *radius))
-                        .insert(CollisionGroups::new(0b1000, 0b0100))
+                        .insert(CollisionGroups::new(0b0000, 0b0000))
                         .insert_bundle(TransformBundle::from_transform(Transform::from_xyz(
                             0.0,
                             -length / 2.0,
