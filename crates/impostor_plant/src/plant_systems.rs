@@ -171,6 +171,16 @@ struct Branches(Vec<Entity>);
 #[derive(Reflect, Default, Component, Debug)]
 #[reflect(Component)]
 struct Length(f32);
+
+#[derive(Reflect, Component, Debug, Clone, Copy)]
+#[reflect(Component)]
+struct BranchingPos(f32);
+impl Default for BranchingPos {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
 #[derive(Reflect, Default, Component, Debug)]
 #[reflect(Component)]
 struct Radius(f32);
@@ -352,23 +362,24 @@ fn branch_out(
                     radius: Radius(0.001),
                     ..Default::default()
                 })
+                .insert(BranchingPos(0.5))
                 .insert(AxisRoot {})
                 .insert(PrevAxe(*new_root_node));
-            commands
-                .spawn()
-                .insert(Name::new("Stem Node"))
-                .insert_bundle(StemBundle {
-                    stem: Stem {
-                        order: 1, //TODO
-                        max_length: plant_config.max_node_length,
-                        direction: Quat::from_euler(EulerRot::XYZ, 0.0, angle + PI, PI / 4.0),
-                    },
-                    length: Length(0.2),
-                    radius: Radius(0.001),
-                    ..Default::default()
-                })
-                .insert(AxisRoot {})
-                .insert(PrevAxe(*new_root_node));
+            // commands
+            //     .spawn()
+            //     .insert(Name::new("Stem Node"))
+            //     .insert_bundle(StemBundle {
+            //         stem: Stem {
+            //             order: 1, //TODO
+            //             max_length: plant_config.max_node_length,
+            //             direction: Quat::from_euler(EulerRot::XYZ, 0.0, angle + PI, PI / 4.0),
+            //         },
+            //         length: Length(0.2),
+            //         radius: Radius(0.001),
+            //         ..Default::default()
+            //     })
+            //     .insert(AxisRoot {})
+            //     .insert(PrevAxe(*new_root_node));
         }
     }
 }
@@ -462,8 +473,8 @@ fn branch_out(
 //                         .motor_position(
 //                             JointAxis::AngY,
 //                             rot_y,
-//                             plant_config.stiffness * strength * 10.0,
-//                             plant_config.damping * strength * 10.0,
+//                             plant_config.stiffness * strength,
+//                             plant_config.damping * strength,
 //                         )
 //                         .motor_position(
 //                             JointAxis::AngZ,
@@ -505,7 +516,7 @@ fn branch_out(
 fn update_joint_forces(
     mut commands: Commands,
     mut axes: Query<(Entity, Option<&mut ImpulseJoint>, Option<&Children>)>,
-    details: Query<(&Strength, &Stem, &Length, &Radius)>,
+    details: Query<(&Strength, &Stem, &Length, &Radius, Option<&BranchingPos>)>,
     positions: Query<(Option<&Transform>, Option<&Length>)>,
     colliders: Query<(Entity, &Transform), (With<Collider>, Without<Stem>)>,
     next_axes: Query<&PrevAxe>,
@@ -514,13 +525,14 @@ fn update_joint_forces(
     println!(">> Update joint forces");
     for (
         (this_axe, joint, children),
-        (Strength(strength), stem, Length(length), Radius(radius)),
+        (Strength(strength), stem, Length(length), Radius(radius), branching_pos),
     ) in axes.iter_mut().filter_map(|axe| {
         details
             .get(axe.0)
             .and_then(|details| Ok((axe, details)))
             .ok()
     }) {
+        let branching_pos = branching_pos.and_then(|bp| Some(bp.0)).unwrap_or(1.0);
         println!(">> Update joint in {:?}", this_axe);
         let has_next_axe = next_axes
             .iter()
@@ -533,7 +545,7 @@ fn update_joint_forces(
                 .data
                 .as_spherical_mut()
                 .expect("Found non spherical joint in the plant")
-                .set_local_anchor1(Vec3::new(0.0, 0.0, 0.0))
+                .set_local_anchor1(Vec3::new(0.0, -length+length * branching_pos, 0.0))
                 .set_local_anchor2(Vec3::new(0.0, -length, 0.0))
                 .set_motor_position(
                     JointAxis::AngX,
@@ -544,8 +556,8 @@ fn update_joint_forces(
                 .set_motor_position(
                     JointAxis::AngY,
                     rot_y,
-                    plant_config.stiffness * strength * 10.0,
-                    plant_config.damping * strength * 10.0,
+                    plant_config.stiffness * strength,
+                    plant_config.damping * strength,
                 )
                 .set_motor_position(
                     JointAxis::AngZ,
@@ -595,7 +607,7 @@ fn update_joint_forces(
             });
         } else {
             let rapier_joint = SphericalJointBuilder::new()
-                .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
+                .local_anchor1(Vec3::new(0.0, -length+length * branching_pos, 0.0))
                 .local_anchor2(Vec3::new(0.0, -length, 0.0))
                 .motor_position(
                     JointAxis::AngX,
@@ -606,8 +618,8 @@ fn update_joint_forces(
                 .motor_position(
                     JointAxis::AngY,
                     rot_y,
-                    plant_config.stiffness * strength * 10.0,
-                    plant_config.damping * strength * 10.0,
+                    plant_config.stiffness * strength,
+                    plant_config.damping * strength,
                 )
                 .motor_position(
                     JointAxis::AngZ,
@@ -638,15 +650,13 @@ fn update_joint_forces(
 
             let initial_transform = if let Ok((transform, _)) = positions.get(parent_entity) {
                 println!(">> parent transform: {:?}", transform);
+                
                 transform
                     .and_then(|transform| {
-                        // let length = length
-                        //     .and_then(|Length(length)| Some(*length))
-                        //     .unwrap_or(0.0);
                         Some(Transform::from_matrix(
                             transform.compute_matrix()
                                 * Transform::from_rotation(stem.direction).compute_matrix()
-                                * Transform::from_xyz(0.0, *length, 0.0).compute_matrix(),
+                                * Transform::from_xyz(0.0, length * branching_pos, 0.0).compute_matrix(),
                         ))
                     })
                     .unwrap_or_default()
@@ -660,32 +670,32 @@ fn update_joint_forces(
 
             println!(">> initial transform: {:?}", initial_transform);
 
-            commands
-                .spawn()
-                .insert(RigidBody::Fixed)
-                .insert(Collider::ball(0.2))
-                .insert(CollisionGroups::new(0b0000, 0b0000))
-                .insert_bundle(TransformBundle::from_transform(initial_transform))
-                // .insert_bundle(TransformBundle::from_transform(initial_transform))
-                .with_children(|children| {
-                    children
-                        .spawn()
-                        .insert(Collider::capsule_y(length / 2.0, *radius))
-                        .insert(CollisionGroups::new(0b0000, 0b0000))
-                        .insert_bundle(TransformBundle::from_transform(Transform::from_xyz(
-                            0.0,
-                            -length / 2.0,
-                            0.0,
-                        )));
-                });
+            // commands
+            //     .spawn()
+            //     .insert(RigidBody::Fixed)
+            //     .insert(Collider::ball(0.2))
+            //     .insert(CollisionGroups::new(0b0000, 0b0000))
+            //     .insert_bundle(TransformBundle::from_transform(initial_transform))
+            //     // .insert_bundle(TransformBundle::from_transform(initial_transform))
+            //     .with_children(|children| {
+            //         children
+            //             .spawn()
+            //             .insert(Collider::capsule_y(length / 2.0, *radius))
+            //             .insert(CollisionGroups::new(0b0000, 0b0000))
+            //             .insert_bundle(TransformBundle::from_transform(Transform::from_xyz(
+            //                 0.0,
+            //                 -length / 2.0,
+            //                 0.0,
+            //             )));
+            //     });
 
             commands
                 .entity(this_axe)
                 .insert(Velocity::default())
                 .insert(RigidBody::Dynamic)
-                .insert(Collider::ball(0.2))
-                .insert(CollisionGroups::new(0b0000, 0b0000))
-                .insert(initial_transform)
+                // .insert(Collider::ball(0.2))
+                // .insert(CollisionGroups::new(0b0000, 0b0000))
+                // .insert(initial_transform)
                 // .insert_bundle(TransformBundle::from_transform(initial_transform))
                 .with_children(|children| {
                     children
@@ -714,8 +724,8 @@ fn update_joint_forces(
     //         .set_motor_position(
     //             JointAxis::AngY,
     //             rot_y,
-    //             plant_config.stiffness * strength * 10.0,
-    //             plant_config.damping * strength * 10.0,
+    //             plant_config.stiffness * strength,
+    //             plant_config.damping * strength,
     //         )
     //         .set_motor_position(
     //             JointAxis::AngZ,
