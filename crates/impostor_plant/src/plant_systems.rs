@@ -143,11 +143,11 @@ fn run_if_growing(grow_steps: Res<GrowSteps>, joints: Query<&Velocity>) -> Shoul
     let still_moving = joints.iter().any(|velocity| {
         let sq_linvel = velocity.linvel.length_squared();
         let sq_angvel = velocity.angvel.length_squared();
-        println!("LIN {:?} {:?}", sq_linvel, velocity.linvel);
-        println!("ANG {:?} {:?}", sq_angvel, velocity.angvel);
+        // println!("LIN {:?} {:?}", sq_linvel, velocity.linvel);
+        // println!("ANG {:?} {:?}", sq_angvel, velocity.angvel);
         sq_linvel > 0.8 || sq_angvel > 1.0
     });
-    println!("MOVING {}", still_moving);
+    // println!("MOVING {}", still_moving);
     if still_moving || grow_steps.is_done() {
         ShouldRun::No
     } else {
@@ -346,7 +346,7 @@ fn branch_out(
                     stem: Stem {
                         order: 1, //TODO
                         max_length: plant_config.max_node_length,
-                        direction: Quat::from_euler(EulerRot::XZY, 0.0, PI / 4.0, angle),
+                        direction: Quat::from_euler(EulerRot::XYZ, 0.0, angle, PI / 4.0),
                     },
                     length: Length(0.2),
                     radius: Radius(0.001),
@@ -361,7 +361,7 @@ fn branch_out(
                     stem: Stem {
                         order: 1, //TODO
                         max_length: plant_config.max_node_length,
-                        direction: Quat::from_euler(EulerRot::XZY, 0.0, PI / 4.0, angle + PI),
+                        direction: Quat::from_euler(EulerRot::XYZ, 0.0, angle + PI, PI / 4.0),
                     },
                     length: Length(0.2),
                     radius: Radius(0.001),
@@ -512,9 +512,8 @@ fn update_joint_forces(
     plant_config: Res<PlantConfig>,
 ) {
     println!(">> Update joint forces");
-    // for  in axes
     for (
-        (this_axe, mut joint, children),
+        (this_axe, joint, children),
         (Strength(strength), stem, Length(length), Radius(radius)),
     ) in axes.iter_mut().filter_map(|axe| {
         details
@@ -528,7 +527,7 @@ fn update_joint_forces(
             .find(|PrevAxe(prev)| *prev == this_axe)
             .is_some();
 
-        let (rot_y, rot_z, rot_x) = stem.direction.to_euler(EulerRot::YZX);
+        let (rot_x, rot_y, rot_z) = stem.direction.to_euler(EulerRot::XYZ);
         if let Some(mut joint) = joint {
             joint
                 .data
@@ -637,15 +636,17 @@ fn update_joint_forces(
                         .id()
                 });
 
-            let initial_transform = if let Ok((transform, length)) = positions.get(parent_entity) {
+            let initial_transform = if let Ok((transform, _)) = positions.get(parent_entity) {
                 println!(">> parent transform: {:?}", transform);
                 transform
                     .and_then(|transform| {
-                        let length = length
-                            .and_then(|Length(length)| Some(*length))
-                            .unwrap_or(0.0);
-                        Some(transform.mul_transform(
-                            Transform::from_xyz(0.0, length, 0.0).with_rotation(stem.direction),
+                        // let length = length
+                        //     .and_then(|Length(length)| Some(*length))
+                        //     .unwrap_or(0.0);
+                        Some(Transform::from_matrix(
+                            transform.compute_matrix()
+                                * Transform::from_rotation(stem.direction).compute_matrix()
+                                * Transform::from_xyz(0.0, *length, 0.0).compute_matrix(),
                         ))
                     })
                     .unwrap_or_default()
@@ -656,6 +657,7 @@ fn update_joint_forces(
                 );
                 Transform::default()
             };
+
             println!(">> initial transform: {:?}", initial_transform);
 
             commands
