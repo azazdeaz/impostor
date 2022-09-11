@@ -507,26 +507,7 @@ fn update_joint_forces(
                         .id()
                 });
 
-            // let initial_transform = if let Ok((transform, _)) = positions.get(parent_entity) {
-            //     println!(">> parent transform: {:?}", transform);
 
-            //     transform
-            //         .and_then(|transform| {
-            //             Some(Transform::from_matrix(
-            //                 transform.compute_matrix()
-            //                     * Transform::from_rotation(stem.direction).compute_matrix()
-            //                     * Transform::from_xyz(0.0, length * branching_pos, 0.0)
-            //                         .compute_matrix(),
-            //             ))
-            //         })
-            //         .unwrap_or_default()
-            // } else {
-            //     println!(
-            //         ">> cant find paremt transform: this {:?} parent {:?}",
-            //         this_axe, parent_entity
-            //     );
-            //     Transform::default()
-            // };
 
             // println!(">> initial transform: {:?}", initial_transform);
 
@@ -559,6 +540,28 @@ fn update_joint_forces(
                 .id();
             commands.entity(parent_entity).add_child(parent);
 
+
+            let initial_transform = if let Ok((transform, _)) = positions.get(parent_entity) {
+                println!(">> parent transform: {:?}", transform);
+
+                transform
+                    .and_then(|transform| {
+                        Some(Transform::from_matrix(
+                            transform.compute_matrix()
+                                * Transform::from_rotation(stem.direction).compute_matrix()
+                                * Transform::from_xyz(0.0, *length, 0.0)
+                                    .compute_matrix(),
+                        ))
+                    })
+                    .unwrap_or_default()
+            } else {
+                println!(
+                    ">> cant find paremt transform: this {:?} parent {:?}",
+                    this_axe, parent_entity
+                );
+                Transform::default()
+            };
+
             commands
                 .entity(this_axe)
                 .insert(Velocity::default())
@@ -566,8 +569,8 @@ fn update_joint_forces(
                 // .insert(Collider::ball(0.2))
                 // .insert(CollisionGroups::new(0b0000, 0b0000))
                 // .insert(initial_transform)
-                // .insert_bundle(TransformBundle::from_transform(initial_transform))
-                .insert_bundle(TransformBundle::default())
+                .insert_bundle(TransformBundle::from_transform(initial_transform))
+                // .insert_bundle(TransformBundle::default())
                 .with_children(|children| {
                     children
                         .spawn()
