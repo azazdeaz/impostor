@@ -1,5 +1,6 @@
 use bevy::{
     ecs::{entity, schedule::ShouldRun},
+    pbr::wireframe::Wireframe,
     prelude::*,
     render::mesh::{
         skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
@@ -25,6 +26,8 @@ impl Plugin for PlantPlugin {
             .add_plugin(InspectorPlugin::<GrowSteps>::new_insert_manually())
             .insert_resource(PlantConfig::default())
             .add_plugin(InspectorPlugin::<PlantConfig>::new_insert_manually())
+            .insert_resource(StemMeshConfig::default())
+            .add_plugin(InspectorPlugin::<StemMeshConfig>::new_insert_manually())
             .add_plugin(WorldInspectorPlugin::new())
             // .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
             .add_plugin(RapierDebugRenderPlugin::default())
@@ -39,6 +42,7 @@ impl Plugin for PlantPlugin {
                     .with_system(branch_out)
                     .with_system(extend)
                     .with_system(update_strength)
+                    .with_system(update_stem_mesh)
                     .with_system(update_joint_forces), // .with_system(print_structure),
             )
             .add_stage_after(CoreStage::Update, "prune", SystemStage::single_threaded())
@@ -102,8 +106,8 @@ impl Default for PlantConfig {
         Self {
             stiffness: 2000.0,
             damping: 1500.0,
-            max_node_length: 2.0,
-            max_radius: 1.2,
+            max_node_length: 1.0,
+            max_radius: 0.2,
         }
     }
 }
@@ -221,12 +225,16 @@ impl Default for StemBundle {
     }
 }
 
-fn grow(mut commands: Commands, query: Query<(Entity, Option<&Parent>, &Radius, &Length, &Stem)>) {
+fn grow(
+    mut commands: Commands,
+    query: Query<(Entity, Option<&Parent>, &Radius, &Length, &Stem)>,
+    config: Res<PlantConfig>,
+) {
     for (stem_id, parent, Radius(radius), Length(length), stem) in query.iter() {
         let prev_radius = parent
             .and_then(|parent| query.get(parent.get()).ok())
             .and_then(|q| Some((*q.2).0))
-            .unwrap_or(1.0);
+            .unwrap_or(config.max_radius);
         commands
             .entity(stem_id)
             .insert(Radius(radius + (prev_radius - radius) / 12.0))
@@ -408,10 +416,10 @@ fn update_joint_forces(
     }) {
         let branching_pos = branching_pos.and_then(|bp| Some(bp.0)).unwrap_or(1.0);
         println!(">> Update joint in {:?}", this_axe);
-        let has_next_axe = next_axes
-            .iter()
-            .find(|PrevAxe(prev)| *prev == this_axe)
-            .is_some();
+        // let has_next_axe = next_axes
+        //     .iter()
+        //     .find(|PrevAxe(prev)| *prev == this_axe)
+        //     .is_some();
 
         if let Some(mut joint) = joint {
             joint
@@ -507,8 +515,6 @@ fn update_joint_forces(
                         .id()
                 });
 
-
-
             // println!(">> initial transform: {:?}", initial_transform);
 
             // commands
@@ -540,7 +546,6 @@ fn update_joint_forces(
                 .id();
             commands.entity(parent_entity).add_child(parent);
 
-
             let initial_transform = if let Ok((transform, _)) = positions.get(parent_entity) {
                 println!(">> parent transform: {:?}", transform);
 
@@ -549,8 +554,7 @@ fn update_joint_forces(
                         Some(Transform::from_matrix(
                             transform.compute_matrix()
                                 * Transform::from_rotation(stem.direction).compute_matrix()
-                                * Transform::from_xyz(0.0, *length, 0.0)
-                                    .compute_matrix(),
+                                * Transform::from_xyz(0.0, *length, 0.0).compute_matrix(),
                         ))
                     })
                     .unwrap_or_default()
@@ -629,13 +633,6 @@ fn update_mesh(
     }
     grow_steps.set_mesh_updated();
 
-    commands
-        .spawn()
-        .insert(RigidBody::Dynamic)
-        .insert(Collider::ball(1.0))
-        .insert(Restitution::coefficient(0.7))
-        .insert(Transform::from_xyz(-0.01, (16.0 as f32) * 4.0 + 4.0, -0.01));
-
     for root in q_root.iter() {
         let mut prev = Some(root);
         while let Some(stem_id) = prev {
@@ -684,4 +681,258 @@ fn print_structure(
         add_node(root, &mut tree, &stems);
     }
     print_tree(&tree.build()).ok();
+}
+
+//////////////////////////////////////////////////////////////////////
+/// Create Mesh //////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+
+#[derive(Inspectable)]
+struct StemMeshConfig {
+    vertical_resolution: f32,
+    ring_resolution: usize,
+}
+impl Default for StemMeshConfig {
+    fn default() -> Self {
+        Self {
+            vertical_resolution: 2.0,
+            ring_resolution: 8,
+        }
+    }
+}
+
+fn update_stem_mesh(
+    mut commands: Commands,
+    roots: Query<Entity, With<AxisRoot>>,
+    joints: Query<(Entity, Option<&ImpulseJoint>, &Transform)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
+    asset_server: Res<AssetServer>,
+    config: Res<StemMeshConfig>,
+) {
+    use bevy_easings::*;
+
+    let texture_handle = asset_server.load("tomato/AG15brn1.png");
+
+    let StemMeshConfig {
+        vertical_resolution,
+        ring_resolution,
+    } = *config;
+
+    // Go trough each stem
+    for root in roots.iter() {
+        // Collect all the joins in sequence
+        let axis_joints =
+            if let Ok((axe, Some(ImpulseJoint { parent, .. }), transform)) = joints.get(root) {
+                if let Ok(ground) = joints.get(*parent) {
+                    let mut axis_joints = vec![(ground.0, ground.2), (axe, transform)];
+                    while let Some((axe, _, transform)) = joints.iter().find(|(_, joint, _)| {
+                        joint
+                            .and_then(|joint| Some(joint.parent == axis_joints.last().unwrap().0))
+                            .unwrap_or(false)
+                    }) {
+                        axis_joints.push((axe, transform))
+                    }
+                    Some(axis_joints)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+        if axis_joints.is_none() {
+            continue;
+        }
+        let axis_joints = axis_joints.unwrap();
+
+        struct Ring {
+            transform: Transform,
+            joint_indices: [u16; 4],
+            joint_weights: [f32; 4],
+            from_start: f32,
+        }
+
+        let mut from_start = 0.0;
+        let mut rings = vec![Ring {
+            transform: axis_joints[0].1.clone(),
+            joint_indices: [0, 0, 0, 0],
+            joint_weights: [1.0, 0.0, 0.0, 0.0],
+            from_start,
+        }];
+
+        let mut leftover_distance = 0.0;
+        for i in 1..axis_joints.len() {
+            let a = EaseValue(axis_joints[i - 1].1.clone());
+            let b = EaseValue(axis_joints[i].1.clone());
+            let distance = axis_joints[i - 1]
+                .1
+                .translation
+                .distance(axis_joints[i].1.translation);
+
+            let mut pos = vertical_resolution - leftover_distance;
+            while pos <= distance {
+                // 0..1.0 place of the ring between the two joints
+                let joint_p = pos / distance;
+                let w0 = 1.0 - joint_p;
+                let w1 = joint_p;
+
+                from_start += vertical_resolution;
+                pos += vertical_resolution;
+
+                rings.push(Ring {
+                    transform: a.lerp(&b, &(pos / distance)).0,
+                    joint_indices: [(i as u16) - 1, i as u16, 0, 0],
+                    joint_weights: [w0, w1, 0.0, 0.0],
+                    from_start,
+                });
+            }
+            leftover_distance = distance - pos;
+        }
+        rings.push(Ring {
+            transform: axis_joints.last().unwrap().1.clone(),
+            joint_indices: [axis_joints.len() as u16, 0, 0, 0],
+            joint_weights: [1.0, 0.0, 0.0, 0.0],
+            from_start,
+        });
+
+        let vertex_count = rings.len() * (ring_resolution + 1);
+        let mut positions = Vec::with_capacity(vertex_count);
+        let mut normals = Vec::with_capacity(vertex_count);
+        let mut uvs = Vec::with_capacity(vertex_count);
+        let mut joint_indices = Vec::with_capacity(vertex_count);
+        let mut joint_weights = Vec::with_capacity(vertex_count);
+
+        let inverse_bindposes = (0..(axis_joints.len()))
+            .map(|i| Mat4::default())
+            .collect_vec();
+
+        let inverse_bindposes = skinned_mesh_inverse_bindposes_assets
+            .add(SkinnedMeshInverseBindposes::from(inverse_bindposes));
+
+        for ring in rings.iter() {
+            for step in 0..(ring_resolution) {
+                let step = step as f32;
+                let theta = (step / ring_resolution as f32) * PI * 2.0;
+                let mut vertex = ring.transform.clone();
+                let radius = 0.2;
+                vertex.rotate_local_y(theta);
+                let normal = vertex.forward();
+                let vertex = vertex.translation + normal * radius;
+                let mut uv_x = (step / (ring_resolution as f32 / 4.0)) % 2.0;
+                if uv_x > 1.0 {
+                    uv_x = 2.0 - uv_x;
+                }
+                let mut uv_y = (ring.from_start / 0.4) % 2.0;
+                if uv_y > 1.0 {
+                    uv_y = 2.0 - uv_y;
+                }
+
+                positions.push([vertex.x, vertex.y, vertex.z]);
+                normals.push([normal.x, normal.y, normal.z]);
+                uvs.push([uv_x, uv_y]);
+                joint_indices.push(ring.joint_indices);
+                joint_weights.push(ring.joint_weights);
+            }
+        }
+
+        let quad_count = ring_resolution * (rings.len() - 1);
+        let mut indices = Vec::<u32>::with_capacity(quad_count * 6);
+        let step_up = ring_resolution as u32;
+
+        for i in 0..(rings.len() as u32 - 1) {
+            for j in 0..step_up {
+                let start = i * step_up;
+                let step1 = j;
+                let step2 = (j + 1) % step_up;
+
+                // lower triangle
+                let a = start + step1;
+                let b = start + step2 + step_up;
+                let c = start + step2;
+                // upper triangle
+                let d = start + step1;
+                let e = start + step1 + step_up;
+                let f = start + step2 + step_up;
+
+                indices.extend_from_slice(&[a, b, c, d, e, f])
+            }
+        }
+
+        // Create a mesh
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        // Set mesh vertex positions
+        // println!("\n\npositions: {} {:?}", positions.len(), positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+
+        // Set mesh vertex normals
+        // println!("\n\nnormals: {} {:?}", normals.len(), normals);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+
+        // Set mesh vertex UVs. Although the mesh doesn't have any texture applied,
+        //  UVs are still required by the render pipeline. So these UVs are zeroed out.
+        // println!("\n\nuvs: {} {:?}", uvs.len(), uvs);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+
+        // Set mesh vertex joint indices for mesh skinning.
+        // Each vertex gets 4 indices used to address the `JointTransforms` array in the vertex shader
+        //  as well as `SkinnedMeshJoint` array in the `SkinnedMesh` component.
+        // This means that a maximum of 4 joints can affect a single vertex.
+
+        println!(
+            "\n\njoint_indices: {} {:?}",
+            joint_indices.len(),
+            joint_indices
+        );
+        mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, joint_indices);
+
+        // Set mesh vertex joint weights for mesh skinning.
+        // Each vertex gets 4 joint weights corresponding to the 4 joint indices assigned to it.
+        // The sum of these weights should equal to 1.
+        println!(
+            "\n\njoint_weights: {} {:?}",
+            joint_weights.len(),
+            joint_weights
+        );
+        mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, joint_weights);
+
+        // Tell bevy to construct triangles from a list of vertex indices,
+        //  where each 3 vertex indices form an triangle.
+
+        // println!("\n\nindices: {} {:?}", indices.len(), indices);
+        mesh.set_indices(Some(Indices::U32(indices)));
+
+        let mesh = meshes.add(mesh);
+
+        // let material_handle = materials.add(StandardMaterial {
+        //     // base_color: Color::rgb(
+        //     //     rand::thread_rng().gen_range(0.0..1.0),
+        //     //     rand::thread_rng().gen_range(0.0..1.0),
+        //     //     rand::thread_rng().gen_range(0.0..1.0),
+        //     // ),
+        //     base_color_texture: Some(texture_handle.clone()),
+        //     alpha_mode: AlphaMode::Blend,
+        //     unlit: false,
+        //     // double_sided: true,
+        //     metallic: 0.001,
+        //     reflectance: 0.01,
+        //     perceptual_roughness: 0.3,
+        //     // flip_normal_map_y: true,
+        //     ..default()
+        // });
+        let material_handle = materials.add(texture_handle.clone().into());
+
+        // Create skinned mesh renderer. Note that its transform doesn't affect the position of the mesh.
+        commands
+            .entity(root)
+            .insert_bundle(PbrBundle {
+                mesh,
+                material: material_handle,
+                ..Default::default()
+            })
+            .insert(SkinnedMesh {
+                inverse_bindposes: inverse_bindposes.clone(),
+                joints: axis_joints.iter().map(|(joint, _)| *joint).collect_vec(),
+            });
+    }
 }

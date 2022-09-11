@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use bevy::{
     ecs::{archetype::Archetypes, component::Components, entity::Entities},
     prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    render::{render_resource::{Extent3d, TextureDimension, TextureFormat}, settings::{WgpuSettings, WgpuFeatures}}, pbr::wireframe::{WireframePlugin, WireframeConfig},
 };
 use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::{WorldInspectorParams, WorldInspectorPlugin};
@@ -29,9 +29,13 @@ fn main() {
         .insert_resource(AmbientLight {
             color: Color::WHITE,
             brightness: 1.0 / 5.0f32,
+        }).insert_resource(WgpuSettings {
+            features: WgpuFeatures::POLYGON_MODE_LINE,
+            ..default()
         })
-        .insert_resource(world_inspector_params)
+        // .insert_resource(world_inspector_params)
         .add_plugins(DefaultPlugins)
+        .add_plugin(WireframePlugin)
         .add_plugin(EguiPlugin)
         .add_plugin(schemas::SchemasPlugin)
         .add_plugin(impostor_teleop::TeleopPlugin::new(
@@ -43,7 +47,7 @@ fn main() {
         .add_plugin(UpdatersPlugin)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         // .add_plugin(RapierDebugRenderPlugin::default())
-        .add_plugin(WorldInspectorPlugin::new().filter::<With<schemas::Editable>>())
+        // .add_plugin(WorldInspectorPlugin::new().filter::<With<schemas::Editable>>())
         .add_startup_system(setup)
         // .add_startup_system(load_scene_system)
         // .add_startup_system(impostor_plant::create_demo_plant)
