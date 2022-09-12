@@ -39,7 +39,7 @@ impl Plugin for PlantPlugin {
                     .with_run_criteria(run_if_growing)
                     .with_system(count_grow_steps)
                     .with_system(grow)
-                    .with_system(branch_out)
+                    // .with_system(branch_out)
                     .with_system(extend)
                     .with_system(update_strength)
                     .with_system(update_stem_mesh)
@@ -691,12 +691,14 @@ fn print_structure(
 struct StemMeshConfig {
     vertical_resolution: f32,
     ring_resolution: usize,
+    use_wireframe: bool,
 }
 impl Default for StemMeshConfig {
     fn default() -> Self {
         Self {
             vertical_resolution: 2.0,
             ring_resolution: 8,
+            use_wireframe: false,
         }
     }
 }
@@ -704,7 +706,7 @@ impl Default for StemMeshConfig {
 fn update_stem_mesh(
     mut commands: Commands,
     roots: Query<Entity, With<AxisRoot>>,
-    joints: Query<(Entity, Option<&ImpulseJoint>, &Transform)>,
+    joints: Query<(Entity, Option<&ImpulseJoint>, Option<&PrevAxe>, &Transform)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
@@ -718,33 +720,42 @@ fn update_stem_mesh(
     let StemMeshConfig {
         vertical_resolution,
         ring_resolution,
+        use_wireframe,
     } = *config;
 
     // Go trough each stem
     for root in roots.iter() {
         // Collect all the joins in sequence
-        let axis_joints =
-            if let Ok((axe, Some(ImpulseJoint { parent, .. }), transform)) = joints.get(root) {
-                if let Ok(ground) = joints.get(*parent) {
-                    let mut axis_joints = vec![(ground.0, ground.2), (axe, transform)];
-                    while let Some((axe, _, transform)) = joints.iter().find(|(_, joint, _)| {
-                        joint
-                            .and_then(|joint| Some(joint.parent == axis_joints.last().unwrap().0))
+        let axis_joints = if let Ok((axe, Some(ImpulseJoint { parent, .. }), _, transform)) =
+            joints.get(root)
+        {
+            // Get the entity the first joint connects to
+            if let Ok(ground) = joints.get(*parent) {
+                let mut axis_joints = vec![(ground.0, ground.3), (axe, transform)];
+                // Find the next axe and add it to the list
+                while let Some((axe, _, _, transform)) =
+                    joints.iter().find(|(_, _, prev_axe, _)| {
+                        // TODO filter out roots
+                        prev_axe
+                            .and_then(|prev_axe| Some(prev_axe.0 == axis_joints.last().unwrap().0))
                             .unwrap_or(false)
-                    }) {
-                        axis_joints.push((axe, transform))
-                    }
-                    Some(axis_joints)
-                } else {
-                    None
+                    })
+                {
+                    axis_joints.push((axe, transform))
                 }
+                Some(axis_joints)
             } else {
                 None
-            };
+            }
+        } else {
+            None
+        };
         if axis_joints.is_none() {
+            println!("no joints {:?}", root);
             continue;
         }
         let axis_joints = axis_joints.unwrap();
+        println!("joints {}", axis_joints.len());
 
         struct Ring {
             transform: Transform,
@@ -753,48 +764,60 @@ fn update_stem_mesh(
             from_start: f32,
         }
 
-        let mut from_start = 0.0;
         let mut rings = vec![Ring {
             transform: axis_joints[0].1.clone(),
             joint_indices: [0, 0, 0, 0],
             joint_weights: [1.0, 0.0, 0.0, 0.0],
-            from_start,
+            from_start: 0.0,
         }];
 
-        let mut leftover_distance = 0.0;
-        for i in 1..axis_joints.len() {
-            let a = EaseValue(axis_joints[i - 1].1.clone());
-            let b = EaseValue(axis_joints[i].1.clone());
-            let distance = axis_joints[i - 1]
-                .1
-                .translation
-                .distance(axis_joints[i].1.translation);
+        // full distances up until each joints
+        let distances = axis_joints
+            .windows(2)
+            .map(|w| w[0].1.translation.distance(w[1].1.translation))
+            .collect_vec();
 
-            let mut pos = vertical_resolution - leftover_distance;
-            while pos <= distance {
-                // 0..1.0 place of the ring between the two joints
-                let joint_p = pos / distance;
-                let w0 = 1.0 - joint_p;
-                let w1 = joint_p;
+        let full_distances = distances.iter().fold(Vec::<f32>::new(), |mut acc, axe| {
+            let last = acc.last().unwrap_or(&0.0);
+            acc.push(*last + axe);
+            return acc;
+        });
+        let full_length = *full_distances.last().unwrap();
 
-                from_start += vertical_resolution;
-                pos += vertical_resolution;
+        let mut state = 0.0;
+        while state < full_length {
+            let i = full_distances
+                .iter()
+                .position(|distance| distance > &state)
+                .unwrap();
+            // TODO there is probably a simpler way to use lerp
+            let a = EaseValue(axis_joints[i].1.clone());
+            let b = EaseValue(axis_joints[i + 1].1.clone());
 
-                rings.push(Ring {
-                    transform: a.lerp(&b, &(pos / distance)).0,
-                    joint_indices: [(i as u16) - 1, i as u16, 0, 0],
-                    joint_weights: [w0, w1, 0.0, 0.0],
-                    from_start,
-                });
-            }
-            leftover_distance = distance - pos;
+            // 0..1.0 place of the ring between the two joints
+            let start = if i == 0 { 0.0 } else { full_distances[i - 1] };
+            let joint_p = (state - start) / distances[i];
+            let w0 = 1.0 - joint_p;
+            let w1 = joint_p;
+
+            rings.push(Ring {
+                transform: a.lerp(&b, &joint_p).0,
+                joint_indices: [i as u16, i as u16 + 1, 0, 0],
+                joint_weights: [w0, w1, 0.0, 0.0],
+                from_start: state,
+            });
+
+            // Increment state
+            state += vertical_resolution;
         }
+
         rings.push(Ring {
             transform: axis_joints.last().unwrap().1.clone(),
             joint_indices: [axis_joints.len() as u16, 0, 0, 0],
             joint_weights: [1.0, 0.0, 0.0, 0.0],
-            from_start,
+            from_start: full_length,
         });
+        println!("Rinngs {}", rings.len());
 
         let vertex_count = rings.len() * (ring_resolution + 1);
         let mut positions = Vec::with_capacity(vertex_count);
@@ -804,7 +827,7 @@ fn update_stem_mesh(
         let mut joint_weights = Vec::with_capacity(vertex_count);
 
         let inverse_bindposes = (0..(axis_joints.len()))
-            .map(|i| Mat4::default())
+            .map(|_| Mat4::default())
             .collect_vec();
 
         let inverse_bindposes = skinned_mesh_inverse_bindposes_assets
@@ -855,12 +878,20 @@ fn update_stem_mesh(
                 let e = start + step1 + step_up;
                 let f = start + step2 + step_up;
 
-                indices.extend_from_slice(&[a, b, c, d, e, f])
+                if use_wireframe {
+                    indices.extend_from_slice(&[a, b, b, c, c, a, d, e, e, f, f, d])
+                } else {
+                    indices.extend_from_slice(&[a, c, b, d, f, e])
+                }
             }
         }
 
         // Create a mesh
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        let mut mesh = if use_wireframe {
+            Mesh::new(PrimitiveTopology::LineList)
+        } else {
+            Mesh::new(PrimitiveTopology::TriangleList)
+        };
         // Set mesh vertex positions
         // println!("\n\npositions: {} {:?}", positions.len(), positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
@@ -930,6 +961,7 @@ fn update_stem_mesh(
                 material: material_handle,
                 ..Default::default()
             })
+            // .insert(Wireframe)
             .insert(SkinnedMesh {
                 inverse_bindposes: inverse_bindposes.clone(),
                 joints: axis_joints.iter().map(|(joint, _)| *joint).collect_vec(),
