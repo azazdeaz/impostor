@@ -775,8 +775,8 @@ fn update_stem_mesh(
 
         rings.push(Ring {
             transform: axis_joints.last().unwrap().1.clone(),
-            radius: **radii.last().unwrap(),
-            joint_indices: [axis_joints.len() as u16, 0, 0, 0],
+            radius: 0.0,
+            joint_indices: [axis_joints.len() as u16 - 1, 0, 0, 0],
             joint_weights: [1.0, 0.0, 0.0, 0.0],
             from_start: full_length,
         });
