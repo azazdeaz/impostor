@@ -644,7 +644,13 @@ impl Default for StemMeshConfig {
 fn update_stem_mesh(
     mut commands: Commands,
     roots: Query<Entity, With<AxisRoot>>,
-    joints: Query<(Entity, Option<&ImpulseJoint>, Option<&PrevAxe>, &Transform)>,
+    joints: Query<(
+        Entity,
+        Option<&ImpulseJoint>,
+        Option<&PrevAxe>,
+        &Transform,
+        Option<&Radius>,
+    )>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
@@ -665,30 +671,36 @@ fn update_stem_mesh(
     // Go trough each stem
     for root in roots.iter() {
         // Collect all the joins in sequence
-        let axis_joints = if let Ok((axe, Some(ImpulseJoint { parent, .. }), _, transform)) =
-            joints.get(root)
-        {
-            // Get the entity the first joint connects to
-            if let Ok(ground) = joints.get(*parent) {
-                let mut axis_joints = vec![(ground.0, ground.3), (axe, transform)];
-                // Find the next axe and add it to the list
-                while let Some((axe, _, _, transform)) =
-                    joints.iter().find(|(_, _, prev_axe, _)| {
-                        // TODO filter out roots
-                        prev_axe
-                            .and_then(|prev_axe| Some(prev_axe.0 == axis_joints.last().unwrap().0))
-                            .unwrap_or(false)
-                    })
-                {
-                    axis_joints.push((axe, transform))
+        let axis_joints =
+            if let Ok((axe, Some(ImpulseJoint { parent, .. }), _, transform, radius)) =
+                joints.get(root)
+            {
+                // Get the entity the first joint connects to
+                if let Ok(ground) = joints.get(*parent) {
+                    let radius = radius.unwrap_or(&Radius(0.0)).0;
+                    let mut axis_joints =
+                        vec![(ground.0, ground.3, radius), (axe, transform, radius)];
+                    // Find the next axe and add it to the list
+                    while let Some((axe, _, _, transform, radius)) =
+                        joints.iter().find(|(_, _, prev_axe, _, _)| {
+                            // TODO filter out roots
+                            prev_axe
+                                .and_then(|prev_axe| {
+                                    Some(prev_axe.0 == axis_joints.last().unwrap().0)
+                                })
+                                .unwrap_or(false)
+                        })
+                    {
+                        let radius = radius.unwrap_or(&Radius(0.0)).0;
+                        axis_joints.push((axe, transform, radius))
+                    }
+                    Some(axis_joints)
+                } else {
+                    None
                 }
-                Some(axis_joints)
             } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
         if axis_joints.is_none() {
             println!("no joints {:?}", root);
             continue;
@@ -698,6 +710,7 @@ fn update_stem_mesh(
 
         struct Ring {
             transform: Transform,
+            radius: f32,
             joint_indices: [u16; 4],
             joint_weights: [f32; 4],
             from_start: f32,
@@ -705,6 +718,7 @@ fn update_stem_mesh(
 
         let mut rings = vec![Ring {
             transform: axis_joints[0].1.clone(),
+            radius: axis_joints[0].2,
             joint_indices: [0, 0, 0, 0],
             joint_weights: [1.0, 0.0, 0.0, 0.0],
             from_start: 0.0,
@@ -715,6 +729,10 @@ fn update_stem_mesh(
             .windows(2)
             .map(|w| w[0].1.translation.distance(w[1].1.translation))
             .collect_vec();
+        let radii = axis_joints
+            .iter()
+            .map(|(_, _, radius)| radius)
+            .collect_vec();
 
         let full_distances = distances.iter().fold(Vec::<f32>::new(), |mut acc, axe| {
             let last = acc.last().unwrap_or(&0.0);
@@ -722,7 +740,10 @@ fn update_stem_mesh(
             return acc;
         });
         let full_length = *full_distances.last().unwrap();
-        println!("Distances={:?}\nFull distances={:?}\nFull{:?}", distances, full_distances, full_length);
+        println!(
+            "Distances={:?}\nFull distances={:?}\nFull{:?}",
+            distances, full_distances, full_length
+        );
 
         let mut state = 0.0;
         while state < full_length {
@@ -742,6 +763,7 @@ fn update_stem_mesh(
 
             rings.push(Ring {
                 transform: a.lerp(&b, &joint_p).0,
+                radius: radii[i].lerp(radii[i + 1], &joint_p),
                 joint_indices: [i as u16, i as u16 + 1, 0, 0],
                 joint_weights: [w0, w1, 0.0, 0.0],
                 from_start: state,
@@ -753,6 +775,7 @@ fn update_stem_mesh(
 
         rings.push(Ring {
             transform: axis_joints.last().unwrap().1.clone(),
+            radius: **radii.last().unwrap(),
             joint_indices: [axis_joints.len() as u16, 0, 0, 0],
             joint_weights: [1.0, 0.0, 0.0, 0.0],
             from_start: full_length,
@@ -766,8 +789,9 @@ fn update_stem_mesh(
         let mut joint_indices = Vec::with_capacity(vertex_count);
         let mut joint_weights = Vec::with_capacity(vertex_count);
 
-        let inverse_bindposes = axis_joints.iter()
-            .map(|(_, transform)| transform.compute_matrix().inverse())
+        let inverse_bindposes = axis_joints
+            .iter()
+            .map(|(_, transform, _)| transform.compute_matrix().inverse())
             .collect_vec();
 
         let inverse_bindposes = skinned_mesh_inverse_bindposes_assets
@@ -778,10 +802,9 @@ fn update_stem_mesh(
                 let step = step as f32;
                 let theta = (step / ring_resolution as f32) * PI * 2.0;
                 let mut vertex = ring.transform.clone();
-                let radius = 0.2;
                 vertex.rotate_local_y(theta);
                 let normal = vertex.forward();
-                let vertex = vertex.translation + normal * radius;
+                let vertex = vertex.translation + normal * ring.radius;
                 let mut uv_x = (step / (ring_resolution as f32 / 4.0)) % 2.0;
                 if uv_x > 1.0 {
                     uv_x = 2.0 - uv_x;
@@ -904,7 +927,10 @@ fn update_stem_mesh(
             // .insert(Wireframe)
             .insert(SkinnedMesh {
                 inverse_bindposes: inverse_bindposes.clone(),
-                joints: axis_joints.iter().map(|(joint, _)| *joint).collect_vec(),
+                joints: axis_joints
+                    .iter()
+                    .map(|(entity, _, _)| *entity)
+                    .collect_vec(),
             });
     }
 }
