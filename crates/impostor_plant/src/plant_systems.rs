@@ -39,7 +39,7 @@ impl Plugin for PlantPlugin {
                     .with_run_criteria(run_if_growing)
                     .with_system(count_grow_steps)
                     .with_system(grow)
-                    // .with_system(branch_out)
+                    .with_system(branch_out)
                     .with_system(extend)
                     .with_system(update_strength)
                     .with_system(update_stem_mesh)
@@ -415,7 +415,7 @@ fn update_joint_forces(
             .ok()
     }) {
         let branching_pos = branching_pos.and_then(|bp| Some(bp.0)).unwrap_or(1.0);
-        println!(">> Update joint in {:?}", this_axe);
+        // println!(">> Update joint in {:?}", this_axe);
         // let has_next_axe = next_axes
         //     .iter()
         //     .find(|PrevAxe(prev)| *prev == this_axe)
@@ -511,7 +511,9 @@ fn update_joint_forces(
                     commands
                         .spawn()
                         .insert(RigidBody::Fixed)
-                        .insert_bundle(TransformBundle::default())
+                        .insert_bundle(TransformBundle::from_transform(
+                            Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
+                        ))
                         .id()
                 });
 
@@ -590,70 +592,6 @@ fn update_joint_forces(
                 .insert(ImpulseJoint::new(parent, rapier_joint));
         };
     }
-
-    //     rapier_joint
-    //         .set_local_anchor1(Vec3::new(0.0, 0.0, 0.0))
-    //         .set_local_anchor2(Vec3::new(0.0, -length, 0.0))
-    //         .set_motor_position(
-    //             JointAxis::AngX,
-    //             rot_x,
-    //             plant_config.stiffness * strength,
-    //             plant_config.damping * strength,
-    //         )
-    //         .set_motor_position(
-    //             JointAxis::AngY,
-    //             rot_y,
-    //             plant_config.stiffness * strength,
-    //             plant_config.damping * strength,
-    //         )
-    //         .set_motor_position(
-    //             JointAxis::AngZ,
-    //             rot_z,
-    //             plant_config.stiffness * strength,
-    //             plant_config.damping * strength,
-    //         )
-    //         .set_motor_model(JointAxis::AngX, MotorModel::ForceBased)
-    //         .set_motor_model(JointAxis::AngY, MotorModel::ForceBased)
-    //         .set_motor_model(JointAxis::AngZ, MotorModel::ForceBased)
-    //         .set_limits(JointAxis::AngX, [rot_x, rot_x])
-    //         .set_limits(JointAxis::AngY, [rot_y, rot_y])
-    //         .set_limits(JointAxis::AngZ, [rot_z, rot_z]);
-
-    // }
-}
-
-fn update_mesh(
-    mut commands: Commands,
-    mut grow_steps: ResMut<GrowSteps>,
-    q_root: Query<Entity, With<AxisRoot>>,
-    q_stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
-) {
-    if !grow_steps.is_done() || grow_steps.mesh_updated {
-        return;
-    }
-    grow_steps.set_mesh_updated();
-
-    for root in q_root.iter() {
-        let mut prev = Some(root);
-        while let Some(stem_id) = prev {
-            prev = if let Ok((entity, info, _)) = q_stems.get(stem_id) {
-                println!(
-                    "STEM {:?} length: {:?} radius: {:?}",
-                    info.0, info.1, info.2
-                );
-                q_stems
-                    .iter()
-                    .find(|(_, _, prev_axe)| {
-                        prev_axe
-                            .and_then(|prev_axe| Some(prev_axe.0 == entity))
-                            .unwrap_or(false)
-                    })
-                    .and_then(|(entity, _, _)| Some(entity))
-            } else {
-                None
-            }
-        }
-    }
 }
 
 fn print_structure(
@@ -696,7 +634,7 @@ struct StemMeshConfig {
 impl Default for StemMeshConfig {
     fn default() -> Self {
         Self {
-            vertical_resolution: 2.0,
+            vertical_resolution: 0.2,
             ring_resolution: 8,
             use_wireframe: false,
         }
@@ -715,7 +653,8 @@ fn update_stem_mesh(
 ) {
     use bevy_easings::*;
 
-    let texture_handle = asset_server.load("tomato/AG15brn1.png");
+    // let texture_handle = asset_server.load("tomato/AG15brn1.png");
+    let texture_handle = asset_server.load("ss.png");
 
     let StemMeshConfig {
         vertical_resolution,
@@ -783,6 +722,7 @@ fn update_stem_mesh(
             return acc;
         });
         let full_length = *full_distances.last().unwrap();
+        println!("Distances={:?}\nFull distances={:?}\nFull{:?}", distances, full_distances, full_length);
 
         let mut state = 0.0;
         while state < full_length {
@@ -826,8 +766,8 @@ fn update_stem_mesh(
         let mut joint_indices = Vec::with_capacity(vertex_count);
         let mut joint_weights = Vec::with_capacity(vertex_count);
 
-        let inverse_bindposes = (0..(axis_joints.len()))
-            .map(|_| Mat4::default())
+        let inverse_bindposes = axis_joints.iter()
+            .map(|(_, transform)| transform.compute_matrix().inverse())
             .collect_vec();
 
         let inverse_bindposes = skinned_mesh_inverse_bindposes_assets
@@ -910,21 +850,21 @@ fn update_stem_mesh(
         //  as well as `SkinnedMeshJoint` array in the `SkinnedMesh` component.
         // This means that a maximum of 4 joints can affect a single vertex.
 
-        println!(
-            "\n\njoint_indices: {} {:?}",
-            joint_indices.len(),
-            joint_indices
-        );
+        // println!(
+        //     "\n\njoint_indices: {} {:?}",
+        //     joint_indices.len(),
+        //     joint_indices
+        // );
         mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, joint_indices);
 
         // Set mesh vertex joint weights for mesh skinning.
         // Each vertex gets 4 joint weights corresponding to the 4 joint indices assigned to it.
         // The sum of these weights should equal to 1.
-        println!(
-            "\n\njoint_weights: {} {:?}",
-            joint_weights.len(),
-            joint_weights
-        );
+        // println!(
+        //     "\n\njoint_weights: {} {:?}",
+        //     joint_weights.len(),
+        //     joint_weights
+        // );
         mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, joint_weights);
 
         // Tell bevy to construct triangles from a list of vertex indices,
