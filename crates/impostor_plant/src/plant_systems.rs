@@ -660,7 +660,7 @@ fn update_stem_mesh(
     use bevy_easings::*;
 
     // let texture_handle = asset_server.load("tomato/AG15brn1.png");
-    let texture_handle = asset_server.load("ss.png");
+    let texture_handle = asset_server.load("debug_color_01.png");
 
     let StemMeshConfig {
         vertical_resolution,
