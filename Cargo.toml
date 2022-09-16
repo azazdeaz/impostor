@@ -1,6 +1,7 @@
 [workspace]
 members = ["crates/*", "demos/*"]
 resolver = "2"
+license = "MIT OR Apache-2.0"
 
 [profile.dev.package.bevy_rapier3d]
 opt-level = 3
