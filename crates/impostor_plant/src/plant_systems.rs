@@ -42,7 +42,8 @@ impl Plugin for PlantPlugin {
                     .with_system(branch_out)
                     .with_system(extend)
                     .with_system(update_strength)
-                    .with_system(update_stem_mesh)
+                    // .with_system(update_stem_mesh)
+                    .with_system(build_skeleton)
                     .with_system(update_joint_forces), // .with_system(print_structure),
             )
             .add_stage_after(CoreStage::Update, "prune", SystemStage::single_threaded())
@@ -134,7 +135,8 @@ fn resetPlant(
                 radius: Radius(0.001),
                 ..Default::default()
             })
-            .insert(AxisRoot {});
+            .insert(AxisRoot {})
+            .insert(Seed {});
     }
 }
 
@@ -161,6 +163,9 @@ fn count_grow_steps(mut grow_steps: ResMut<GrowSteps>) {
 
 #[derive(Component)]
 struct AxisRoot {}
+
+#[derive(Component)]
+struct Seed {}
 
 #[derive(Component)]
 struct AxeCollider {}
@@ -262,14 +267,10 @@ fn extend(
 
 fn update_strength(
     mut commands: Commands,
-    roots: Query<Entity, With<Stem>>,
     stems: Query<(Entity, (&Length, &Radius), Option<&PrevAxe>)>,
 ) {
-    let mut tree = TreeBuilder::new("tree".to_string());
-
     fn weight_above(
         entity: Entity,
-        mut tree: &mut TreeBuilder,
         stems: &Query<(Entity, (&Length, &Radius), Option<&PrevAxe>)>,
     ) -> f32 {
         let (_, (Length(length), Radius(radius)), _) = stems.get(entity).unwrap();
@@ -279,15 +280,14 @@ fn update_strength(
             .filter_map(|(child, _, prev)| {
                 prev.and_then(|prev| if prev.0 == entity { Some(child) } else { None })
             })
-            .map(|next| weight_above(next, &mut tree, &stems))
+            .map(|next| weight_above(next, &stems))
             .sum();
         stem_weight + children_weight
-    };
-    for root in roots.iter() {
-        let weight = weight_above(root, &mut tree, &stems);
-        commands.entity(root).insert(Strength(weight));
     }
-    print_tree(&tree.build()).ok();
+    for stem in stems.iter() {
+        let weight = weight_above(stem.0, &stems);
+        commands.entity(stem.0).insert(Strength(weight));
+    }
 }
 
 fn branch_out(
@@ -373,10 +373,126 @@ fn branch_out(
     }
 }
 
+fn build_skeleton(
+    mut commands: Commands,
+    seeds: Query<Entity, With<Seed>>,
+    stems: Query<(
+        Entity,
+        (&Length, &Radius, &Direction, &Strength),
+        Option<&PrevAxe>,
+    )>,
+    plant_config: Res<PlantConfig>,
+) {
+    fn add_section(
+        commands: &mut Commands,
+        entity: Entity,
+        (parent_entity, parent_transform): (Entity, Transform),
+        stems: &Query<(
+            Entity,
+            (&Length, &Radius, &Direction, &Strength),
+            Option<&PrevAxe>,
+        )>,
+        plant_config: &PlantConfig,
+    ) {
+
+        println!("ADD SECTION {:?}", entity);
+        let (_, (Length(length), Radius(radius), Direction(direction), Strength(strength)), _) =
+            stems.get(entity).unwrap();
+        let transform = Transform::from_matrix(
+            parent_transform.compute_matrix()
+                * Transform::from_rotation(*direction).compute_matrix()
+                * Transform::from_xyz(0.0, *length, 0.0).compute_matrix(),
+        );
+
+        let rapier_joint = SphericalJointBuilder::new()
+            .local_anchor1(Vec3::new(0.0, 0.0, 0.0))
+            .local_anchor2(Vec3::new(0.0, -length, 0.0))
+            .motor_position(
+                JointAxis::AngX,
+                0.0,
+                plant_config.stiffness * strength,
+                plant_config.damping * strength,
+            )
+            .motor_position(
+                JointAxis::AngY,
+                0.0,
+                plant_config.stiffness * strength,
+                plant_config.damping * strength,
+            )
+            .motor_position(
+                JointAxis::AngZ,
+                0.0,
+                plant_config.stiffness * strength,
+                plant_config.damping * strength,
+            )
+            .motor_model(JointAxis::AngX, MotorModel::ForceBased)
+            .motor_model(JointAxis::AngY, MotorModel::ForceBased)
+            .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
+
+        let section = commands
+            .spawn()
+            .insert(Velocity::default())
+            .insert(RigidBody::Dynamic)
+            // .insert(Collider::ball(0.2))
+            // .insert(CollisionGroups::new(0b0000, 0b0000))
+            // .insert(initial_transform)
+            .insert_bundle(TransformBundle::from_transform(transform))
+            // .insert_bundle(TransformBundle::default())
+            .with_children(|children| {
+                children
+                    .spawn()
+                    .insert(AxeCollider {})
+                    .insert(Collider::capsule_y(length / 2.0, *radius))
+                    .insert(CollisionGroups::new(0b0000, 0b0000))
+                    .insert_bundle(TransformBundle::from_transform(Transform::from_xyz(
+                        0.0,
+                        -length / 2.0,
+                        0.0,
+                    )));
+            })
+            .insert(ImpulseJoint::new(parent_entity, rapier_joint))
+            .id();
+
+        stems
+            .iter()
+            .filter_map(|(child, _, prev)| {
+                prev.and_then(|prev| if prev.0 == entity { Some(child) } else { None })
+            })
+            .for_each(|next| {
+                add_section(commands, next, (section, transform), &stems, &plant_config)
+            });
+    }
+
+    for seed in seeds.iter() {
+        if !stems.contains(seed) {
+            continue;
+        }
+        let root_transform = Transform::default();
+        let root_entity = commands
+            .spawn()
+            .insert(RigidBody::Fixed)
+            .insert_bundle(TransformBundle::from_transform(root_transform))
+            .id();
+        add_section(
+            &mut commands,
+            seed,
+            (root_entity, root_transform),
+            &stems,
+            &plant_config,
+        );
+    }
+}
+
 fn update_joint_forces(
     mut commands: Commands,
     mut axes: Query<(Entity, Option<&mut ImpulseJoint>, Option<&Children>)>,
-    details: Query<(&Strength, &Direction, &Length, &Radius, Option<&BranchingPos>)>,
+    details: Query<(
+        &Strength,
+        &Direction,
+        &Length,
+        &Radius,
+        Option<&BranchingPos>,
+    )>,
     positions: Query<(Option<&Transform>, Option<&Length>)>,
     colliders: Query<Entity, With<AxeCollider>>,
     next_axes: Query<&PrevAxe>,
