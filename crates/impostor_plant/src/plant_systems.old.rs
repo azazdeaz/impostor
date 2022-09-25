@@ -130,6 +130,11 @@ fn resetPlant(
             .spawn()
             .insert(Name::new("Root Node"))
             .insert_bundle(StemBundle {
+                stem: Stem {
+                    order: 0,
+                    max_length: plant_config.max_node_length,
+                    direction: Quat::default(),
+                },
                 length: Length(0.2),
                 radius: Radius(0.001),
                 ..Default::default()
@@ -189,41 +194,43 @@ struct Radius(f32);
 
 #[derive(Reflect, Default, Component, Debug)]
 #[reflect(Component)]
-struct Direction(Quat);
-
-#[derive(Reflect, Default, Component, Debug)]
-#[reflect(Component)]
 struct Strength(f32);
 
 #[derive(Reflect, Default, Component, Debug, Clone)]
 #[reflect(Component)]
-struct Stem {}
+struct Stem {
+    order: u32,
+    max_length: f32,
+    direction: Quat,
+}
 
 #[derive(Bundle)]
 struct StemBundle {
     stem: Stem,
     length: Length,
     radius: Radius,
-    direction: Direction,
 }
 
 impl Default for StemBundle {
     fn default() -> Self {
         Self {
-            stem: Stem {},
+            stem: Stem {
+                order: 0,
+                max_length: 4.0,
+                direction: Quat::default(),
+            },
             length: Length(1.0),
             radius: Radius(1.0),
-            direction: Direction::default(),
         }
     }
 }
 
 fn grow(
     mut commands: Commands,
-    query: Query<(Entity, Option<&Parent>, &Radius, &Length)>,
+    query: Query<(Entity, Option<&Parent>, &Radius, &Length, &Stem)>,
     config: Res<PlantConfig>,
 ) {
-    for (stem_id, parent, Radius(radius), Length(length)) in query.iter() {
+    for (stem_id, parent, Radius(radius), Length(length), stem) in query.iter() {
         let prev_radius = parent
             .and_then(|parent| query.get(parent.get()).ok())
             .and_then(|q| Some((*q.2).0))
@@ -231,26 +238,31 @@ fn grow(
         commands
             .entity(stem_id)
             .insert(Radius(radius + (prev_radius - radius) / 12.0))
-            .insert(Length(length + (config.max_node_length - length) / 3.0));
+            .insert(Length(length + (stem.max_length - length) / 3.0));
     }
 }
 
 fn extend(
     mut commands: Commands,
-    config: Res<PlantConfig>,
-    query: Query<(Entity, &Length)>,
+    plant_config: Res<PlantConfig>,
+    query: Query<(Entity, &Stem, &Length)>,
     prev_axes: Query<&PrevAxe, Without<AxisRoot>>,
 ) {
     let end_stems = query
         .iter()
-        .filter(|(entity, _)| prev_axes.iter().all(|prev_axe| prev_axe.0 != *entity));
+        .filter(|(entity, _, _)| prev_axes.iter().all(|prev_axe| prev_axe.0 != *entity));
 
-    for (id, Length(length)) in end_stems {
-        if length.clone() > config.max_node_length * 0.8 {
+    for (id, stem, Length(length)) in end_stems {
+        if length.clone() > stem.max_length * 0.8 {
             commands
                 .spawn()
                 .insert(Name::new("Stem Node"))
                 .insert_bundle(StemBundle {
+                    stem: Stem {
+                        order: stem.order,
+                        max_length: plant_config.max_node_length,
+                        direction: Quat::default(),
+                    },
                     length: Length(0.2),
                     radius: Radius(0.001),
                     ..Default::default()
@@ -263,16 +275,16 @@ fn extend(
 fn update_strength(
     mut commands: Commands,
     roots: Query<Entity, With<Stem>>,
-    stems: Query<(Entity, (&Length, &Radius), Option<&PrevAxe>)>,
+    stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
 ) {
     let mut tree = TreeBuilder::new("tree".to_string());
 
     fn weight_above(
         entity: Entity,
         mut tree: &mut TreeBuilder,
-        stems: &Query<(Entity, (&Length, &Radius), Option<&PrevAxe>)>,
+        stems: &Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
     ) -> f32 {
-        let (_, (Length(length), Radius(radius)), _) = stems.get(entity).unwrap();
+        let (_, (_, Length(length), Radius(radius)), _) = stems.get(entity).unwrap();
         let stem_weight = radius * length;
         let children_weight: f32 = stems
             .iter()
@@ -352,6 +364,11 @@ fn branch_out(
                 .spawn()
                 .insert(Name::new("Stem Node"))
                 .insert_bundle(StemBundle {
+                    stem: Stem {
+                        order: 1, //TODO
+                        max_length: plant_config.max_node_length,
+                        direction: Quat::from_euler(EulerRot::XYZ, 0.0, angle, PI / 4.0),
+                    },
                     length: Length(0.2),
                     radius: Radius(0.001),
                     ..Default::default()
@@ -363,6 +380,11 @@ fn branch_out(
                 .spawn()
                 .insert(Name::new("Stem Node"))
                 .insert_bundle(StemBundle {
+                    stem: Stem {
+                        order: 1, //TODO
+                        max_length: plant_config.max_node_length,
+                        direction: Quat::from_euler(EulerRot::XYZ, 0.0, angle + PI, PI / 4.0),
+                    },
                     length: Length(0.2),
                     radius: Radius(0.001),
                     ..Default::default()
@@ -376,7 +398,7 @@ fn branch_out(
 fn update_joint_forces(
     mut commands: Commands,
     mut axes: Query<(Entity, Option<&mut ImpulseJoint>, Option<&Children>)>,
-    details: Query<(&Strength, &Direction, &Length, &Radius, Option<&BranchingPos>)>,
+    details: Query<(&Strength, &Stem, &Length, &Radius, Option<&BranchingPos>)>,
     positions: Query<(Option<&Transform>, Option<&Length>)>,
     colliders: Query<Entity, With<AxeCollider>>,
     next_axes: Query<&PrevAxe>,
@@ -385,7 +407,7 @@ fn update_joint_forces(
     println!(">> Update joint forces");
     for (
         (this_axe, joint, children),
-        (Strength(strength), Direction(direction), Length(length), Radius(radius), branching_pos),
+        (Strength(strength), stem, Length(length), Radius(radius), branching_pos),
     ) in axes.iter_mut().filter_map(|axe| {
         details
             .get(axe.0)
@@ -521,7 +543,7 @@ fn update_joint_forces(
                 .insert(Collider::cuboid(0.2, 0.2, 0.2))
                 .insert(CollisionGroups::new(0b0000, 0b0000))
                 .insert_bundle(TransformBundle::from_transform(Transform::from_rotation(
-                    *direction,
+                    stem.direction,
                 )))
                 .id();
             commands.entity(parent_entity).add_child(parent);
@@ -533,7 +555,7 @@ fn update_joint_forces(
                     .and_then(|transform| {
                         Some(Transform::from_matrix(
                             transform.compute_matrix()
-                                * Transform::from_rotation(*direction).compute_matrix()
+                                * Transform::from_rotation(stem.direction).compute_matrix()
                                 * Transform::from_xyz(0.0, *length, 0.0).compute_matrix(),
                         ))
                     })
@@ -574,16 +596,16 @@ fn update_joint_forces(
 
 fn print_structure(
     roots: Query<Entity, (With<AxisRoot>, Without<PrevAxe>)>,
-    stems: Query<(Entity, (&Length, &Radius), Option<&PrevAxe>)>,
+    stems: Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
 ) {
     let mut tree = TreeBuilder::new("tree".to_string());
 
     fn add_node(
         entity: Entity,
         mut tree: &mut TreeBuilder,
-        stems: &Query<(Entity, (&Length, &Radius), Option<&PrevAxe>)>,
+        stems: &Query<(Entity, (&Stem, &Length, &Radius), Option<&PrevAxe>)>,
     ) {
-        let (_, (Length(length), Radius(radius)), _) = stems.get(entity).unwrap();
+        let (_, (_, Length(length), Radius(radius)), _) = stems.get(entity).unwrap();
         tree.begin_child(format!("{:?} len:{:.2} r:{:.2}", entity, length, radius));
         stems
             .iter()
