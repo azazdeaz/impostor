@@ -43,7 +43,7 @@ impl Plugin for PlantPlugin {
                     .with_system(extend)
                     .with_system(update_strength)
                     // .with_system(update_stem_mesh)
-                    .with_system(build_skeleton)
+                    // .with_system(build_skeleton)
                     .with_system(update_joint_forces), // .with_system(print_structure),
             )
             .add_stage_after(CoreStage::Update, "prune", SystemStage::single_threaded())
@@ -209,6 +209,7 @@ struct StemBundle {
     stem: Stem,
     length: Length,
     radius: Radius,
+    strength: Strength,
     direction: Direction,
 }
 
@@ -218,6 +219,7 @@ impl Default for StemBundle {
             stem: Stem {},
             length: Length(1.0),
             radius: Radius(1.0),
+            strength: Strength(0.1),
             direction: Direction::default(),
         }
     }
@@ -286,7 +288,7 @@ fn update_strength(
     }
     for stem in stems.iter() {
         let weight = weight_above(stem.0, &stems);
-        commands.entity(stem.0).insert(Strength(weight));
+        commands.entity(stem.0).insert(Strength(weight + 0.1));
     }
 }
 
@@ -596,7 +598,7 @@ fn update_joint_forces(
                 .motor_model(JointAxis::AngX, MotorModel::ForceBased)
                 .motor_model(JointAxis::AngY, MotorModel::ForceBased)
                 .motor_model(JointAxis::AngZ, MotorModel::ForceBased);
-
+            let seed_position = Transform::from_translation(Vec3::new(0.0, 2.0, 2.0));
             let parent_entity = next_axes
                 .get(this_axe)
                 .and_then(|PrevAxe(prev)| Ok(*prev))
@@ -605,8 +607,11 @@ fn update_joint_forces(
                     commands
                         .spawn()
                         .insert(RigidBody::Fixed)
+
+                    .insert(Collider::cuboid(0.5, 0.05, 0.5))
+                    .insert(CollisionGroups::new(0b0000, 0b0000))
                         .insert_bundle(TransformBundle::from_transform(
-                            Transform::from_translation(Vec3::new(0.0, 0.0, 2.0)),
+                            seed_position,
                         ))
                         .id()
                 });
@@ -659,7 +664,7 @@ fn update_joint_forces(
                     ">> cant find paremt transform: this {:?} parent {:?}",
                     this_axe, parent_entity
                 );
-                Transform::default()
+                seed_position
             };
 
             commands
