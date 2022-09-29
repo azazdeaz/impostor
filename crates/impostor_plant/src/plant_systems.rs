@@ -1,6 +1,5 @@
 use bevy::{
-    ecs::{entity, schedule::ShouldRun},
-    pbr::wireframe::Wireframe,
+    ecs::schedule::ShouldRun,
     prelude::*,
     render::mesh::{
         skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
@@ -15,8 +14,7 @@ use bevy_rapier3d::{
 use itertools::Itertools;
 use ptree::{print_tree, TreeBuilder};
 use rand::Rng;
-use std::{cell::RefCell, collections::VecDeque, fmt};
-use std::{f32::consts::PI, rc::Rc};
+use std::f32::consts::PI;
 
 pub struct PlantPlugin;
 
@@ -43,7 +41,7 @@ impl Plugin for PlantPlugin {
                     .with_system(extend)
                     .with_system(update_strength)
                     // .with_system(update_stem_mesh)
-                    // .with_system(build_skeleton)
+                    .with_system(build_skeleton)
                     .with_system(update_joint_forces), // .with_system(print_structure),
             )
             .add_stage_after(CoreStage::Update, "prune", SystemStage::single_threaded())
@@ -101,14 +99,16 @@ struct PlantConfig {
     damping: f32,
     max_node_length: f32,
     max_radius: f32,
+    min_length_between_branches: f32,
 }
 impl Default for PlantConfig {
     fn default() -> Self {
         Self {
             stiffness: 2000.0,
             damping: 1500.0,
-            max_node_length: 1.0,
+            max_node_length: 1.2,
             max_radius: 0.2,
+            min_length_between_branches: 3.0,
         }
     }
 }
@@ -166,6 +166,9 @@ struct AxisRoot {}
 
 #[derive(Component)]
 struct Seed {}
+
+#[derive(Component)]
+struct SkeletonOf(Entity);
 
 #[derive(Component)]
 struct AxeCollider {}
@@ -298,8 +301,6 @@ fn branch_out(
     roots: Query<Entity, With<AxisRoot>>,
     lengths: Query<(Entity, &Length, Option<&PrevAxe>)>,
 ) {
-    let min_length_between_branches = 5.0; // TODO move this to config resource
-
     for root_axe in roots.iter() {
         let mut this_axe = root_axe;
         let mut length_without_branch = 0.0;
@@ -329,12 +330,21 @@ fn branch_out(
             });
 
             length_without_branch += length;
-            if next_axe.is_some() && length_without_branch > min_length_between_branches {
+            println!(
+                "length_without_branch {} {}",
+                length_without_branch,
+                next_axe.is_some()
+            );
+            if next_axe.is_some()
+                && length_without_branch > plant_config.min_length_between_branches
+            {
+                println!("add node");
+                length_without_branch = 0.0;
                 branch_out_from.push(entity);
             }
 
             if has_branch_starting {
-                println!("reset branching");
+                println!("reset branching at {}", length_without_branch);
                 length_without_branch = 0.0;
                 branch_out_from.clear();
             }
@@ -345,7 +355,7 @@ fn branch_out(
                 break;
             }
         }
-
+        println!("branch_out_from {:?}", branch_out_from);
         for new_root_node in branch_out_from.iter() {
             println!("Add branch to {:?}", new_root_node);
             let mut rng = rand::thread_rng();
@@ -383,10 +393,12 @@ fn build_skeleton(
         (&Length, &Radius, &Direction, &Strength),
         Option<&PrevAxe>,
     )>,
+    skeletons: Query<(Entity, &SkeletonOf)>,
     plant_config: Res<PlantConfig>,
 ) {
     fn add_section(
         commands: &mut Commands,
+        seed: Entity,
         entity: Entity,
         (parent_entity, parent_transform): (Entity, Transform),
         stems: &Query<(
@@ -396,8 +408,6 @@ fn build_skeleton(
         )>,
         plant_config: &PlantConfig,
     ) {
-
-        println!("ADD SECTION {:?}", entity);
         let (_, (Length(length), Radius(radius), Direction(direction), Strength(strength)), _) =
             stems.get(entity).unwrap();
         let transform = Transform::from_matrix(
@@ -433,6 +443,7 @@ fn build_skeleton(
 
         let section = commands
             .spawn()
+            .insert(SkeletonOf(seed))
             .insert(Velocity::default())
             .insert(RigidBody::Dynamic)
             // .insert(Collider::ball(0.2))
@@ -461,13 +472,25 @@ fn build_skeleton(
                 prev.and_then(|prev| if prev.0 == entity { Some(child) } else { None })
             })
             .for_each(|next| {
-                add_section(commands, next, (section, transform), &stems, &plant_config)
+                add_section(
+                    commands,
+                    seed,
+                    next,
+                    (section, transform),
+                    &stems,
+                    &plant_config,
+                )
             });
     }
 
     for seed in seeds.iter() {
         if !stems.contains(seed) {
             continue;
+        }
+        for (entity, SkeletonOf(skeleton_seed)) in skeletons.iter() {
+            if *skeleton_seed == seed {
+                commands.entity(entity).despawn_recursive();
+            }
         }
         let root_transform = Transform::default();
         let root_entity = commands
@@ -477,6 +500,7 @@ fn build_skeleton(
             .id();
         add_section(
             &mut commands,
+            seed,
             seed,
             (root_entity, root_transform),
             &stems,
@@ -500,7 +524,6 @@ fn update_joint_forces(
     next_axes: Query<&PrevAxe>,
     plant_config: Res<PlantConfig>,
 ) {
-    println!(">> Update joint forces");
     for (
         (this_axe, joint, children),
         (Strength(strength), Direction(direction), Length(length), Radius(radius), branching_pos),
@@ -603,16 +626,12 @@ fn update_joint_forces(
                 .get(this_axe)
                 .and_then(|PrevAxe(prev)| Ok(*prev))
                 .unwrap_or_else(|_| {
-                    println!(">> Creating Root for {:?}", this_axe);
                     commands
                         .spawn()
                         .insert(RigidBody::Fixed)
-
-                    .insert(Collider::cuboid(0.5, 0.05, 0.5))
-                    .insert(CollisionGroups::new(0b0000, 0b0000))
-                        .insert_bundle(TransformBundle::from_transform(
-                            seed_position,
-                        ))
+                        .insert(Collider::cuboid(0.5, 0.05, 0.5))
+                        .insert(CollisionGroups::new(0b0000, 0b0000))
+                        .insert_bundle(TransformBundle::from_transform(seed_position))
                         .id()
                 });
 
@@ -648,8 +667,6 @@ fn update_joint_forces(
             commands.entity(parent_entity).add_child(parent);
 
             let initial_transform = if let Ok((transform, _)) = positions.get(parent_entity) {
-                println!(">> parent transform: {:?}", transform);
-
                 transform
                     .and_then(|transform| {
                         Some(Transform::from_matrix(
@@ -660,10 +677,6 @@ fn update_joint_forces(
                     })
                     .unwrap_or_default()
             } else {
-                println!(
-                    ">> cant find paremt transform: this {:?} parent {:?}",
-                    this_axe, parent_entity
-                );
                 seed_position
             };
 
