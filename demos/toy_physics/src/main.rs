@@ -1,20 +1,20 @@
 use bevy::prelude::*;
-use bevy_rapier3d::{prelude::*, na::UnitQuaternion};
 use bevy_prototype_debug_lines::*;
+use bevy_rapier3d::{na::UnitQuaternion, prelude::*};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(DebugLinesPlugin::default())        
+        .add_plugin(DebugLinesPlugin::default())
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin {
-            mode: DebugRenderMode::default() ,//| DebugRenderMode::CONTACTS,
+            mode: DebugRenderMode::default(), //| DebugRenderMode::CONTACTS,
             ..Default::default()
         })
         // .insert_resource(PhysicsHooksWithQueryObject(Box::new(MyPhysicsHooks {})))
         .add_plugin(impostor_editor_camera::EditorCameraPlugin)
         .add_startup_system(setup_stick)
-        .add_startup_system(setup_physics)       
+        .add_startup_system(setup_physics)
         // .add_system(print_ball_altitude)
         .add_system(display_contact_info)
         .run();
@@ -26,15 +26,22 @@ struct Stick {}
 #[derive(Component)]
 struct Ball {}
 
-
-fn setup_stick(mut commands:Commands) {
+fn setup_stick(mut commands: Commands) {
     println!("Spawn stick");
-    commands.spawn()
-        .insert(Stick {})
+    commands
+        .spawn()
         .insert(RigidBody::KinematicPositionBased)
         .insert(ActiveEvents::CONTACT_FORCE_EVENTS)
-        .insert(Collider::capsule_y(2.0, 0.6))
-        .insert_bundle(TransformBundle::default());
+        .insert_bundle(TransformBundle::default())
+        .with_children(|children| {
+            children
+                .spawn()
+                .insert(Stick {})
+                .insert(Collider::capsule_y(2.0, 0.6))
+                .insert_bundle(TransformBundle::from_transform(
+                    Transform::from_translation((0.0, 1.0, 0.0).into()),
+                ));
+        });
 }
 
 fn setup_physics(mut commands: Commands) {
@@ -51,7 +58,7 @@ fn setup_physics(mut commands: Commands) {
         .insert(RigidBody::Dynamic)
         .insert(Collider::ball(0.5))
         .insert(Restitution::coefficient(0.7))
-        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.01, 4.0, 0.01)));
+        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.01, 5.0, 0.01)));
 }
 
 fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
@@ -69,7 +76,7 @@ fn display_events(
         // for collision_event in collision_events.iter() {
         //     println!("Received collision event: {:?}", collision_event);
         // }
-    
+
         // for contact_force_event in contact_force_events.iter() {
         //     let pair = if stick.contains(contact_force_event.collider1) {
         //         Some((contact_force_event.collider1, contact_force_event.collider2))
@@ -91,10 +98,11 @@ fn display_events(
 fn display_contact_info(
     rapier_context: Res<RapierContext>,
     mut lines: ResMut<DebugLines>,
-    mut stick: Query<(Entity, &GlobalTransform, &mut Transform), With<Stick>>,
+    stick: Query<Entity, With<Stick>>,
+    mut transforms: Query<(&mut Transform, &GlobalTransform)>,
     ball: Query<Entity, With<Ball>>,
 ) {
-    if let (Ok((stick_entity, stick_global, mut stick_transform)), Ok(ball_entity)) = (stick.get_single_mut(), ball.get_single()) {
+    if let (Ok(stick_entity), Ok(ball_entity)) = (stick.get_single(), ball.get_single()) {
         /* Find the contact pair, if it exists, between two colliders. */
         if let Some(contact_pair) = rapier_context.contact_pair(stick_entity, ball_entity) {
             // The contact pair exists meaning that the broad-phase identified a potential contact.
@@ -103,57 +111,40 @@ fn display_contact_info(
                 // contains contacts for which contact forces were computed.
             }
 
-            
-
-            // We may also read the contact manifolds to access the contact geometry.
-            for manifold in contact_pair.manifolds() {
-                // println!("Local-space contact normal: {}", manifold.local_n1());
-                // println!("Local-space contact normal: {}", manifold.local_n2());
+            if let Some((manifold, contact)) = contact_pair.find_deepest_contact() {
                 println!(": World-space contact normal: {}", manifold.normal());
 
-                
-
                 if let Some(contact) = manifold.find_deepest_contact() {
-                    let (local_p, ) = if manifold.rigid_body1().unwrap() == stick_entity {
-                        (contact.local_p1(),)
-                    }
-                    else {
-                        (contact.local_p2(),)
+                    let rb = if contact_pair.collider1() == stick_entity {
+                        manifold.rigid_body1()
+                    } else {
+                        manifold.rigid_body2()
                     };
-                    // let pos = 
-                    println!(": Deepest: {:?} {:?}", contact.dist(), local_p);
-                }
-                
 
-                // // Read the geometric contacts.
-                // for contact_point in manifold.points() {
-                //     // Keep in mind that all the geometric contact data are expressed in the local-space of the colliders.
-                //     println!("Found local contact point 1: {:?}", contact_point.local_p1());
-                //     println!("Found contact distance: {:?}", contact_point.dist()); // Negative if there is a penetration.
-                //     println!("Found contact impulse: {}", contact_point.impulse());
-                //     println!("Found friction impulse: {:?}", contact_point.tangent_impulse());
-                // }
+                    let rb = rb.unwrap();
 
-                // // Read the solver contacts.
-                for solver_contact in manifold.solver_contacts() {
-                    // Keep in mind that all the solver contact data are expressed in world-space.
-                    println!("Found solver contact point: {:?}", solver_contact.point());
-                    println!("Found solver contact distance: {:?}", solver_contact.dist()); // Negative if there is a penetration.
-                    
+                    if let Ok((mut body_local, body_global)) = transforms.get_mut(rb) {
+                        for solver_contact in manifold.solver_contacts() {
+                            // Keep in mind that all the solver contact data are expressed in world-space.
+                            println!("Found solver contact point: {:?}", solver_contact.point());
+                            println!("Found solver contact distance: {:?}", solver_contact.dist()); // Negative if there is a penetration.
 
+                            let contact = solver_contact.point();
+                            let anchor = body_global.translation();
+                            lines.line(contact, anchor, 0.0);
 
-                    let contact = solver_contact.point();
-                    let anchor = stick_global.translation();
-                    lines.line(contact, anchor, 0.0);
+                            let pushed_contact = contact - manifold.normal();
+                            let a = contact - anchor;
+                            let b = pushed_contact - anchor;
+                            if let Some(rotation) =
+                                UnitQuaternion::rotation_between(&a.into(), &b.into())
+                            {
+                                body_local.rotate(rotation.into());
+                            }
 
-                    let pushed_contact = contact + manifold.normal();
-                    let a = contact - anchor;
-                    let b = pushed_contact - anchor;
-                    if let Some(rotation)  = UnitQuaternion::rotation_between(&a.into(), &b.into()) {
-                        stick_transform.rotate(rotation.into());
+                            lines.line_colored(contact, pushed_contact, 30.0, Color::RED)
+                        }
                     }
-
-                    lines.line_colored(contact, contact + manifold.normal(), 0.0, Color::CRIMSON)
                 }
             }
         }
@@ -163,7 +154,7 @@ fn display_contact_info(
 // struct MyPhysicsHooks;
 // impl PhysicsHooksWithQuery<NoUserData<'_>> for MyPhysicsHooks {
 //     fn modify_solver_contacts(
-//         &self, 
+//         &self,
 //         context: ContactModificationContextView,
 //         _user_data: &Query<NoUserData>
 //     ) {
