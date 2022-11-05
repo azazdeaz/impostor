@@ -625,6 +625,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_prototype_debug_lines"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e272fe1736bff610fc80982d31b437eb75dc7d7e087fdd470ddcbeb9bdfa8a0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_ptr"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -640,7 +649,21 @@ dependencies = [
  "bitflags",
  "log",
  "nalgebra 0.31.1",
- "rapier3d",
+ "rapier3d 0.14.0",
+ "serde 1.0.142",
+]
+
+[[package]]
+name = "bevy_rapier3d"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e34cffd065dbb111fad1cdeac471690d1f4e17418973fd6be5a0c743497f5f72"
+dependencies = [
+ "bevy",
+ "bitflags",
+ "log",
+ "nalgebra 0.31.1",
+ "rapier3d 0.15.0",
  "serde 1.0.142",
 ]
 
@@ -1020,7 +1043,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_egui",
- "bevy_rapier3d",
+ "bevy_rapier3d 0.16.0",
  "impostor_editor_camera",
  "impostor_plant",
  "impostor_schemas",
@@ -2032,7 +2055,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_egui",
- "bevy_rapier3d",
+ "bevy_rapier3d 0.16.0",
  "impostor_schemas",
  "itertools",
  "nalgebra 0.30.1",
@@ -2054,7 +2077,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_easings",
- "bevy_rapier3d",
+ "bevy_rapier3d 0.16.0",
  "impostor_schemas",
  "itertools",
  "nalgebra 0.30.1",
@@ -2068,7 +2091,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_egui",
- "bevy_rapier3d",
+ "bevy_rapier3d 0.16.0",
 ]
 
 [[package]]
@@ -2076,7 +2099,7 @@ name = "impostor_teleop"
 version = "0.1.0"
 dependencies = [
  "bevy",
- "bevy_rapier3d",
+ "bevy_rapier3d 0.16.0",
  "impostor_schemas",
 ]
 
@@ -2994,6 +3017,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "parry3d"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2420ecc938f3acf004ca7f5059aca5145324a88525879745e18ba6ea785d793"
+dependencies = [
+ "approx",
+ "arrayvec 0.7.2",
+ "bitflags",
+ "downcast-rs",
+ "either",
+ "nalgebra 0.31.1",
+ "num-derive",
+ "num-traits 0.2.15",
+ "rustc-hash",
+ "serde 1.0.142",
+ "simba",
+ "slab",
+ "smallvec",
+ "spade",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3186,7 +3231,29 @@ dependencies = [
  "nalgebra 0.31.1",
  "num-derive",
  "num-traits 0.2.15",
- "parry3d",
+ "parry3d 0.9.0",
+ "rustc-hash",
+ "serde 1.0.142",
+ "simba",
+ "vec_map",
+]
+
+[[package]]
+name = "rapier3d"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3393d49fd2b9a66cba62e45a778a59f73cbed56afff461a5dda32d3b630fd029"
+dependencies = [
+ "approx",
+ "arrayvec 0.7.2",
+ "bit-vec",
+ "bitflags",
+ "crossbeam",
+ "downcast-rs",
+ "nalgebra 0.31.1",
+ "num-derive",
+ "num-traits 0.2.15",
+ "parry3d 0.10.0",
  "rustc-hash",
  "serde 1.0.142",
  "simba",
@@ -3622,6 +3689,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
 dependencies = [
  "serde 1.0.142",
+]
+
+[[package]]
+name = "toy_physics"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy-inspector-egui",
+ "bevy_egui",
+ "bevy_prototype_debug_lines",
+ "bevy_rapier3d 0.17.0",
+ "impostor_editor_camera",
+ "impostor_plant",
+ "impostor_schemas",
+ "impostor_teleop",
+ "itertools",
+ "nalgebra 0.30.1",
+ "rand",
 ]
 
 [[package]]
