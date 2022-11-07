@@ -17,6 +17,7 @@ fn main() {
         .add_startup_system(setup_physics)
         // .add_system(print_ball_altitude)
         .add_system(display_contact_info)
+        .add_system_to_stage(PhysicsStages::DetectDespawn, remember_velocity)
         .run();
 }
 
@@ -33,13 +34,14 @@ fn setup_stick(mut commands: Commands) {
         .insert(RigidBody::KinematicPositionBased)
         .insert(ActiveEvents::CONTACT_FORCE_EVENTS)
         .insert_bundle(TransformBundle::default())
+        .insert(Collider::ball(0.5))
         .with_children(|children| {
             children
                 .spawn()
                 .insert(Stick {})
                 .insert(Collider::capsule_y(2.0, 0.6))
                 .insert_bundle(TransformBundle::from_transform(
-                    Transform::from_translation((0.0, 1.0, 0.0).into()),
+                    Transform::from_translation((0.0, 2.0, 0.0).into()),
                 ));
         });
 }
@@ -55,15 +57,22 @@ fn setup_physics(mut commands: Commands) {
     commands
         .spawn()
         .insert(Ball {})
+        .insert(Velocity::default())
         .insert(RigidBody::Dynamic)
         .insert(Collider::ball(0.5))
         .insert(Restitution::coefficient(0.7))
-        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.01, 5.0, 0.01)));
+        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.2, 7.0, 0.1)));
 }
 
-fn print_ball_altitude(positions: Query<&Transform, With<RigidBody>>) {
-    for transform in positions.iter() {
-        println!("Ball altitude: {}", transform.translation.y);
+#[derive(Component)]
+struct PrevVelocity(Velocity);
+
+fn remember_velocity(mut commands: Commands, velocities: Query<(Entity, &Velocity)>) {
+    // TODO use clone_from() if PrevVelocity already exist
+    for (entity, velocity) in velocities.into_iter() {
+        commands
+            .entity(entity)
+            .insert(PrevVelocity(velocity.clone()));
     }
 }
 
@@ -100,9 +109,11 @@ fn display_contact_info(
     mut lines: ResMut<DebugLines>,
     stick: Query<Entity, With<Stick>>,
     mut transforms: Query<(&mut Transform, &GlobalTransform)>,
-    ball: Query<Entity, With<Ball>>,
+    mut ball: Query<(Entity, &mut Velocity, &PrevVelocity, &GlobalTransform), With<Ball>>,
 ) {
-    if let (Ok(stick_entity), Ok(ball_entity)) = (stick.get_single(), ball.get_single()) {
+    if let (Ok(stick_entity), Ok((ball_entity, mut ball_velocity, PrevVelocity(prev_velocity), ball_gt))) =
+        (stick.get_single(), ball.get_single_mut())
+    {
         /* Find the contact pair, if it exists, between two colliders. */
         if let Some(contact_pair) = rapier_context.contact_pair(stick_entity, ball_entity) {
             // The contact pair exists meaning that the broad-phase identified a potential contact.
@@ -142,7 +153,24 @@ fn display_contact_info(
                                 body_local.rotate(rotation.into());
                             }
 
-                            lines.line_colored(contact, pushed_contact, 30.0, Color::RED)
+                            lines.line_colored(contact, pushed_contact, 0.0, Color::RED);
+                            lines.line_colored(
+                                ball_gt.translation(),
+                                ball_gt.translation() + ball_velocity.linvel,
+                                0.0,
+                                Color::INDIGO,
+                            );
+                            lines.line_colored(
+                                ball_gt.translation(),
+                                ball_gt.translation() + prev_velocity.linvel,
+                                0.0,
+                                Color::PINK,
+                            );
+                            *ball_velocity = prev_velocity.clone();
+                            // let keep_prev = 1.0;
+                            // let keep_curr = 0.0;
+                            // ball_velocity.linvel = (ball_velocity.linvel * keep_curr) + (prev_velocity.linvel * keep_prev);
+                            // ball_velocity.angvel = (ball_velocity.angvel * keep_curr) + (prev_velocity.angvel * keep_prev);
                         }
                     }
                 }
