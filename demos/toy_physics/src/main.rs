@@ -35,18 +35,19 @@ struct Stick {}
 struct Ball {}
 
 fn setup_stick(mut commands: Commands) {
-    println!("Spawn stick");
     commands
         .spawn()
-        .insert(RigidBody::KinematicPositionBased)
+        .insert(RigidBody::KinematicVelocityBased)
         .insert(ActiveEvents::CONTACT_FORCE_EVENTS)
         .insert_bundle(TransformBundle::default())
-        // .insert(Collider::ball(0.5))
+        .insert(Velocity::default())
+        .insert(Collider::ball(0.5))
         .with_children(|children| {
             children
                 .spawn()
                 .insert(Stick {})
                 .insert(Collider::capsule_y(2.0, 0.6))
+                .insert(ColliderMassProperties::Density(0.0))
                 .insert_bundle(TransformBundle::from_transform(
                     Transform::from_translation((0.0, 2.0, 0.0).into()),
                 ));
@@ -137,10 +138,11 @@ fn display_contact_info(
     rapier_context: Res<RapierContext>,
     mut lines: ResMut<DebugLines>,
     stick: Query<Entity, With<Stick>>,
-    mut transforms: Query<(&mut Transform, &GlobalTransform)>,
-    mut balls: Query<(Entity, &mut Velocity, &PrevVelocity, &GlobalTransform), With<Ball>>,
+    balls: Query<(Entity, &PrevVelocity, &GlobalTransform), With<Ball>>,
+    transforms: Query<&GlobalTransform>,
+    mut velocities: Query<&mut Velocity>,
 ) {
-    for (ball_entity, mut ball_velocity, PrevVelocity(prev_velocity), ball_gt) in balls.iter_mut() {
+    for (ball_entity, PrevVelocity(prev_velocity), ball_gt) in balls.iter() {
         if let Ok(stick_entity) = stick.get_single() {
             /* Find the contact pair, if it exists, between two colliders. */
             if let Some(contact_pair) = rapier_context.contact_pair(stick_entity, ball_entity) {
@@ -162,51 +164,58 @@ fn display_contact_info(
 
                         let rb = rb.unwrap();
 
-                        if let Ok((mut body_local, body_global)) = transforms.get_mut(rb) {
-                            for solver_contact in manifold.solver_contacts() {
-                                // Keep in mind that all the solver contact data are expressed in world-space.
-                                println!(
-                                    "Found solver contact point: {:?}",
-                                    solver_contact.point()
-                                );
-                                println!(
-                                    "Found solver contact distance: {:?}",
-                                    solver_contact.dist()
-                                ); // Negative if there is a penetration.
+                        if let Ok(body_global) = transforms.get(rb) {
+                            if let Ok([mut ball_velocity, mut stick_velocity]) =
+                                velocities.get_many_mut([ball_entity, rb])
+                            {
+                                for solver_contact in manifold.solver_contacts() {
+                                    // Keep in mind that all the solver contact data are expressed in world-space.
+                                    println!(
+                                        "Found solver contact point: {:?}",
+                                        solver_contact.point()
+                                    );
+                                    println!(
+                                        "Found solver contact distance: {:?}",
+                                        solver_contact.dist()
+                                    ); // Negative if there is a penetration.
 
-                                let contact = solver_contact.point();
-                                let anchor = body_global.translation();
-                                lines.line(contact, anchor, 0.0);
+                                    let contact = solver_contact.point();
+                                    let anchor = body_global.translation();
+                                    lines.line(contact, anchor, 0.0);
 
-                                let pushed_contact = contact - manifold.normal();
-                                let a = contact - anchor;
-                                let b = pushed_contact - anchor;
-                                if let Some(rotation) =
-                                    UnitQuaternion::rotation_between(&a.into(), &b.into())
-                                {
-                                    body_local.rotate(rotation.into());
+                                    let pushed_contact = contact - manifold.normal();
+                                    let a = contact - anchor;
+                                    let b = pushed_contact - anchor;
+                                    if let Some((axis, angle)) =
+                                        UnitQuaternion::rotation_between(&a.into(), &b.into())
+                                            .and_then(|q| q.axis_angle())
+                                    {
+                                        stick_velocity.angvel = axis.into();
+                                        stick_velocity.angvel *= angle;
+                                        // body_local.rotate(rotation.into());
+                                    }
+
+                                    lines.line_colored(contact, pushed_contact, 0.0, Color::RED);
+                                    lines.line_colored(
+                                        ball_gt.translation(),
+                                        ball_gt.translation() + ball_velocity.linvel,
+                                        30.0,
+                                        Color::INDIGO,
+                                    );
+                                    lines.line_colored(
+                                        ball_gt.translation() + Vec3::X,
+                                        ball_gt.translation() + Vec3::X + prev_velocity.linvel,
+                                        30.0,
+                                        Color::PINK,
+                                    );
+                                    // *ball_velocity = prev_velocity.clone();
+                                    // let keep_prev = 0.7;
+                                    // let keep_curr = 0.2;
+                                    // ball_velocity.linvel = (ball_velocity.linvel * keep_curr)
+                                    //     + (prev_velocity.linvel * keep_prev);
+                                    // ball_velocity.angvel = (ball_velocity.angvel * keep_curr)
+                                    //     + (prev_velocity.angvel * keep_prev);
                                 }
-
-                                lines.line_colored(contact, pushed_contact, 0.0, Color::RED);
-                                lines.line_colored(
-                                    ball_gt.translation(),
-                                    ball_gt.translation() + ball_velocity.linvel,
-                                    30.0,
-                                    Color::INDIGO,
-                                );
-                                lines.line_colored(
-                                    ball_gt.translation() + Vec3::X,
-                                    ball_gt.translation() + Vec3::X + prev_velocity.linvel,
-                                    30.0,
-                                    Color::PINK,
-                                );
-                                // *ball_velocity = prev_velocity.clone();
-                                let keep_prev = 0.7;
-                                let keep_curr = 0.2;
-                                ball_velocity.linvel = (ball_velocity.linvel * keep_curr)
-                                    + (prev_velocity.linvel * keep_prev);
-                                ball_velocity.angvel = (ball_velocity.angvel * keep_curr)
-                                    + (prev_velocity.angvel * keep_prev);
                             }
                         }
                     }
