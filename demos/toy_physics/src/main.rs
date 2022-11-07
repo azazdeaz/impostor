@@ -18,13 +18,15 @@ fn main() {
         .add_startup_system(setup_physics)
         .add_system(shoot_at)
         // .add_system(print_ball_altitude)
-        .add_system(display_contact_info)
+        
         .add_stage_after(
             PhysicsStages::StepSimulation,
             "update_plants",
             SystemStage::single_threaded(),
         )
         .add_system_to_stage("update_plants", remember_velocity)
+        .add_system(handle_stem_contact.after(remember_velocity))
+        .add_system(pull_back_stems.after(handle_stem_contact))
         .run();
 }
 
@@ -52,6 +54,9 @@ fn setup_stick(mut commands: Commands) {
                     Transform::from_translation((0.0, 2.0, 0.0).into()),
                 ));
         });
+}
+
+fn pull_back_stems(mut commands: Commands) {
 }
 
 fn shoot_at(mut commands: Commands, time: Res<Time>) {
@@ -134,7 +139,7 @@ fn display_events(
     }
 }
 
-fn display_contact_info(
+fn handle_stem_contact(
     rapier_context: Res<RapierContext>,
     mut lines: ResMut<DebugLines>,
     stick: Query<Entity, With<Stick>>,
