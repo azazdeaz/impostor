@@ -7,30 +7,40 @@ enum CustomFilterTag {
     GroupB,
 }
 
+#[derive(Component)]
+struct Floor {}
+
 // A custom filter that allows contacts only between rigid-bodies with the
 // same user_data value.
 // Note that using collision groups would be a more efficient way of doing
 // this, but we use custom filters instead for demonstration purpose.
 struct SameUserDataFilter;
-impl<'a> PhysicsHooksWithQuery<&'a CustomFilterTag> for SameUserDataFilter {
-    fn filter_contact_pair(
-        &self,
-        context: PairFilterContextView,
-        tags: &Query<&'a CustomFilterTag>,
-    ) -> Option<SolverFlags> {
-        if tags.get(context.collider1()).ok().copied()
-            == tags.get(context.collider2()).ok().copied()
-        {
-            Some(SolverFlags::COMPUTE_IMPULSES)
-        } else {
-            None
-        }
-    }
+impl<'a> PhysicsHooksWithQuery<&Floor> for SameUserDataFilter {
+    // fn filter_contact_pair(
+    //     &self,
+    //     context: PairFilterContextView,
+    //     tags: &Query<&'a CustomFilterTag>,
+    // ) -> Option<SolverFlags> {
+    //     if tags.get(context.collider1()).is_ok() 
+    //         && tags.get(context.collider2()).is_ok()
+    //     {
+    //         if tags.get(context.collider1()).ok().copied()
+    //         == tags.get(context.collider2()).ok().copied()
+    //         {
+    //             Some(SolverFlags::COMPUTE_IMPULSES)
+    //         } else {
+    //             None
+    //         }
+    //     } else {
+    //         Some(SolverFlags::COMPUTE_IMPULSES)
+    //     }
+        
+    // }
 
     fn modify_solver_contacts(
         &self, 
         context: ContactModificationContextView,
-        _user_data: &Query<&CustomFilterTag>
+        mut user_data: &Query<&Floor>
     ) {
         // This is a silly example of contact modifier that does silly things
         // for illustration purpose:
@@ -54,7 +64,7 @@ impl<'a> PhysicsHooksWithQuery<&'a CustomFilterTag> for SameUserDataFilter {
         // Use the persistent user-data to count the number of times
         // contact modification was called for this contact manifold
         // since its creation.
-        *context.raw.user_data += 1;
+        // *context.raw.user_data += 1;
         println!("Contact manifold has been modified {} times since its creation.", *context.raw.user_data);
     }
 }
@@ -95,6 +105,8 @@ pub fn setup_physics(mut commands: Commands) {
 
     commands
         .spawn_bundle(TransformBundle::from(Transform::from_xyz(0.0, -10.0, 0.0)))
+        .insert(RigidBody::KinematicPositionBased)
+        .insert(Floor {})
         .insert(Collider::cuboid(ground_size, 1.2, ground_size))
         .insert(CustomFilterTag::GroupA);
 
@@ -126,7 +138,7 @@ pub fn setup_physics(mut commands: Commands) {
                 .spawn_bundle(TransformBundle::from(Transform::from_xyz(x, y, 0.0)))
                 .insert(RigidBody::Dynamic)
                 .insert(Collider::cuboid(rad, rad, rad))
-                .insert(ActiveHooks::FILTER_CONTACT_PAIRS)
+                .insert(ActiveHooks::FILTER_CONTACT_PAIRS | ActiveHooks::MODIFY_SOLVER_CONTACTS)
                 .insert(tags[group_id % 2])
                 .insert(ColliderDebugColor(colors[group_id % 2]));
         }
