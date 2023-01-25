@@ -1,11 +1,12 @@
 use std::ops::Mul;
 
-use bevy::prelude::*;
-use itertools_num::linspace;
+use bevy::{prelude::*, utils::HashMap};
+use bevy_prototype_debug_lines::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(DebugLinesPlugin::default())
         .add_startup_system(setup)
         .add_system(update)
         .run();
@@ -58,6 +59,35 @@ impl Particle {
 }
 
 #[derive(Component)]
+struct Constraint {
+    particle_a: Entity,
+    particle_b: Entity,
+    target: f32,
+    stiffness: f32,
+    damping: f32,
+}
+
+impl Constraint {
+    fn new(particle_a: Entity, particle_b: Entity, target: f32) -> Self {
+        Self {
+            particle_a,
+            particle_b,
+            target,
+            stiffness: 1.0,
+            damping: 0.0,
+        }
+    }
+    fn relax(&self, particle_a: &mut Particle, particle_b: &mut Particle) {
+        let distance = particle_b.position - particle_a.position;
+        let force = 0.5 * self.stiffness * (distance.length() - self.target) * distance.normalize();
+        if particle_a.mass != 0.0 && particle_b.mass != 0.0 {
+            particle_a.apply_force(-force);
+            particle_b.apply_force(force);
+        }
+    }
+}
+
+#[derive(Component)]
 struct Matreial {}
 
 /// set up a simple 3D scene
@@ -88,14 +118,23 @@ fn setup(
         ..default()
     });
 
+    
+    let mut map = HashMap::<(i32, i32, i32), Entity>::new();
+
+    let resolution = 3;
     let start_y = 1.0;
     let half = 0.15;
-    let resolution = 3;
-    for x in linspace::<f32>(-half, half, resolution) {
-        for y in linspace::<f32>(-half, half, resolution) {
-            for z in linspace::<f32>(-half, half, resolution) {
-                let transform = Transform::from_xyz(x, start_y + y, z);
-                commands
+    let i_to_vec = |ix: i32, iy: i32, iz: i32| -> Vec3 {
+        let x = ix as f32 / resolution as f32 - 0.5 * half * 2.0;
+        let y = iy as f32 / resolution as f32 - 0.5 * half * 2.0 + start_y;
+        let z = iz as f32 / resolution as f32 - 0.5 * half * 2.0;
+        Vec3::new(x, y, z)
+    };
+    for ix in 0..resolution {
+        for iy in 0..resolution {
+            for iz in 0..resolution {
+                let transform = Transform::from_translation(i_to_vec(ix, iy, iz));
+                let particle = commands
                     .spawn(PbrBundle {
                         mesh: meshes.add(Mesh::from(shape::Icosphere {
                             radius: 0.05,
@@ -111,18 +150,49 @@ fn setup(
                         velocity: Vec3::ZERO,
                         acceleration: Vec3::Y * -0.01,
                         mass: 0.1,
-                    });
+                    })
+                    .id();
+
+                map.insert((ix,iy,iz), particle);
+                
+                if ix > 0 {
+                    let key = (ix-1, iy, iz);
+                    let particle_b = map.get(&key).unwrap();
+                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
+                    commands.spawn(Constraint::new(particle, *particle_b, target));
+                }
+                if iy > 0 {
+                    let key = (ix, iy-1, iz);
+                    let particle_b = map.get(&key).unwrap();
+                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
+                    commands.spawn(Constraint::new(particle, *particle_b, target));
+                }
+                if iz > 0 {
+                    let key = (ix, iy, iz-1);
+                    let particle_b = map.get(&key).unwrap();
+                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
+                    commands.spawn(Constraint::new(particle, *particle_b, target));
+                }
+                
             }
         }
     }
 }
 
-fn update(time: Res<Time>, mut particles: Query<(&mut Particle, &mut Transform)>) {
+fn update(time: Res<Time>, mut lines: ResMut<DebugLines>, mut particles: Query<(&mut Particle, &mut Transform)>, constraints: Query<&Constraint>) {
     for (mut particle, mut transform) in particles.iter_mut() {
         particle.accelerate(Vec3::Y * -10.0);
         particle.simulate(time.delta_seconds());
         particle.restrain();
         particle.reset_forces();
         transform.translation = particle.position;
+    }
+    for constraint in constraints.iter() {
+        let particle_ab = particles.get_many_mut([constraint.particle_a, constraint.particle_b]);
+        if let Ok([mut particle_a, mut particle_b]) = particle_ab {
+            println!("relaxing {:?} {:?}", particle_a.0.position, particle_a.0.position);
+            constraint.relax(&mut particle_a.0, &mut particle_b.0);
+            lines.line(particle_a.0.position, particle_b.0.position, 0.0);
+        }
     }
 }

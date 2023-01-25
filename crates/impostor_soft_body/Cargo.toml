@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.9.1"
+bevy_prototype_debug_lines ={version="0.9.0", features=["3d"]}
 bevy_rapier3d = { version = "0.20.0", features = ["simd-stable", "debug-render", "serde-serialize"] }
-itertools-num = "0.1.3"
 nalgebra = "0.32.1"
