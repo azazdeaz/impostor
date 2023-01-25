@@ -9,20 +9,56 @@ fn main() {
         .add_startup_system(setup)
         .add_system(update)
         .run();
-
 }
 #[derive(Component)]
 struct Particle {
     previous_position: Vec3,
     position: Vec3,
     velocity: Vec3,
-    acceleration: Vec3
+    acceleration: Vec3,
+    mass: f32,
+}
+
+impl Particle {
+    fn accelerate(&mut self, rate: Vec3) {
+        self.acceleration += rate;
+    }
+    fn simulate(&mut self, delta: f32) {
+        if self.mass == 0.0 {
+            return;
+        }
+        self.velocity = 2.0 * self.position - self.previous_position;
+        self.previous_position = self.position;
+        self.position = self.velocity + self.acceleration * delta * delta;
+        self.velocity = self.position - self.previous_position;
+        self.acceleration = Vec3::ZERO;
+    }
+    fn apply_force(&mut self, force: Vec3) {
+        if self.mass == 0.0 {
+            return;
+        }
+        self.acceleration += force / self.mass;
+    }
+    fn apply_impulse(&mut self, impulse: Vec3) {
+        if self.mass == 0.0 {
+            return;
+        }
+        self.position += impulse / self.mass;
+    }
+    fn reset_forces(&mut self) {
+        self.acceleration = Vec3::ZERO;
+    }
+    fn restrain(&mut self) {
+        if self.position.y < 0.0 {
+            self.position = self.position - 2.0 * self.position.dot(Vec3::Y) * Vec3::Y;
+            self.velocity = self.velocity - 2.0 * self.velocity.dot(Vec3::Y) * Vec3::Y;
+            self.previous_position = self.position - self.velocity;
+        }
+    }
 }
 
 #[derive(Component)]
-struct Matreial {
-
-}
+struct Matreial {}
 
 /// set up a simple 3D scene
 fn setup(
@@ -54,28 +90,39 @@ fn setup(
 
     let start_y = 1.0;
     let half = 0.15;
-    for x in linspace::<f32>(-half, half, 3) {
-        for y in linspace::<f32>(-half, half, 3) {
-            for z in linspace::<f32>(-half, half, 3) {
+    let resolution = 3;
+    for x in linspace::<f32>(-half, half, resolution) {
+        for y in linspace::<f32>(-half, half, resolution) {
+            for z in linspace::<f32>(-half, half, resolution) {
                 let transform = Transform::from_xyz(x, start_y + y, z);
-                commands.spawn(PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Icosphere { radius: 0.05, subdivisions: 3 })),
-                    material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
-                    transform,
-                    ..default()
-                }).insert(Particle {
-                    previous_position: transform.translation,
-                    position: transform.translation,
-                    velocity: Vec3::ZERO,
-                    acceleration: Vec3::Y * -0.01,
-                });
+                commands
+                    .spawn(PbrBundle {
+                        mesh: meshes.add(Mesh::from(shape::Icosphere {
+                            radius: 0.05,
+                            subdivisions: 3,
+                        })),
+                        material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+                        transform,
+                        ..default()
+                    })
+                    .insert(Particle {
+                        previous_position: transform.translation,
+                        position: transform.translation,
+                        velocity: Vec3::ZERO,
+                        acceleration: Vec3::Y * -0.01,
+                        mass: 0.1,
+                    });
             }
         }
     }
 }
 
-fn update(mut particles: Query<(&mut Particle, &mut Transform)>) {
-    for (particle, mut transform) in particles.iter_mut() {
-        transform.translation += particle.acceleration;
+fn update(time: Res<Time>, mut particles: Query<(&mut Particle, &mut Transform)>) {
+    for (mut particle, mut transform) in particles.iter_mut() {
+        particle.accelerate(Vec3::Y * -10.0);
+        particle.simulate(time.delta_seconds());
+        particle.restrain();
+        particle.reset_forces();
+        transform.translation = particle.position;
     }
 }
