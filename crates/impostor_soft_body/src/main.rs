@@ -2,6 +2,7 @@ use std::ops::Mul;
 
 use bevy::{prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
+use random_color::RandomColor;
 
 fn main() {
     App::new()
@@ -39,6 +40,10 @@ impl Particle {
             return;
         }
         self.acceleration += force / self.mass;
+        println!(
+            "\tapply force: force {:?} mass {:?} new acceleration: {:?}",
+            force, self.mass, self.acceleration
+        );
     }
     fn apply_impulse(&mut self, impulse: Vec3) {
         if self.mass == 0.0 {
@@ -51,9 +56,10 @@ impl Particle {
     }
     fn restrain(&mut self) {
         if self.position.y < 0.0 {
+            let bounce = 0.95;
             self.position = self.position - 2.0 * self.position.dot(Vec3::Y) * Vec3::Y;
             self.velocity = self.velocity - 2.0 * self.velocity.dot(Vec3::Y) * Vec3::Y;
-            self.previous_position = self.position - self.velocity;
+            self.previous_position = self.position - self.velocity * bounce;
         }
     }
 }
@@ -73,14 +79,22 @@ impl Constraint {
             particle_a,
             particle_b,
             target,
-            stiffness: 1.0,
+            stiffness: 0.5,
             damping: 0.0,
         }
     }
     fn relax(&self, particle_a: &mut Particle, particle_b: &mut Particle) {
         let distance = particle_b.position - particle_a.position;
-        let force = 0.5 * self.stiffness * (distance.length() - self.target) * distance.normalize();
-        if particle_a.mass != 0.0 && particle_b.mass != 0.0 {
+        // let distance_length = dista
+        if particle_a.mass != 0.0 && particle_b.mass != 0.0 && distance.length() != self.target {
+            let force =
+                0.5 * self.stiffness * (distance.length() - self.target) / self.target * distance.normalize();
+            println!(
+                "relaxing target {} distance {} force {:?} ",
+                self.target,
+                distance.length(),
+                force
+            );
             particle_a.apply_force(-force);
             particle_b.apply_force(force);
         }
@@ -118,10 +132,9 @@ fn setup(
         ..default()
     });
 
-    
     let mut map = HashMap::<(i32, i32, i32), Entity>::new();
 
-    let resolution = 3;
+    let resolution = 2;
     let start_y = 1.0;
     let half = 0.15;
     let i_to_vec = |ix: i32, iy: i32, iz: i32| -> Vec3 {
@@ -134,13 +147,16 @@ fn setup(
         for iy in 0..resolution {
             for iz in 0..resolution {
                 let transform = Transform::from_translation(i_to_vec(ix, iy, iz));
+                let [r, g, b] = RandomColor::new().to_rgb_array();
                 let particle = commands
                     .spawn(PbrBundle {
                         mesh: meshes.add(Mesh::from(shape::Icosphere {
                             radius: 0.05,
                             subdivisions: 3,
                         })),
-                        material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
+                        material: materials.add(
+                            Color::rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0).into(),
+                        ),
                         transform,
                         ..default()
                     })
@@ -149,39 +165,43 @@ fn setup(
                         position: transform.translation,
                         velocity: Vec3::ZERO,
                         acceleration: Vec3::Y * -0.01,
-                        mass: 0.1,
+                        mass: 0.01,
                     })
                     .id();
 
-                map.insert((ix,iy,iz), particle);
-                
+                map.insert((ix, iy, iz), particle);
+
                 if ix > 0 {
-                    let key = (ix-1, iy, iz);
+                    let key = (ix - 1, iy, iz);
                     let particle_b = map.get(&key).unwrap();
                     let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
                     commands.spawn(Constraint::new(particle, *particle_b, target));
                 }
                 if iy > 0 {
-                    let key = (ix, iy-1, iz);
+                    let key = (ix, iy - 1, iz);
                     let particle_b = map.get(&key).unwrap();
                     let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
                     commands.spawn(Constraint::new(particle, *particle_b, target));
                 }
                 if iz > 0 {
-                    let key = (ix, iy, iz-1);
+                    let key = (ix, iy, iz - 1);
                     let particle_b = map.get(&key).unwrap();
                     let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
                     commands.spawn(Constraint::new(particle, *particle_b, target));
                 }
-                
             }
         }
     }
 }
 
-fn update(time: Res<Time>, mut lines: ResMut<DebugLines>, mut particles: Query<(&mut Particle, &mut Transform)>, constraints: Query<&Constraint>) {
+fn update(
+    time: Res<Time>,
+    mut lines: ResMut<DebugLines>,
+    mut particles: Query<(&mut Particle, &mut Transform)>,
+    constraints: Query<&Constraint>,
+) {
     for (mut particle, mut transform) in particles.iter_mut() {
-        particle.accelerate(Vec3::Y * -10.0);
+        particle.accelerate(Vec3::Y * -9.8);
         particle.simulate(time.delta_seconds());
         particle.restrain();
         particle.reset_forces();
@@ -190,8 +210,11 @@ fn update(time: Res<Time>, mut lines: ResMut<DebugLines>, mut particles: Query<(
     for constraint in constraints.iter() {
         let particle_ab = particles.get_many_mut([constraint.particle_a, constraint.particle_b]);
         if let Ok([mut particle_a, mut particle_b]) = particle_ab {
-            println!("relaxing {:?} {:?}", particle_a.0.position, particle_a.0.position);
-            constraint.relax(&mut particle_a.0, &mut particle_b.0);
+            println!(
+                "relaxing {:?} {:?}",
+                particle_a.0.position, particle_a.0.position
+            );
+            // constraint.relax(&mut particle_a.0, &mut particle_b.0);
             lines.line(particle_a.0.position, particle_b.0.position, 0.0);
         }
     }
