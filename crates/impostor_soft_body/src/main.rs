@@ -1,16 +1,17 @@
-use std::ops::Mul;
-
 use bevy::{log, prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
-use nalgebra::iter;
+use bevy_rapier3d::prelude::*;
 use random_color::RandomColor;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_startup_system(setup)
         .add_system(update)
+        .add_system(handle_collisions)
         .run();
 }
 #[derive(Component)]
@@ -137,11 +138,15 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // plane
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
-        material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
-        ..default()
-    });
+    commands
+        .spawn(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+            material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+            ..default()
+        })
+        .insert(RigidBody::Fixed)
+        .insert(Collider::cuboid(5.0, 0.1, 5.0));
+
     // light
     commands.spawn(PointLightBundle {
         point_light: PointLight {
@@ -157,6 +162,14 @@ fn setup(
         transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
+
+
+    /* Create the bouncing ball. */
+    commands
+        .spawn(RigidBody::Dynamic)
+        .insert(Collider::ball(0.5))
+        .insert(Restitution::coefficient(0.7))
+        .insert(TransformBundle::from(Transform::from_xyz(0.0, 5.0, 0.0)));
 
     let mut map = HashMap::<(i32, i32, i32), Entity>::new();
 
@@ -181,7 +194,7 @@ fn setup(
                     acceleration: Vec3::Y * -0.01,
                     mass: 0.01,
                 };
-                if ix == 0 && iy == 0 && iz == 0  {
+                if ix == 0 && iy == 0 && iz == 0 {
                     particle.apply_impulse(Vec3::X * 0.0002);
                 }
 
@@ -198,6 +211,11 @@ fn setup(
                         ..default()
                     })
                     .insert(particle)
+                    .insert((
+                        RigidBody::KinematicPositionBased,
+                        Collider::ball(0.1),
+                        SolverGroups::new(Group::NONE, Group::NONE),
+                    ))
                     .id();
 
                 map.insert((ix, iy, iz), particle);
@@ -243,6 +261,72 @@ fn setup(
     }
 }
 
+
+fn handle_collisions(
+    mut cloth_query: Query<(
+        Entity,
+        // &Collider,
+        &mut Particle,
+    ), With<Particle>>,
+    rapier_context: Res<RapierContext>,
+    mut colliders_query: Query<
+        (&Collider, &GlobalTransform, Option<&mut Velocity>),
+        Without<Particle>,
+    >,
+    time: Res<Time>,
+) {
+    let delta_time = time.delta_seconds();
+    for (entity, mut particle) in cloth_query.iter_mut() {
+        let collider_offset = 0.1;
+        let collider_velocity_coefficient = 1.0;
+        for contact_pair in rapier_context.contacts_with(entity) {
+            let other_entity = if contact_pair.collider1() == entity {
+                contact_pair.collider2()
+            } else {
+                contact_pair.collider1()
+            };
+            let Ok((other_collider, other_transform, other_velocity)) = colliders_query.get_mut(other_entity) else {
+                error!("Couldn't find collider on entity {:?}", entity);
+                continue;
+            };
+            let vel = other_velocity.as_ref().map_or(0.0, |v| {
+                v.linvel.length_squared() * delta_time * delta_time * collider_velocity_coefficient
+            });
+            let pushed_position = {
+                let other_transform = other_transform.compute_transform();
+                let projected_point = other_collider.project_point(
+                    other_transform.translation,
+                    other_transform.rotation,
+                    particle.position,
+                    false,
+                );
+                
+                let normal: Vec3 = (projected_point.point - particle.position)
+                    .try_normalize()
+                    .unwrap_or(Vec3::Y);
+                if projected_point.is_inside {
+                    Some(projected_point.point + (normal * collider_offset) + (normal * vel))
+                } else if particle.position.distance_squared(projected_point.point)
+                    < collider_offset * collider_offset
+                {
+                    Some(projected_point.point - (normal * collider_offset))
+                } else {
+                    None
+                }
+            };
+            if let Some(position) = pushed_position {
+                particle.position = position;
+            }
+            // if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider.dampen_others) {
+            //     let damp = 1.0 - dampen_coef;
+            //     vel.linvel *= damp;
+            //     vel.angvel *= damp;
+            // }
+        }
+        // *rapier_collider = get_collider(rendering, collider, None);
+    }
+}
+
 fn update(
     time: Res<Time>,
     mut lines: ResMut<DebugLines>,
@@ -252,7 +336,7 @@ fn update(
     for (mut particle, mut transform) in particles.iter_mut() {
         particle.accelerate(Vec3::Y * -9.8);
         particle.simulate(time.delta_seconds());
-        particle.restrain();
+        // particle.restrain();
         particle.reset_forces();
         transform.translation = particle.position;
     }
