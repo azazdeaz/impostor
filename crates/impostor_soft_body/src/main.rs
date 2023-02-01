@@ -1,3 +1,5 @@
+use std::f32::consts::TAU;
+
 use bevy::{log, prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
@@ -119,10 +121,10 @@ impl Constraint {
             Some(dir) => dir * self.target / 2.0,
         };
         let slowing = 1.0;
-        println!(
-            "\tcenter {:?} direction {:?} target {:?}",
-            center, direction, self.target
-        );
+        // println!(
+        //     "\tcenter {:?} direction {:?} target {:?}",
+        //     center, direction, self.target
+        // );
         particle_a.position = center - direction * slowing;
         particle_b.position = center + direction * slowing;
     }
@@ -171,93 +173,75 @@ fn setup(
         .insert(Restitution::coefficient(0.7))
         .insert(TransformBundle::from(Transform::from_xyz(0.0, 5.0, 0.0)));
 
-    let mut map = HashMap::<(i32, i32, i32), Entity>::new();
+    let sides = 3;
+    let sections = 4;
+    let section_height = 0.4;
+    let radius = 0.4;
+    let start_height = 1.0;
+    let mut prev_ring = Vec::new();
+    for i_section in 0..sections {
+        let next_ring: Vec<_> = (0..sides).map(|i_side| {
+            let mut angle = TAU * i_side as f32 / sides as f32;
+            if i_section % 2 > 0 {
+                angle += TAU / (sides * 2) as f32;
+            }
+            
+            let (z, x) = angle.sin_cos();
+            println!("{} angle {} {} {}", i_side, angle, z, x);
+            let y = start_height + section_height * i_section as f32;
+            let transform = Transform::from_translation(Vec3::new(x * radius, y, z * radius));
+            let [r, g, b] = RandomColor::new().to_rgb_array();
+            let particle = Particle {
+                previous_position: transform.translation,
+                position: transform.translation,
+                velocity: Vec3::ZERO,
+                acceleration: Vec3::Y * -0.01,
+                mass: 0.01,
+            };
 
-    let resolution = 3;
-    let start_y = 1.0;
-    let half = 0.15;
-    let i_to_vec = |ix: i32, iy: i32, iz: i32| -> Vec3 {
-        let x = ix as f32 / resolution as f32 - 0.5 * half * 2.0;
-        let y = iy as f32 / resolution as f32 - 0.5 * half * 2.0 + start_y;
-        let z = iz as f32 / resolution as f32 - 0.5 * half * 2.0;
-        Vec3::new(x, y, z)
-    };
-    for ix in 0..resolution {
-        for iy in 0..resolution {
-            for iz in 0..resolution {
-                let transform = Transform::from_translation(i_to_vec(ix, iy, iz));
-                let [r, g, b] = RandomColor::new().to_rgb_array();
-                let mut particle = Particle {
-                    previous_position: transform.translation,
-                    position: transform.translation,
-                    velocity: Vec3::ZERO,
-                    acceleration: Vec3::Y * -0.01,
-                    mass: 0.01,
-                };
-                if ix == 0 && iy == 0 && iz == 0 {
-                    particle.apply_impulse(Vec3::X * 0.0002);
-                }
+            let entity = commands
+                .spawn(PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Icosphere {
+                        radius: 0.05,
+                        subdivisions: 3,
+                    })),
+                    material: materials.add(
+                        Color::rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0).into(),
+                    ),
+                    transform,
+                    ..default()
+                })
+                .insert(particle)
+                .insert((
+                    RigidBody::KinematicPositionBased,
+                    Collider::ball(0.1),
+                    SolverGroups::new(Group::NONE, Group::NONE),
+                ))
+                .id();
+            (entity, transform.translation)
+        }).collect();
 
-                let particle = commands
-                    .spawn(PbrBundle {
-                        mesh: meshes.add(Mesh::from(shape::Icosphere {
-                            radius: 0.05,
-                            subdivisions: 3,
-                        })),
-                        material: materials.add(
-                            Color::rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0).into(),
-                        ),
-                        transform,
-                        ..default()
-                    })
-                    .insert(particle)
-                    .insert((
-                        RigidBody::KinematicPositionBased,
-                        Collider::ball(0.1),
-                        SolverGroups::new(Group::NONE, Group::NONE),
-                    ))
-                    .id();
-
-                map.insert((ix, iy, iz), particle);
-
-                if ix > 0 {
-                    let key = (ix - 1, iy, iz);
-                    let particle_b = map.get(&key).unwrap();
-                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
-                    commands.spawn(Constraint::new(particle, *particle_b, target));
+        let mut add_constraint = |a: (Entity, Vec3), b: (Entity, Vec3)| {
+            let target = (a.1 - b.1).length();
+            println!("TargetL {} {:?} {:?}", target, a.1, b.1);
+            commands.spawn(Constraint::new(a.0, b.0, target));
+        };
+        for i_side in 0..sides {
+            let i2_side = (i_side + 1) % sides;
+            add_constraint(next_ring[i_side], next_ring[i2_side]);
+            if i_section > 0 {
+                if i_section % 2 > 0 {
+                    add_constraint(prev_ring[i_side], next_ring[i_side]);
+                    add_constraint(prev_ring[i2_side], next_ring[i_side]);
                 }
-                if iy > 0 {
-                    let key = (ix, iy - 1, iz);
-                    let particle_b = map.get(&key).unwrap();
-                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
-                    commands.spawn(Constraint::new(particle, *particle_b, target));
-                }
-                if iz > 0 {
-                    let key = (ix, iy, iz - 1);
-                    let particle_b = map.get(&key).unwrap();
-                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
-                    commands.spawn(Constraint::new(particle, *particle_b, target));
-                }
-                if iy > 0 && iz > 0 {
-                    let key = (ix, iy - 1, iz - 1);
-                    let particle_b = map.get(&key).unwrap();
-                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
-                    commands.spawn(Constraint::new(particle, *particle_b, target));
-                }
-                if ix > 0 && iz > 0 {
-                    let key = (ix - 1, iy, iz - 1);
-                    let particle_b = map.get(&key).unwrap();
-                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
-                    commands.spawn(Constraint::new(particle, *particle_b, target));
-                }
-                if ix > 0 && iy > 0 && iz > 0 {
-                    let key = (ix - 1, iy - 1, iz - 1);
-                    let particle_b = map.get(&key).unwrap();
-                    let target = (i_to_vec(key.0, key.1, key.2) - transform.translation).length();
-                    commands.spawn(Constraint::new(particle, *particle_b, target));
+                else {
+                    add_constraint(next_ring[i_side], prev_ring[i_side]);
+                    add_constraint(next_ring[i2_side], prev_ring[i_side]);
                 }
             }
         }
+
+        prev_ring = next_ring;
     }
 }
 
