@@ -23,6 +23,7 @@ struct Particle {
     velocity: Vec3,
     acceleration: Vec3,
     mass: f32,
+    is_fixed: bool,
 }
 
 impl Particle {
@@ -30,7 +31,7 @@ impl Particle {
         self.acceleration += rate;
     }
     fn simulate(&mut self, delta: f32) {
-        if self.mass == 0.0 {
+        if self.is_fixed || self.mass == 0.0 {
             return;
         }
         // self.velocity = 2.0 * self.position - self.previous_position;
@@ -41,7 +42,7 @@ impl Particle {
 
         self.velocity = self.position - self.previous_position;
         self.previous_position = self.position;
-        let friction = 0.99;
+        let friction = 0.98;
         self.position += self.velocity * friction + self.acceleration * delta * delta;
         self.velocity = self.position - self.previous_position;
         self.acceleration = Vec3::ZERO;
@@ -112,6 +113,10 @@ impl Constraint {
     }
 
     fn relax(&self, particle_a: &mut Particle, particle_b: &mut Particle) {
+        if particle_a.is_fixed && particle_b.is_fixed {
+            return;
+        }
+
         let center = (particle_a.position + particle_b.position) / 2.0;
         let direction = match (particle_b.position - particle_a.position).try_normalize() {
             None => {
@@ -120,13 +125,20 @@ impl Constraint {
             }
             Some(dir) => dir * self.target / 2.0,
         };
-        let slowing = 1.0;
+        let slowing = 0.8;
         // println!(
         //     "\tcenter {:?} direction {:?} target {:?}",
         //     center, direction, self.target
         // );
-        particle_a.position = center - direction * slowing;
-        particle_b.position = center + direction * slowing;
+
+        if particle_a.is_fixed {
+            particle_b.position = particle_a.position + direction * 2.0;
+        } else if particle_b.is_fixed {
+            particle_a.position = particle_b.position - direction * 2.0;
+        } else {
+            particle_a.position = center - direction;
+            particle_b.position = center + direction;
+        }
     }
 }
 
@@ -142,12 +154,12 @@ fn setup(
     // plane
     commands
         .spawn(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Plane { size: 5.0 })),
+            mesh: meshes.add(Mesh::from(shape::Box::new(10.0, 1.2, 10.0))),
             material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
             ..default()
         })
         .insert(RigidBody::Fixed)
-        .insert(Collider::cuboid(5.0, 0.1, 5.0));
+        .insert(Collider::cuboid(5.0, 0.6, 5.0));
 
     // light
     commands.spawn(PointLightBundle {
@@ -165,61 +177,63 @@ fn setup(
         ..default()
     });
 
-
     /* Create the bouncing ball. */
     commands
         .spawn(RigidBody::Dynamic)
-        .insert(Collider::ball(0.5))
+        .insert(Collider::ball(0.3))
         .insert(Restitution::coefficient(0.7))
         .insert(TransformBundle::from(Transform::from_xyz(0.0, 5.0, 0.0)));
 
     let sides = 3;
-    let sections = 4;
-    let section_height = 0.4;
-    let radius = 0.4;
-    let start_height = 1.0;
+    let sections = 8;
+    let section_height = 0.2;
+    let radius = 0.2;
+    let start_height = 0.2;
     let mut prev_ring = Vec::new();
     for i_section in 0..sections {
-        let next_ring: Vec<_> = (0..sides).map(|i_side| {
-            let mut angle = TAU * i_side as f32 / sides as f32;
-            if i_section % 2 > 0 {
-                angle += TAU / (sides * 2) as f32;
-            }
-            
-            let (z, x) = angle.sin_cos();
-            println!("{} angle {} {} {}", i_side, angle, z, x);
-            let y = start_height + section_height * i_section as f32;
-            let transform = Transform::from_translation(Vec3::new(x * radius, y, z * radius));
-            let [r, g, b] = RandomColor::new().to_rgb_array();
-            let particle = Particle {
-                previous_position: transform.translation,
-                position: transform.translation,
-                velocity: Vec3::ZERO,
-                acceleration: Vec3::Y * -0.01,
-                mass: 0.01,
-            };
+        let next_ring: Vec<_> = (0..sides)
+            .map(|i_side| {
+                let mut angle = TAU * i_side as f32 / sides as f32;
+                if i_section % 2 > 0 {
+                    angle += TAU / (sides * 2) as f32;
+                }
 
-            let entity = commands
-                .spawn(PbrBundle {
-                    mesh: meshes.add(Mesh::from(shape::Icosphere {
-                        radius: 0.05,
-                        subdivisions: 3,
-                    })),
-                    material: materials.add(
-                        Color::rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0).into(),
-                    ),
-                    transform,
-                    ..default()
-                })
-                .insert(particle)
-                .insert((
-                    RigidBody::KinematicPositionBased,
-                    Collider::ball(0.1),
-                    SolverGroups::new(Group::NONE, Group::NONE),
-                ))
-                .id();
-            (entity, transform.translation)
-        }).collect();
+                let (z, x) = angle.sin_cos();
+                println!("{} angle {} {} {}", i_side, angle, z, x);
+                let y = start_height + section_height * i_section as f32;
+                let transform = Transform::from_translation(Vec3::new(x * radius, y, z * radius));
+                let [r, g, b] = RandomColor::new().to_rgb_array();
+                let particle = Particle {
+                    previous_position: transform.translation,
+                    position: transform.translation,
+                    velocity: Vec3::ZERO,
+                    acceleration: Vec3::Y * -0.01,
+                    mass: 0.01,
+                    is_fixed: i_section == 0,
+                };
+
+                let entity = commands
+                    .spawn(PbrBundle {
+                        mesh: meshes.add(Mesh::from(shape::Icosphere {
+                            radius: 0.05,
+                            subdivisions: 3,
+                        })),
+                        material: materials.add(
+                            Color::rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0).into(),
+                        ),
+                        transform,
+                        ..default()
+                    })
+                    .insert(particle)
+                    .insert((
+                        RigidBody::KinematicPositionBased,
+                        Collider::ball(0.1),
+                        SolverGroups::new(Group::NONE, Group::NONE),
+                    ))
+                    .id();
+                (entity, transform.translation)
+            })
+            .collect();
 
         let mut add_constraint = |a: (Entity, Vec3), b: (Entity, Vec3)| {
             let target = (a.1 - b.1).length();
@@ -233,8 +247,7 @@ fn setup(
                 if i_section % 2 > 0 {
                     add_constraint(prev_ring[i_side], next_ring[i_side]);
                     add_constraint(prev_ring[i2_side], next_ring[i_side]);
-                }
-                else {
+                } else {
                     add_constraint(next_ring[i_side], prev_ring[i_side]);
                     add_constraint(next_ring[i2_side], prev_ring[i_side]);
                 }
@@ -245,13 +258,15 @@ fn setup(
     }
 }
 
-
 fn handle_collisions(
-    mut cloth_query: Query<(
-        Entity,
-        // &Collider,
-        &mut Particle,
-    ), With<Particle>>,
+    mut cloth_query: Query<
+        (
+            Entity,
+            // &Collider,
+            &mut Particle,
+        ),
+        With<Particle>,
+    >,
     rapier_context: Res<RapierContext>,
     mut colliders_query: Query<
         (&Collider, &GlobalTransform, Option<&mut Velocity>),
@@ -284,7 +299,7 @@ fn handle_collisions(
                     particle.position,
                     false,
                 );
-                
+
                 let normal: Vec3 = (projected_point.point - particle.position)
                     .try_normalize()
                     .unwrap_or(Vec3::Y);
@@ -301,11 +316,13 @@ fn handle_collisions(
             if let Some(position) = pushed_position {
                 particle.position = position;
             }
-            // if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider.dampen_others) {
-            //     let damp = 1.0 - dampen_coef;
-            //     vel.linvel *= damp;
-            //     vel.angvel *= damp;
-            // }
+
+            let collider_dampen_others = Some(0.05);
+            if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider_dampen_others) {
+                let damp = 1.0 - dampen_coef;
+                vel.linvel *= damp;
+                vel.angvel *= damp;
+            }
         }
         // *rapier_collider = get_collider(rendering, collider, None);
     }
