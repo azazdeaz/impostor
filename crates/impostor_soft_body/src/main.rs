@@ -4,6 +4,7 @@ use bevy::{log, prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
 use random_color::RandomColor;
+use rand::Rng;
 
 fn main() {
     App::new()
@@ -11,6 +12,7 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
+        .add_plugin(impostor_editor_camera::EditorCameraPlugin)
         .add_startup_system(setup)
         .add_system(update)
         .add_system(handle_collisions)
@@ -34,18 +36,21 @@ impl Particle {
         if self.is_fixed || self.mass == 0.0 {
             return;
         }
-        // self.velocity = 2.0 * self.position - self.previous_position;
-        // self.previous_position = self.position;
-        // self.position = self.velocity + self.acceleration * delta * delta;
+        let friction = 0.95;
+        self.velocity = self.position - self.previous_position;
+        self.previous_position = self.position;
+        self.position += self.velocity * friction + self.acceleration * delta * delta;
         // self.velocity = self.position - self.previous_position;
         // self.acceleration = Vec3::ZERO;
 
-        self.velocity = self.position - self.previous_position;
-        self.previous_position = self.position;
-        let friction = 0.98;
-        self.position += self.velocity * friction + self.acceleration * delta * delta;
-        self.velocity = self.position - self.previous_position;
-        self.acceleration = Vec3::ZERO;
+        // self.velocity = self.position - self.previous_position;
+        // self.previous_position = self.position;
+        // let friction = 0.98;
+        // self.position += self.velocity * friction + self.acceleration * delta * delta;
+        // self.velocity = self.position - self.previous_position;
+        // self.acceleration = Vec3::ZERO;
+        // self.velocity = self.position - self.previous_position;
+
     }
     fn apply_force(&mut self, force: Vec3) {
         if self.mass == 0.0 {
@@ -172,24 +177,27 @@ fn setup(
         ..default()
     });
     // camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    // commands.spawn(Camera3dBundle {
+    //     transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::Y * 2.0, Vec3::Y * 6.0),
+    //     ..default()
+    // });
 
     /* Create the bouncing ball. */
     commands
-        .spawn(RigidBody::Dynamic)
-        .insert(Collider::ball(0.3))
+        .spawn(RigidBody::KinematicVelocityBased)
+        // .insert(Collider::ball(0.3))
+        .insert(Collider::cuboid(0.2,0.2,4.0))
         .insert(Restitution::coefficient(0.7))
-        .insert(TransformBundle::from(Transform::from_xyz(0.0, 5.0, 0.0)));
+        .insert(Velocity::linear(Vec3::X * 0.6))
+        .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
 
-    let sides = 3;
-    let sections = 8;
+    let sides = 5;
+    let sections = 18;
     let section_height = 0.2;
     let radius = 0.2;
     let start_height = 0.2;
     let mut prev_ring = Vec::new();
+    let mut rng = rand::thread_rng();
     for i_section in 0..sections {
         let next_ring: Vec<_> = (0..sides)
             .map(|i_side| {
@@ -199,6 +207,8 @@ fn setup(
                 }
 
                 let (z, x) = angle.sin_cos();
+                let z = z + rng.gen::<f32>() * 0.1;
+                let x = x + rng.gen::<f32>() * 0.1;
                 println!("{} angle {} {} {}", i_side, angle, z, x);
                 let y = start_height + section_height * i_section as f32;
                 let transform = Transform::from_translation(Vec3::new(x * radius, y, z * radius));
@@ -240,18 +250,39 @@ fn setup(
             println!("TargetL {} {:?} {:?}", target, a.1, b.1);
             commands.spawn(Constraint::new(a.0, b.0, target));
         };
+
+        let create_tube = false;
+
+        // iterate through the ring
         for i_side in 0..sides {
+            // get the index of the next particle on the ring
             let i2_side = (i_side + 1) % sides;
+            // connect with the neighbouring particle
             add_constraint(next_ring[i_side], next_ring[i2_side]);
-            if i_section > 0 {
-                if i_section % 2 > 0 {
-                    add_constraint(prev_ring[i_side], next_ring[i_side]);
-                    add_constraint(prev_ring[i2_side], next_ring[i_side]);
-                } else {
-                    add_constraint(next_ring[i_side], prev_ring[i_side]);
-                    add_constraint(next_ring[i2_side], prev_ring[i_side]);
+
+            // Create tube
+            if create_tube {
+                if i_section > 0 {
+                    if i_section % 2 > 0 {
+                        add_constraint(prev_ring[i_side], next_ring[i_side]);
+                        add_constraint(prev_ring[i2_side], next_ring[i_side]);
+                    } else {
+                        add_constraint(next_ring[i_side], prev_ring[i_side]);
+                        add_constraint(next_ring[i2_side], prev_ring[i_side]);
+                    }
                 }
             }
+            // Connect all particles between segments
+            else {
+                if i_section > 0 {
+                    for i2_side in 0..sides {
+                        add_constraint(prev_ring[i2_side], next_ring[i_side]);
+                    }
+                }
+            }
+        }
+
+        for i_side in 0..sides {
         }
 
         prev_ring = next_ring;
@@ -285,7 +316,7 @@ fn handle_collisions(
                 contact_pair.collider1()
             };
             let Ok((other_collider, other_transform, other_velocity)) = colliders_query.get_mut(other_entity) else {
-                error!("Couldn't find collider on entity {:?}", entity);
+                // error!("Couldn't find collider on entity {:?}", entity);
                 continue;
             };
             let vel = other_velocity.as_ref().map_or(0.0, |v| {
@@ -317,12 +348,12 @@ fn handle_collisions(
                 particle.position = position;
             }
 
-            let collider_dampen_others = Some(0.05);
-            if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider_dampen_others) {
-                let damp = 1.0 - dampen_coef;
-                vel.linvel *= damp;
-                vel.angvel *= damp;
-            }
+            // let collider_dampen_others = Some(0.05);
+            // if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider_dampen_others) {
+            //     let damp = 1.0 - dampen_coef;
+            //     vel.linvel *= damp;
+            //     vel.angvel *= damp;
+            // }
         }
         // *rapier_collider = get_collider(rendering, collider, None);
     }
@@ -335,22 +366,18 @@ fn update(
     constraints: Query<&Constraint>,
 ) {
     for (mut particle, mut transform) in particles.iter_mut() {
-        particle.accelerate(Vec3::Y * -9.8);
+        // particle.accelerate(Vec3::Y * -1.8);
         particle.simulate(time.delta_seconds());
         // particle.restrain();
         particle.reset_forces();
         transform.translation = particle.position;
     }
-    let iterations = 8;
+    let iterations = 32;
     for _ in 0..iterations {
         for constraint in constraints.iter() {
             let particle_ab =
                 particles.get_many_mut([constraint.particle_a, constraint.particle_b]);
             if let Ok([mut particle_a, mut particle_b]) = particle_ab {
-                println!(
-                    "relaxing {:?} {:?}",
-                    particle_a.0.position, particle_b.0.position
-                );
                 constraint.relax(&mut particle_a.0, &mut particle_b.0);
                 lines.line(particle_a.0.position, particle_b.0.position, 0.0);
             }
