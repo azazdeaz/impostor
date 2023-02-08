@@ -1,11 +1,7 @@
-use std::f32::consts::TAU;
-
-use bevy::{log, prelude::*, utils::HashMap};
+use bevy::{prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
-use random_color::RandomColor;
-use rand::Rng;
-
+use impostor_soft_body::{StemStructure, Constraint, Particle};
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -18,134 +14,7 @@ fn main() {
         .add_system(handle_collisions)
         .run();
 }
-#[derive(Component)]
-struct Particle {
-    previous_position: Vec3,
-    position: Vec3,
-    velocity: Vec3,
-    acceleration: Vec3,
-    mass: f32,
-    is_fixed: bool,
-}
 
-impl Particle {
-    fn accelerate(&mut self, rate: Vec3) {
-        self.acceleration += rate;
-    }
-    fn simulate(&mut self, delta: f32) {
-        if self.is_fixed || self.mass == 0.0 {
-            return;
-        }
-        let friction = 0.95;
-        self.velocity = self.position - self.previous_position;
-        self.previous_position = self.position;
-        self.position += self.velocity * friction + self.acceleration * delta * delta;
-        // self.velocity = self.position - self.previous_position;
-        // self.acceleration = Vec3::ZERO;
-
-        // self.velocity = self.position - self.previous_position;
-        // self.previous_position = self.position;
-        // let friction = 0.98;
-        // self.position += self.velocity * friction + self.acceleration * delta * delta;
-        // self.velocity = self.position - self.previous_position;
-        // self.acceleration = Vec3::ZERO;
-        // self.velocity = self.position - self.previous_position;
-
-    }
-    fn apply_force(&mut self, force: Vec3) {
-        if self.mass == 0.0 {
-            return;
-        }
-        self.acceleration += force / self.mass;
-        println!(
-            "\tapply force: force {:?} mass {:?} new acceleration: {:?}",
-            force, self.mass, self.acceleration
-        );
-    }
-    fn apply_impulse(&mut self, impulse: Vec3) {
-        if self.mass == 0.0 {
-            return;
-        }
-        self.position += impulse / self.mass;
-    }
-    fn reset_forces(&mut self) {
-        self.acceleration = Vec3::ZERO;
-    }
-    fn restrain(&mut self) {
-        if self.position.y < 0.0 {
-            let bounce = 0.95;
-            self.position = self.position - 2.0 * self.position.dot(Vec3::Y) * Vec3::Y;
-            self.velocity = self.velocity - 2.0 * self.velocity.dot(Vec3::Y) * Vec3::Y;
-            self.previous_position = self.position - self.velocity * bounce;
-        }
-    }
-}
-
-#[derive(Component)]
-struct Constraint {
-    particle_a: Entity,
-    particle_b: Entity,
-    target: f32,
-    stiffness: f32,
-    damping: f32,
-}
-
-impl Constraint {
-    fn new(particle_a: Entity, particle_b: Entity, target: f32) -> Self {
-        Self {
-            particle_a,
-            particle_b,
-            target,
-            stiffness: 0.5,
-            damping: 0.0,
-        }
-    }
-    fn relax_old(&self, particle_a: &mut Particle, particle_b: &mut Particle) {
-        let distance = particle_b.position - particle_a.position;
-        // let distance_length = dista
-        if particle_a.mass != 0.0 && particle_b.mass != 0.0 && distance.length() != self.target {
-            let force = 0.5 * self.stiffness * (distance.length() - self.target) / self.target
-                * distance.normalize();
-            println!(
-                "relaxing target {} distance {} force {:?} ",
-                self.target,
-                distance.length(),
-                force
-            );
-            particle_a.apply_force(-force);
-            particle_b.apply_force(force);
-        }
-    }
-
-    fn relax(&self, particle_a: &mut Particle, particle_b: &mut Particle) {
-        if particle_a.is_fixed && particle_b.is_fixed {
-            return;
-        }
-
-        let center = (particle_a.position + particle_b.position) / 2.0;
-        let direction = match (particle_b.position - particle_a.position).try_normalize() {
-            None => {
-                log::warn!("Failed handle stick between points {} and {} which are too close to each other", particle_a.position, particle_b.position);
-                return;
-            }
-            Some(dir) => dir * self.target / 2.0,
-        };
-        let slowing = 0.8;
-        // println!(
-        //     "\tcenter {:?} direction {:?} target {:?}",
-        //     center, direction, self.target
-        // );
-
-        if particle_a.is_fixed {
-            particle_b.position = particle_a.position + direction * 2.0;
-        } else if particle_b.is_fixed {
-            particle_a.position = particle_b.position - direction * 2.0;
-        } else {
-            particle_a.position = center - direction;
-            particle_b.position = center + direction;
-        }
-    }
-}
 
 #[derive(Component)]
 struct Matreial {}
@@ -190,99 +59,16 @@ fn setup(
         .insert(Restitution::coefficient(0.7))
         .insert(Velocity::linear(Vec3::X * 0.6))
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
-
-    let sides = 5;
-    let sections = 18;
-    let section_height = 0.1;
-    let radius = 0.1;
-    let start_height = 0.8;
-    let mut prev_ring = Vec::new();
-    let mut rng = rand::thread_rng();
-    for i_section in 0..sections {
-        let next_ring: Vec<_> = (0..sides)
-            .map(|i_side| {
-                let mut angle = TAU * i_side as f32 / sides as f32;
-                if i_section % 2 > 0 {
-                    angle += TAU / (sides * 2) as f32;
-                }
-
-                let (z, x) = angle.sin_cos();
-                let z = z + rng.gen::<f32>() * 0.1;
-                let x = x + rng.gen::<f32>() * 0.1;
-                let y = start_height + section_height * i_section as f32;
-                println!("section {}, side {}, x {}, z {}, y {}", i_section, i_side, x, z, y);
-                let transform = Transform::from_translation(Vec3::new(x * radius, y, z * radius));
-                let [r, g, b] = RandomColor::new().to_rgb_array();
-                let particle = Particle {
-                    previous_position: transform.translation,
-                    position: transform.translation,
-                    velocity: Vec3::ZERO,
-                    acceleration: Vec3::Y * -0.01,
-                    mass: 0.01,
-                    is_fixed: i_section == 0,
-                };
-
-                let entity = commands
-                    .spawn(PbrBundle {
-                        mesh: meshes.add(Mesh::from(shape::Icosphere {
-                            radius: section_height / 2.0,
-                            subdivisions: 3,
-                        })),
-                        material: materials.add(
-                            Color::rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0).into(),
-                        ),
-                        transform,
-                        ..default()
-                    })
-                    .insert(particle)
-                    .insert((
-                        RigidBody::KinematicPositionBased,
-                        Collider::ball(section_height / 2.0),
-                        SolverGroups::new(Group::NONE, Group::NONE),
-                    ))
-                    .id();
-                (entity, transform.translation)
-            })
-            .collect();
-
-        let mut add_constraint = |a: (Entity, Vec3), b: (Entity, Vec3)| {
-            let target = (a.1 - b.1).length();
-            commands.spawn(Constraint::new(a.0, b.0, target));
-        };
-
-        let create_tube = false;
-
-        // iterate through the ring
-        for i_side in 0..sides {
-            // get the index of the next particle on the ring
-            let i2_side = (i_side + 1) % sides;
-            // connect with the neighbouring particle
-            add_constraint(next_ring[i_side], next_ring[i2_side]);
-
-            // Create tube
-            if create_tube {
-                if i_section > 0 {
-                    if i_section % 2 > 0 {
-                        add_constraint(prev_ring[i_side], next_ring[i_side]);
-                        add_constraint(prev_ring[i2_side], next_ring[i_side]);
-                    } else {
-                        add_constraint(next_ring[i_side], prev_ring[i_side]);
-                        add_constraint(next_ring[i2_side], prev_ring[i_side]);
-                    }
-                }
-            }
-            // Connect all particles between segments
-            else {
-                if i_section > 0 {
-                    for i2_side in 0..sides {
-                        add_constraint(prev_ring[i2_side], next_ring[i_side]);
-                    }
-                }
-            }
-        }
-
-        prev_ring = next_ring;
-    }
+    
+    let stem = StemStructure {
+        sides: 5,
+        sections: 18,
+        section_height: 0.1,
+        radius: 0.1,
+        particles: HashMap::new(),
+    };
+    stem.spawn(commands, meshes, materials);
+    
 }
 
 fn handle_collisions(
