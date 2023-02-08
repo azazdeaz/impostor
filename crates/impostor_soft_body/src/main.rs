@@ -193,9 +193,9 @@ fn setup(
 
     let sides = 5;
     let sections = 18;
-    let section_height = 0.2;
-    let radius = 0.2;
-    let start_height = 0.2;
+    let section_height = 0.1;
+    let radius = 0.1;
+    let start_height = 0.8;
     let mut prev_ring = Vec::new();
     let mut rng = rand::thread_rng();
     for i_section in 0..sections {
@@ -209,8 +209,8 @@ fn setup(
                 let (z, x) = angle.sin_cos();
                 let z = z + rng.gen::<f32>() * 0.1;
                 let x = x + rng.gen::<f32>() * 0.1;
-                println!("{} angle {} {} {}", i_side, angle, z, x);
                 let y = start_height + section_height * i_section as f32;
+                println!("section {}, side {}, x {}, z {}, y {}", i_section, i_side, x, z, y);
                 let transform = Transform::from_translation(Vec3::new(x * radius, y, z * radius));
                 let [r, g, b] = RandomColor::new().to_rgb_array();
                 let particle = Particle {
@@ -225,7 +225,7 @@ fn setup(
                 let entity = commands
                     .spawn(PbrBundle {
                         mesh: meshes.add(Mesh::from(shape::Icosphere {
-                            radius: 0.05,
+                            radius: section_height / 2.0,
                             subdivisions: 3,
                         })),
                         material: materials.add(
@@ -237,7 +237,7 @@ fn setup(
                     .insert(particle)
                     .insert((
                         RigidBody::KinematicPositionBased,
-                        Collider::ball(0.1),
+                        Collider::ball(section_height / 2.0),
                         SolverGroups::new(Group::NONE, Group::NONE),
                     ))
                     .id();
@@ -247,7 +247,6 @@ fn setup(
 
         let mut add_constraint = |a: (Entity, Vec3), b: (Entity, Vec3)| {
             let target = (a.1 - b.1).length();
-            println!("TargetL {} {:?} {:?}", target, a.1, b.1);
             commands.spawn(Constraint::new(a.0, b.0, target));
         };
 
@@ -280,9 +279,6 @@ fn setup(
                     }
                 }
             }
-        }
-
-        for i_side in 0..sides {
         }
 
         prev_ring = next_ring;

@@ -9,5 +9,7 @@ edition = "2021"
 bevy = "0.9.1"
 bevy_prototype_debug_lines ={version="0.9.0", features=["3d"]}
 bevy_rapier3d = { version = "0.20.0", features = ["simd-stable", "debug-render", "serde-serialize"] }
+impostor_editor_camera = { path = "../impostor_editor_camera" }
 nalgebra = "0.32.1"
 random_color = "0.6.1"
+rand = "0.8.5"
