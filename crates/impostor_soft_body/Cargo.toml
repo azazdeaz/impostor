@@ -13,3 +13,4 @@ impostor_editor_camera = { path = "../impostor_editor_camera" }
 nalgebra = "0.32.1"
 random_color = "0.6.1"
 rand = "0.8.5"
+itertools = "0.10.5"

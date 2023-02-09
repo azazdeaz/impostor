@@ -1,7 +1,10 @@
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
+
 use bevy::{prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
 use impostor_soft_body::{Constraint, Particle, StemStructure};
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -24,6 +27,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let mut rng = thread_rng();
     // plane
     commands
         .spawn(PbrBundle {
@@ -59,16 +63,37 @@ fn setup(
         .insert(Velocity::linear(Vec3::X * 0.6))
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
 
-    let stem = StemStructure {
+    /* Main stem */
+    let mut stem = StemStructure {
         sides: 5,
         sections: 18,
-        section_height: 0.1,
+        section_height: 0.12,
         radius: 0.1,
         particles: HashMap::new(),
-        start_translation: Vec3::Y * 1.6,
-        orientation: Quat::from_rotation_x(1.0)
+        start_translation: Vec3::Y * 0.6,
+        orientation: Quat::from_rotation_x(0.0),
+        fix_first_ring: true,
     };
-    stem.spawn(commands, meshes, materials);
+    stem.spawn(&mut commands, &mut meshes, &mut materials);
+
+    /* Branches */
+    for _ in 0..4 {
+        let start = Transform::from_translation(Vec3::Y * (1.2 + rng.gen::<f32>()))
+            * Transform::from_rotation(Quat::from_rotation_y(PI * 2.0 * rng.gen::<f32>()))
+            * Transform::from_rotation(Quat::from_rotation_x(0.6 + 0.4 * rng.gen::<f32>()));
+        let mut stem2 = StemStructure {
+            sides: 5,
+            sections: 14,
+            section_height: 0.1,
+            radius: 0.07,
+            particles: HashMap::new(),
+            start_translation: start.translation,
+            orientation: start.rotation,
+            fix_first_ring: false,
+        };
+        stem2.spawn(&mut commands, &mut meshes, &mut materials);
+        stem2.connect_to_stem(&mut commands, &stem);
+    }
 }
 
 fn handle_collisions(
