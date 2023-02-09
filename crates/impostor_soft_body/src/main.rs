@@ -65,6 +65,8 @@ fn setup(
         section_height: 0.1,
         radius: 0.1,
         particles: HashMap::new(),
+        start_translation: Vec3::Y * 1.6,
+        orientation: Quat::from_rotation_x(1.0)
     };
     stem.spawn(commands, meshes, materials);
 }
