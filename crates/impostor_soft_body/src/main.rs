@@ -1,7 +1,7 @@
 use bevy::{prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
-use impostor_soft_body::{StemStructure, Constraint, Particle};
+use impostor_soft_body::{Constraint, Particle, StemStructure};
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -14,7 +14,6 @@ fn main() {
         .add_system(handle_collisions)
         .run();
 }
-
 
 #[derive(Component)]
 struct Matreial {}
@@ -55,11 +54,11 @@ fn setup(
     commands
         .spawn(RigidBody::KinematicVelocityBased)
         // .insert(Collider::ball(0.3))
-        .insert(Collider::cuboid(0.2,0.2,4.0))
+        .insert(Collider::cuboid(0.2, 0.2, 4.0))
         .insert(Restitution::coefficient(0.7))
         .insert(Velocity::linear(Vec3::X * 0.6))
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
-    
+
     let stem = StemStructure {
         sides: 5,
         sections: 18,
@@ -68,7 +67,6 @@ fn setup(
         particles: HashMap::new(),
     };
     stem.spawn(commands, meshes, materials);
-    
 }
 
 fn handle_collisions(

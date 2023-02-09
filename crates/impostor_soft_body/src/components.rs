@@ -32,7 +32,6 @@ impl Particle {
         // self.velocity = self.position - self.previous_position;
         // self.acceleration = Vec3::ZERO;
         // self.velocity = self.position - self.previous_position;
-
     }
     pub fn apply_force(&mut self, force: Vec3) {
         if self.mass == 0.0 {

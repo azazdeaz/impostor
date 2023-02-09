@@ -1,5 +1,5 @@
-pub mod structure;
 pub mod components;
+pub mod structure;
 
-pub use self::structure::*;
 pub use self::components::*;
+pub use self::structure::*;
