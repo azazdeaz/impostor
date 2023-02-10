@@ -190,7 +190,7 @@ fn update(
             let particle_ab =
                 particles.get_many_mut([constraint.particle_a, constraint.particle_b]);
             if let Ok([mut particle_a, mut particle_b]) = particle_ab {
-                constraint.relax(&mut particle_a.0, &mut particle_b.0);
+                constraint.relax_weighted(&mut particle_a.0, &mut particle_b.0);
                 lines.line(particle_a.0.position, particle_b.0.position, 0.0);
             }
         }

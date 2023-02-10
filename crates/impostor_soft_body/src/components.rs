@@ -126,4 +126,34 @@ impl Constraint {
             particle_b.position = center + direction;
         }
     }
+
+    
+    pub fn relax_weighted(&self, particle_a: &mut Particle, particle_b: &mut Particle) {
+        if particle_a.is_fixed && particle_b.is_fixed {
+            return;
+        }
+
+        let ab_vector = particle_b.position - particle_a.position;
+        let ab_offset = match (ab_vector).try_normalize() {
+            None => {
+                log::warn!("Failed handle stick between points {} and {} which are too close to each other", particle_a.position, particle_b.position);
+                return;
+            }
+            Some(dir) => dir * (ab_vector.length() - self.target),
+        };
+
+        
+        if particle_a.is_fixed {
+            particle_b.position -= ab_offset;
+        } else if particle_b.is_fixed {
+            particle_a.position += ab_offset;
+        } else {
+            // Move more towards the first particle of the constraint. 
+            //  This requires to set particler higher in the hierarchy (lower in the plant) as first
+            let weight_a = 0.48;
+            let weight_b = 1.0 - weight_a;
+            particle_a.position += ab_offset * weight_a;
+            particle_b.position -= ab_offset * weight_b;
+        }
+    }
 }

@@ -133,8 +133,8 @@ impl StemStructure {
                             add_constraint(prev_ring[i_side], next_ring[i_side]);
                             add_constraint(prev_ring[i2_side], next_ring[i_side]);
                         } else {
-                            add_constraint(next_ring[i_side], prev_ring[i_side]);
-                            add_constraint(next_ring[i2_side], prev_ring[i_side]);
+                            add_constraint(prev_ring[i_side], next_ring[i_side]);
+                            add_constraint(prev_ring[i_side], next_ring[i2_side]);
                         }
                     }
                 }
