@@ -58,7 +58,12 @@ fn setup(
     commands
         .spawn(RigidBody::KinematicVelocityBased)
         // .insert(Collider::ball(0.3))
-        .insert(Collider::cuboid(0.2, 0.2, 4.0))
+        .insert(Collider::cuboid(0.1, 0.1, 2.0))
+        .insert(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(0.2, 0.2, 4.0))),
+            material: materials.add(Color::rgb(0.5, 0.3, 0.3).into()),
+            ..default()
+        })
         .insert(Restitution::coefficient(0.7))
         .insert(Velocity::linear(Vec3::X * 0.6))
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
@@ -77,13 +82,13 @@ fn setup(
     stem.spawn(&mut commands, &mut meshes, &mut materials);
 
     /* Branches */
-    for _ in 0..4 {
+    for _ in 0..2 {
         let start = Transform::from_translation(Vec3::Y * (1.2 + rng.gen::<f32>()))
             * Transform::from_rotation(Quat::from_rotation_y(PI * 2.0 * rng.gen::<f32>()))
             * Transform::from_rotation(Quat::from_rotation_x(0.6 + 0.4 * rng.gen::<f32>()));
         let mut stem2 = StemStructure {
             sides: 5,
-            sections: 14,
+            sections: 12,
             section_height: 0.1,
             radius: 0.07,
             particles: HashMap::new(),
