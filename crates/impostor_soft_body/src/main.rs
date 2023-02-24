@@ -71,8 +71,8 @@ fn setup(
     /* Main stem */
     let mut stem = StemStructure {
         sides: 5,
-        sections: 18,
-        section_height: 0.12,
+        sections: 9,
+        section_height: 0.24,
         radius: 0.1,
         particles: HashMap::new(),
         start_translation: Vec3::Y * 0.6,
@@ -87,9 +87,9 @@ fn setup(
             * Transform::from_rotation(Quat::from_rotation_y(PI * 2.0 * rng.gen::<f32>()))
             * Transform::from_rotation(Quat::from_rotation_x(0.6 + 0.4 * rng.gen::<f32>()));
         let mut stem2 = StemStructure {
-            sides: 5,
-            sections: 12,
-            section_height: 0.1,
+            sides: 4,
+            sections: 6,
+            section_height: 0.2,
             radius: 0.07,
             particles: HashMap::new(),
             start_translation: start.translation,
