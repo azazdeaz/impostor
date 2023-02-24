@@ -127,7 +127,9 @@ fn spawn_camera(mut commands: Commands) {
     }).insert(PanOrbitCamera {
         radius,
         ..Default::default()
-    });
+    })
+    .insert_bundle(bevy_mod_picking::PickingCameraBundle::default())
+    .insert(bevy_transform_gizmo::GizmoPickSource::default());
 }
 // ANCHOR_END: example
 

@@ -12,6 +12,8 @@ fn main() {
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(impostor_editor_camera::EditorCameraPlugin)
+        .add_plugins(bevy_mod_picking::DefaultPickingPlugins)
+        .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin::default())
         .add_startup_system(setup)
         .add_system(update)
         .add_system(handle_collisions)
@@ -65,7 +67,9 @@ fn setup(
             ..default()
         })
         .insert(Restitution::coefficient(0.7))
-        .insert(Velocity::linear(Vec3::X * 0.6))
+        // .insert(Velocity::linear(Vec3::X * 0.6))
+        .insert_bundle(bevy_mod_picking::PickableBundle::default())
+        .insert(bevy_transform_gizmo::GizmoTransformable)
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
 
     /* Main stem */
