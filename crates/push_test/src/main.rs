@@ -21,6 +21,7 @@ fn main() {
 #[derive(Component)]
 struct Pushable {
     home_position: Transform,
+    prev_position: Transform,
 }
 
 fn setup(
@@ -57,9 +58,9 @@ fn setup(
 
     let transform = Transform::from_xyz(-2.0, 1.0, 0.0);
     commands
-        .spawn(RigidBody::KinematicPositionBased)
+        // .spawn(RigidBody::KinematicPositionBased)
         // .insert(Collider::ball(0.3))
-        .insert(Collider::ball(0.4))
+        .spawn(Collider::ball(0.4))
         // .insert(PbrBundle {
         //     mesh: meshes.add(Mesh::from(shape::Box::new(0.2, 0.2, 4.0))),
         //     material: materials.add(Color::rgb(0.5, 0.3, 0.3).into()),
@@ -67,7 +68,8 @@ fn setup(
         // })
         .insert(Restitution::coefficient(0.7))
         .insert(Pushable {
-            home_position: transform,
+            home_position: transform * Transform::from_xyz(0.0, 10.0, 0.0),
+            prev_position: transform,
         })
         .insert(TransformBundle::from(transform));
 
@@ -89,16 +91,32 @@ fn setup(
 }
 
 fn handle_collisions(
-    mut pushables: Query<(Entity, &mut GlobalTransform), With<Pushable>>,
+    mut pushables: Query<(Entity, &mut Transform, &mut Pushable)>,
     rapier_context: Res<RapierContext>,
     mut colliders_query: Query<
         (&Collider, &GlobalTransform, Option<&mut Velocity>),
         Without<Pushable>,
     >,
     time: Res<Time>,
+    mut lines: ResMut<DebugLines>,
 ) {
     let delta_time = time.delta_seconds();
-    for (entity, mut transform) in pushables.iter_mut() {
+
+
+    for (entity, mut transform, mut pushable) in pushables.iter_mut() {
+        println!("\n\n\nentity {:?}", entity);
+        println!("prev={:?}", pushable.prev_position.translation);
+        let lin_vel = transform.translation - pushable.prev_position.translation;
+        pushable.prev_position = transform.clone();
+
+        println!("new prev={:?}", pushable.prev_position.translation);
+        let lin_acc = (pushable.home_position.translation - transform.translation);
+        let friction = 0.92;
+        println!("before={:?}", transform.translation);
+        transform.translation = (transform.translation + lin_vel * friction + lin_acc * delta_time.powi(2)).into();
+        println!("lin_vel={:?} lin_acc={:?}", lin_vel, lin_acc);
+        println!("after={:?}", transform.translation);
+
         let collider_offset = 0.4;
         let collider_velocity_coefficient = 1.0;
         for contact_pair in rapier_context.contacts_with(entity) {
@@ -116,7 +134,6 @@ fn handle_collisions(
             });
             let pushed_position = {
                 let other_transform = other_transform.compute_transform();
-                let transform = transform.compute_transform();
                 let projected_point = other_collider.project_point(
                     other_transform.translation,
                     other_transform.rotation,
@@ -140,8 +157,10 @@ fn handle_collisions(
                 }
             };
             if let Some(position) = pushed_position {
-                *transform.translation_mut() = position.into();
+                lines.line(transform.translation, position, 0.0);
+                transform.translation = position.into();
             }
+
 
             // let collider_dampen_others = Some(0.05);
             // if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider_dampen_others) {
