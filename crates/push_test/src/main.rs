@@ -1,6 +1,7 @@
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 use bevy::{prelude::*, utils::HashMap};
+use bevy_mod_picking::Selection;
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
 use rand::{seq::IteratorRandom, thread_rng, Rng};
@@ -61,16 +62,21 @@ fn setup(
         // .spawn(RigidBody::KinematicPositionBased)
         // .insert(Collider::ball(0.3))
         .spawn(Collider::ball(0.4))
-        // .insert(PbrBundle {
-        //     mesh: meshes.add(Mesh::from(shape::Box::new(0.2, 0.2, 4.0))),
-        //     material: materials.add(Color::rgb(0.5, 0.3, 0.3).into()),
-        //     ..default()
-        // })
+        .insert(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Icosphere {
+                radius: 0.4,
+                subdivisions: 4,
+            })),
+            material: materials.add(Color::rgb(0.5, 0.3, 0.3).into()),
+            ..default()
+        })
         .insert(Restitution::coefficient(0.7))
         .insert(Pushable {
             home_position: transform * Transform::from_xyz(0.0, 10.0, 0.0),
             prev_position: transform,
         })
+        .insert_bundle(bevy_mod_picking::PickableBundle::default())
+        .insert(bevy_transform_gizmo::GizmoTransformable)
         .insert(TransformBundle::from(transform));
 
     /* Create the bouncing ball. */
@@ -91,7 +97,7 @@ fn setup(
 }
 
 fn handle_collisions(
-    mut pushables: Query<(Entity, &mut Transform, &mut Pushable)>,
+    mut pushables: Query<(Entity, &mut Transform, &mut Pushable, &Selection)>,
     rapier_context: Res<RapierContext>,
     mut colliders_query: Query<
         (&Collider, &GlobalTransform, Option<&mut Velocity>),
@@ -102,18 +108,25 @@ fn handle_collisions(
 ) {
     let delta_time = time.delta_seconds();
 
-
-    for (entity, mut transform, mut pushable) in pushables.iter_mut() {
-        println!("\n\n\nentity {:?}", entity);
+    for (entity, mut transform, mut pushable, selection) in pushables.iter_mut() {
+        println!(
+            "\n\n\nentity {:?} selected={:?}",
+            entity,
+            selection.selected()
+        );
         println!("prev={:?}", pushable.prev_position.translation);
         let lin_vel = transform.translation - pushable.prev_position.translation;
         pushable.prev_position = transform.clone();
-
+        
+        if (selection.selected()) {
+            continue;
+        }
         println!("new prev={:?}", pushable.prev_position.translation);
         let lin_acc = (pushable.home_position.translation - transform.translation);
         let friction = 0.92;
         println!("before={:?}", transform.translation);
-        transform.translation = (transform.translation + lin_vel * friction + lin_acc * delta_time.powi(2)).into();
+        transform.translation =
+            (transform.translation + lin_vel * friction + lin_acc * delta_time.powi(2)).into();
         println!("lin_vel={:?} lin_acc={:?}", lin_vel, lin_acc);
         println!("after={:?}", transform.translation);
 
@@ -160,7 +173,6 @@ fn handle_collisions(
                 lines.line(transform.translation, position, 0.0);
                 transform.translation = position.into();
             }
-
 
             // let collider_dampen_others = Some(0.05);
             // if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider_dampen_others) {
