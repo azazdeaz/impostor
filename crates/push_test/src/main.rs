@@ -74,14 +74,18 @@ fn setup(
     for _ in 0..4 {
         let transform = Transform::from_xyz(0.0, 1.0, 0.0);
         let segment = commands
-            .spawn(Collider::ball(0.2))
-            .insert(PbrBundle {
+            .spawn(PbrBundle {
                 mesh: meshes.add(Mesh::from(shape::Icosphere {
                     radius: 0.2,
                     subdivisions: 3,
                 })),
                 material: materials.add(Color::rgb(0.5, 0.3, 0.3).into()),
                 ..default()
+            })
+            .with_children(|children| {
+                children
+                    .spawn(Collider::ball(0.2))
+                    .insert(TransformBundle::IDENTITY);
             })
             .insert(TargetLength(1.0))
             .insert(TargetRotation(Quat::IDENTITY))
@@ -154,8 +158,11 @@ fn handle_segment_collisions(
 
             let collider_offset = 0.2;
             let collider_velocity_coefficient = 1.0;
-            for contact_pair in rapier_context.contacts_with(segment) {
-                let other_entity = if contact_pair.collider1() == segment {
+            let contact_child = *children
+                .first()
+                .expect("Segments have to have one child with a Collider component");
+            for contact_pair in rapier_context.contacts_with(contact_child) {
+                let other_entity = if contact_pair.collider1() == contact_child {
                     contact_pair.collider2()
                 } else {
                     contact_pair.collider1()
@@ -186,15 +193,21 @@ fn handle_segment_collisions(
                         0.0,
                         Color::PINK,
                     );
+                    lines.line_colored(
+                        combined_transform.translation,
+                        projected_point.point,
+                        0.0,
+                        Color::LIME_GREEN,
+                    );
 
                     println!("projected_point.is_inside {:?}", projected_point.is_inside);
 
-                    let normal: Vec3 = (projected_point.point - transform.translation)
+                    let normal: Vec3 = (projected_point.point - combined_transform.translation)
                         .try_normalize()
                         .unwrap_or(Vec3::Y);
                     if projected_point.is_inside {
                         Some(projected_point.point + (normal * collider_offset) + (normal * vel))
-                    } else if transform
+                    } else if combined_transform
                         .translation
                         .distance_squared(projected_point.point)
                         < collider_offset * collider_offset
@@ -205,7 +218,7 @@ fn handle_segment_collisions(
                     }
                 };
                 if let Some(position) = pushed_position {
-                    lines.line(combined_transform.translation, position, 0.0);
+                    // lines.line(combined_transform.translation, position, 0.0);
                     lines.line(prev_transform.translation, position, 0.0);
                     // transform.translation = position.into();
                 }
