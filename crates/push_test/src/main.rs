@@ -15,7 +15,8 @@ fn main() {
         .add_plugins(bevy_mod_picking::DefaultPickingPlugins)
         .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin::default())
         .add_startup_system(setup)
-        .add_system(handle_collisions)
+        // .add_system(handle_collisions)
+        .add_system(handle_segment_collisions)
         .run();
 }
 
@@ -24,6 +25,15 @@ struct Pushable {
     home_position: Transform,
     prev_position: Transform,
 }
+
+#[derive(Component)]
+struct TargetLength(f32);
+
+#[derive(Component)]
+struct TargetRotation(Quat);
+
+#[derive(Component)]
+struct PlantBase {}
 
 fn setup(
     mut commands: Commands,
@@ -56,6 +66,31 @@ fn setup(
     //     transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::Y * 2.0, Vec3::Y * 6.0),
     //     ..default()
     // });
+
+    let mut parent = commands
+        .spawn(PlantBase {})
+        .insert(TransformBundle::IDENTITY)
+        .id();
+    for _ in 0..4 {
+        let transform = Transform::from_xyz(0.0, 1.0, 0.0);
+        let segment = commands
+            .spawn(Collider::ball(0.2))
+            .insert(PbrBundle {
+                mesh: meshes.add(Mesh::from(shape::Icosphere {
+                    radius: 0.2,
+                    subdivisions: 3,
+                })),
+                material: materials.add(Color::rgb(0.5, 0.3, 0.3).into()),
+                ..default()
+            })
+            .insert(TargetLength(1.0))
+            .insert(TargetRotation(Quat::IDENTITY))
+            .insert(TransformBundle::from(transform))
+            .id();
+
+        commands.entity(parent).add_child(segment);
+        parent = segment;
+    }
 
     let transform = Transform::from_xyz(-2.0, 1.0, 0.0);
     commands
@@ -96,6 +131,93 @@ fn setup(
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
 }
 
+fn handle_segment_collisions(
+    bases: Query<(Entity, &GlobalTransform, &Children), With<PlantBase>>,
+    mut segments: Query<(&mut Transform, &Children), With<TargetLength>>,
+    mut colliders_query: Query<(&Collider, &GlobalTransform, Option<&mut Velocity>)>,
+    rapier_context: Res<RapierContext>,
+    time: Res<Time>,
+    mut lines: ResMut<DebugLines>,
+) {
+    let delta_time = time.delta_seconds();
+
+    for (base, transform, children) in bases.iter() {
+        let mut next = children.iter().find(|&&child| segments.contains(child));
+        let mut prev_transform = transform.compute_transform();
+
+        while let Some(&segment) = next {
+            let (transform, children) = segments.get(segment).expect(&format!(
+                "Can't find segment({:?}) in the segments query",
+                segment
+            ));
+            let combined_transform = (*transform * prev_transform);
+
+            let collider_offset = 0.2;
+            let collider_velocity_coefficient = 1.0;
+            for contact_pair in rapier_context.contacts_with(segment) {
+                let other_entity = if contact_pair.collider1() == segment {
+                    contact_pair.collider2()
+                } else {
+                    contact_pair.collider1()
+                };
+                let Ok((other_collider, other_transform, other_velocity)) = colliders_query.get_mut(other_entity) else {
+                    error!("Couldn't find collider on entity {:?}", other_entity);
+                    continue;
+                };
+                println!("Got contact {:?}<>{:?}", segment, other_entity);
+                let vel = other_velocity.as_ref().map_or(0.0, |v| {
+                    v.linvel.length_squared()
+                        * delta_time
+                        * delta_time
+                        * collider_velocity_coefficient
+                });
+                let pushed_position = {
+                    let other_transform = other_transform.compute_transform();
+
+                    let projected_point = other_collider.project_point(
+                        other_transform.translation,
+                        other_transform.rotation,
+                        combined_transform.translation,
+                        false,
+                    );
+                    lines.line_colored(
+                        prev_transform.translation,
+                        combined_transform.translation,
+                        0.0,
+                        Color::PINK,
+                    );
+
+                    println!("projected_point.is_inside {:?}", projected_point.is_inside);
+
+                    let normal: Vec3 = (projected_point.point - transform.translation)
+                        .try_normalize()
+                        .unwrap_or(Vec3::Y);
+                    if projected_point.is_inside {
+                        Some(projected_point.point + (normal * collider_offset) + (normal * vel))
+                    } else if transform
+                        .translation
+                        .distance_squared(projected_point.point)
+                        < collider_offset * collider_offset
+                    {
+                        Some(projected_point.point - (normal * collider_offset))
+                    } else {
+                        None
+                    }
+                };
+                if let Some(position) = pushed_position {
+                    lines.line(combined_transform.translation, position, 0.0);
+                    lines.line(prev_transform.translation, position, 0.0);
+                    // transform.translation = position.into();
+                }
+            }
+            // Continue the iteration from the next child
+            next = children.iter().find(|&&child| segments.contains(child));
+            prev_transform = combined_transform;
+            println!("Next is {:?}", next);
+        }
+    }
+}
+
 fn handle_collisions(
     mut pushables: Query<(Entity, &mut Transform, &mut Pushable, &Selection)>,
     rapier_context: Res<RapierContext>,
@@ -117,7 +239,7 @@ fn handle_collisions(
         println!("prev={:?}", pushable.prev_position.translation);
         let lin_vel = transform.translation - pushable.prev_position.translation;
         pushable.prev_position = transform.clone();
-        
+
         if (selection.selected()) {
             continue;
         }
