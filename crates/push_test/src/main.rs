@@ -4,6 +4,7 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_mod_picking::Selection;
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
+use itertools::Itertools;
 use rand::{seq::IteratorRandom, thread_rng, Rng};
 fn main() {
     App::new()
@@ -26,14 +27,19 @@ struct Pushable {
     prev_position: Transform,
 }
 
-#[derive(Component)]
-struct TargetLength(f32);
 
 #[derive(Component)]
 struct TargetRotation(Quat);
 
 #[derive(Component)]
 struct PlantBase {}
+
+#[derive(Component, Clone, Copy)]
+struct SegmentData {
+    collider: Entity,
+    next: Option<Entity>,
+    length: f32
+}
 
 fn setup(
     mut commands: Commands,
@@ -67,34 +73,54 @@ fn setup(
     //     ..default()
     // });
 
-    let mut parent = commands
-        .spawn(PlantBase {})
-        .insert(TransformBundle::IDENTITY)
-        .id();
-    for _ in 0..4 {
-        let transform = Transform::from_xyz(0.0, 1.0, 0.0);
-        let segment = commands
-            .spawn(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Icosphere {
-                    radius: 0.2,
-                    subdivisions: 3,
-                })),
-                material: materials.add(Color::rgb(0.5, 0.3, 0.3).into()),
-                ..default()
-            })
-            .with_children(|children| {
-                children
-                    .spawn(Collider::ball(0.2))
-                    .insert(TransformBundle::IDENTITY);
-            })
-            .insert(TargetLength(1.0))
-            .insert(TargetRotation(Quat::IDENTITY))
-            .insert(TransformBundle::from(transform))
-            .id();
+    let segment_count = 5;
+    let segment_length = 0.8;
+    let segments = (0..segment_count)
+        .map(|_| commands.spawn_empty().id())
+        .collect_vec();
+    let colliders = (0..segment_count)
+        .map(|_| {
+            commands
+                .spawn(Collider::ball(0.2))
+                .insert(TransformBundle::IDENTITY)
+                .id()
+        })
+        .collect_vec();
+    for i in 0..segment_count {
+        let segment = segments[i];
+        if i == 0 {
+            commands.entity(segment).insert(PlantBase {});
+        }
+        let segment_data = SegmentData {
+            length: segment_length,
+            collider: colliders[i],
+            next: if i < segments.len() - 1 {
+                Some(segments[i + 1])
+            } else {
+                None
+            },
+        };
 
-        commands.entity(parent).add_child(segment);
-        parent = segment;
+        commands
+            .entity(segment)
+            .insert(TargetRotation(Quat::IDENTITY))
+            .insert(TransformBundle::IDENTITY)
+            .insert(segment_data)
+            .with_children(|children| {
+                let mut container = children.spawn(TransformBundle::from(Transform::from_xyz(
+                    0.0,
+                    segment_length,
+                    0.0,
+                )));
+                container.add_child(segment_data.collider);
+                if let Some(next) = segment_data.next {
+                    container.add_child(next);
+                }
+            });
     }
+    commands
+        .spawn(TransformBundle::from(Transform::from_xyz(0.0, 2.0, 0.0)))
+        .add_child(segments[0]);
 
     let transform = Transform::from_xyz(-2.0, 1.0, 0.0);
     commands
@@ -136,8 +162,8 @@ fn setup(
 }
 
 fn handle_segment_collisions(
-    bases: Query<(Entity, &GlobalTransform, &Children), With<PlantBase>>,
-    mut segments: Query<(&mut Transform, &Children), With<TargetLength>>,
+    bases: Query<(Entity, &GlobalTransform), With<PlantBase>>,
+    mut segments: Query<(&mut Transform, &SegmentData)>,
     mut colliders_query: Query<(&Collider, &GlobalTransform, Option<&mut Velocity>)>,
     rapier_context: Res<RapierContext>,
     time: Res<Time>,
@@ -145,56 +171,53 @@ fn handle_segment_collisions(
 ) {
     let delta_time = time.delta_seconds();
 
-    for (base, transform, children) in bases.iter() {
-        let mut next = children.iter().find(|&&child| segments.contains(child));
+    for (base, transform) in bases.iter() {
+        let mut next = segments.get(base).ok();
         let mut prev_transform = transform.compute_transform();
 
-        while let Some(&segment) = next {
-            let (transform, children) = segments.get(segment).expect(&format!(
-                "Can't find segment({:?}) in the segments query",
-                segment
-            ));
+        while let Some((transform, data)) = next {
             let combined_transform = (*transform * prev_transform);
 
             let collider_offset = 0.2;
             let collider_velocity_coefficient = 1.0;
-            let contact_child = *children
-                .first()
-                .expect("Segments have to have one child with a Collider component");
-            for contact_pair in rapier_context.contacts_with(contact_child) {
-                let other_entity = if contact_pair.collider1() == contact_child {
+            for contact_pair in rapier_context.contacts_with(data.collider) {
+                let other_entity = if contact_pair.collider1() == data.collider {
                     contact_pair.collider2()
                 } else {
                     contact_pair.collider1()
                 };
-                let Ok((other_collider, other_transform, other_velocity)) = colliders_query.get_mut(other_entity) else {
+                let Ok((other_collider, other_transform, other_velocity)) = colliders_query.get(other_entity) else {
                     error!("Couldn't find collider on entity {:?}", other_entity);
                     continue;
                 };
-                println!("Got contact {:?}<>{:?}", segment, other_entity);
+                let Ok((_, self_collider_transform, __)) = colliders_query.get(data.collider) else {
+                    error!("Couldn't find self collider on entity {:?}", other_entity);
+                    continue;
+                };
                 let vel = other_velocity.as_ref().map_or(0.0, |v| {
                     v.linvel.length_squared()
                         * delta_time
                         * delta_time
                         * collider_velocity_coefficient
                 });
+                let self_collider_transform = self_collider_transform.compute_transform();
                 let pushed_position = {
                     let other_transform = other_transform.compute_transform();
-
+                    
                     let projected_point = other_collider.project_point(
                         other_transform.translation,
                         other_transform.rotation,
-                        combined_transform.translation,
+                        self_collider_transform.translation,
                         false,
                     );
                     lines.line_colored(
                         prev_transform.translation,
-                        combined_transform.translation,
+                        self_collider_transform.translation,
                         0.0,
                         Color::PINK,
                     );
                     lines.line_colored(
-                        combined_transform.translation,
+                        self_collider_transform.translation,
                         projected_point.point,
                         0.0,
                         Color::LIME_GREEN,
@@ -202,12 +225,12 @@ fn handle_segment_collisions(
 
                     println!("projected_point.is_inside {:?}", projected_point.is_inside);
 
-                    let normal: Vec3 = (projected_point.point - combined_transform.translation)
+                    let normal: Vec3 = (projected_point.point - self_collider_transform.translation)
                         .try_normalize()
                         .unwrap_or(Vec3::Y);
                     if projected_point.is_inside {
                         Some(projected_point.point + (normal * collider_offset) + (normal * vel))
-                    } else if combined_transform
+                    } else if self_collider_transform
                         .translation
                         .distance_squared(projected_point.point)
                         < collider_offset * collider_offset
@@ -218,15 +241,14 @@ fn handle_segment_collisions(
                     }
                 };
                 if let Some(position) = pushed_position {
-                    // lines.line(combined_transform.translation, position, 0.0);
+                    // lines.line(self_collider_transform.translation, position, 0.0);
                     lines.line(prev_transform.translation, position, 0.0);
                     // transform.translation = position.into();
                 }
             }
             // Continue the iteration from the next child
-            next = children.iter().find(|&&child| segments.contains(child));
+            next = data.next.and_then(|next| segments.get(next).ok());
             prev_transform = combined_transform;
-            println!("Next is {:?}", next);
         }
     }
 }
