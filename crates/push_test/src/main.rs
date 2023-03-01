@@ -6,12 +6,15 @@ use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
 use itertools::Itertools;
 use rand::{seq::IteratorRandom, thread_rng, Rng};
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
+        .add_plugin(WorldInspectorPlugin)
         .add_plugin(impostor_editor_camera::EditorCameraPlugin)
         .add_plugins(bevy_mod_picking::DefaultPickingPlugins)
         .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin::default())
@@ -27,7 +30,6 @@ struct Pushable {
     prev_position: Transform,
 }
 
-
 #[derive(Component)]
 struct TargetRotation(Quat);
 
@@ -38,7 +40,7 @@ struct PlantBase {}
 struct SegmentData {
     collider: Entity,
     next: Option<Entity>,
-    length: f32
+    length: f32,
 }
 
 fn setup(
@@ -76,7 +78,7 @@ fn setup(
     let segment_count = 5;
     let segment_length = 0.8;
     let segments = (0..segment_count)
-        .map(|_| commands.spawn_empty().id())
+        .map(|i| commands.spawn(Name::new(format!("Segment #{}", i))).id())
         .collect_vec();
     let colliders = (0..segment_count)
         .map(|_| {
@@ -120,6 +122,7 @@ fn setup(
     }
     commands
         .spawn(TransformBundle::from(Transform::from_xyz(0.0, 2.0, 0.0)))
+        .insert(Name::new("Plant Base"))
         .add_child(segments[0]);
 
     let transform = Transform::from_xyz(-2.0, 1.0, 0.0);
@@ -172,12 +175,10 @@ fn handle_segment_collisions(
     let delta_time = time.delta_seconds();
 
     for (base, transform) in bases.iter() {
-        let mut next = segments.get(base).ok();
+        let mut next = segments.get_mut(base).ok();
         let mut prev_transform = transform.compute_transform();
 
-        while let Some((transform, data)) = next {
-            let combined_transform = (*transform * prev_transform);
-
+        while let Some((mut transform, data)) = next {
             let collider_offset = 0.2;
             let collider_velocity_coefficient = 1.0;
             for contact_pair in rapier_context.contacts_with(data.collider) {
@@ -203,29 +204,30 @@ fn handle_segment_collisions(
                 let self_collider_transform = self_collider_transform.compute_transform();
                 let pushed_position = {
                     let other_transform = other_transform.compute_transform();
-                    
+
                     let projected_point = other_collider.project_point(
                         other_transform.translation,
                         other_transform.rotation,
                         self_collider_transform.translation,
                         false,
                     );
-                    lines.line_colored(
-                        prev_transform.translation,
-                        self_collider_transform.translation,
-                        0.0,
-                        Color::PINK,
-                    );
-                    lines.line_colored(
-                        self_collider_transform.translation,
-                        projected_point.point,
-                        0.0,
-                        Color::LIME_GREEN,
-                    );
+                    // lines.line_colored(
+                    //     prev_transform.translation,
+                    //     self_collider_transform.translation,
+                    //     0.0,
+                    //     Color::PINK,
+                    // );
+                    // lines.line_colored(
+                    //     self_collider_transform.translation,
+                    //     projected_point.point,
+                    //     0.0,
+                    //     Color::LIME_GREEN,
+                    // );
 
                     println!("projected_point.is_inside {:?}", projected_point.is_inside);
 
-                    let normal: Vec3 = (projected_point.point - self_collider_transform.translation)
+                    let normal: Vec3 = (projected_point.point
+                        - self_collider_transform.translation)
                         .try_normalize()
                         .unwrap_or(Vec3::Y);
                     if projected_point.is_inside {
@@ -241,14 +243,36 @@ fn handle_segment_collisions(
                     }
                 };
                 if let Some(position) = pushed_position {
-                    // lines.line(self_collider_transform.translation, position, 0.0);
-                    lines.line(prev_transform.translation, position, 0.0);
+                    let from = self_collider_transform.translation - prev_transform.translation;
+                    let to = position - prev_transform.translation;
+                    // lines.line_colored(
+                    //     prev_transform.translation,
+                    //     prev_transform.translation + from,
+                    //     0.0,
+                    //     Color::ORANGE,
+                    // );
+                    // lines.line_colored(
+                    //     prev_transform.translation,
+                    //     prev_transform.translation + to,
+                    //     0.0,
+                    //     Color::ORANGE_RED,
+                    // );
+                    let turn = Quat::from_rotation_arc(from.normalize(), to.normalize());
+                    transform.rotate(turn);
                     // transform.translation = position.into();
                 }
             }
+            let old_pt = prev_transform.clone();
+            prev_transform =
+                prev_transform * transform.clone() * Transform::from_xyz(0.0, data.length, 0.0);
+            lines.line_colored(
+                prev_transform.translation,
+                old_pt.translation,
+                0.0,
+                Color::ORANGE_RED,
+            );
             // Continue the iteration from the next child
-            next = data.next.and_then(|next| segments.get(next).ok());
-            prev_transform = combined_transform;
+            next = data.next.and_then(|next| segments.get_mut(next).ok());
         }
     }
 }
