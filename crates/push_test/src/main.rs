@@ -1,12 +1,12 @@
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 use bevy::{prelude::*, utils::HashMap};
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::Selection;
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
 use itertools::Itertools;
 use rand::{seq::IteratorRandom, thread_rng, Rng};
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 fn main() {
     App::new()
@@ -41,6 +41,8 @@ struct SegmentData {
     collider: Entity,
     next: Option<Entity>,
     length: f32,
+    previous_rotation: Quat,
+    target_rotation: Quat,
 }
 
 fn setup(
@@ -78,7 +80,16 @@ fn setup(
     let segment_count = 5;
     let segment_length = 0.8;
     let segments = (0..segment_count)
-        .map(|i| commands.spawn(Name::new(format!("Segment #{}", i))).id())
+        .map(|i| {
+            commands
+                .spawn(Name::new(format!("Segment #{}", i)))
+                .insert(PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Box::new(0.1, 0.1, 0.1))),
+                    material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+                    ..default()
+                })
+                .id()
+        })
         .collect_vec();
     let colliders = (0..segment_count)
         .map(|_| {
@@ -95,6 +106,8 @@ fn setup(
         }
         let segment_data = SegmentData {
             length: segment_length,
+            previous_rotation: Quat::IDENTITY,
+            target_rotation: Quat::IDENTITY,
             collider: colliders[i],
             next: if i < segments.len() - 1 {
                 Some(segments[i + 1])
@@ -105,15 +118,15 @@ fn setup(
 
         commands
             .entity(segment)
-            .insert(TargetRotation(Quat::IDENTITY))
-            .insert(TransformBundle::IDENTITY)
             .insert(segment_data)
+            // .insert(TransformBundle::IDENTITY)
             .with_children(|children| {
                 let mut container = children.spawn(TransformBundle::from(Transform::from_xyz(
                     0.0,
                     segment_length,
                     0.0,
                 )));
+                container.insert(VisibilityBundle::default());
                 container.add_child(segment_data.collider);
                 if let Some(next) = segment_data.next {
                     container.add_child(next);
@@ -121,11 +134,16 @@ fn setup(
             });
     }
     commands
-        .spawn(TransformBundle::from(Transform::from_xyz(0.0, 2.0, 0.0)))
+        .spawn(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(0.5, 0.01, 0.5))),
+            material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+            transform: Transform::from_xyz(0.0, 2.0, 0.0),
+            ..default()
+        })
         .insert(Name::new("Plant Base"))
         .add_child(segments[0]);
 
-    let transform = Transform::from_xyz(-2.0, 1.0, 0.0);
+    let transform = Transform::from_xyz(-0.5, 1.0, 0.0);
     commands
         // .spawn(RigidBody::KinematicPositionBased)
         // .insert(Collider::ball(0.3))
@@ -139,10 +157,6 @@ fn setup(
             ..default()
         })
         .insert(Restitution::coefficient(0.7))
-        .insert(Pushable {
-            home_position: transform * Transform::from_xyz(0.0, 10.0, 0.0),
-            prev_position: transform,
-        })
         .insert_bundle(bevy_mod_picking::PickableBundle::default())
         .insert(bevy_transform_gizmo::GizmoTransformable)
         .insert(TransformBundle::from(transform));
@@ -166,7 +180,7 @@ fn setup(
 
 fn handle_segment_collisions(
     bases: Query<(Entity, &GlobalTransform), With<PlantBase>>,
-    mut segments: Query<(&mut Transform, &SegmentData)>,
+    mut segments: Query<(&mut Transform, &mut SegmentData)>,
     mut colliders_query: Query<(&Collider, &GlobalTransform, Option<&mut Velocity>)>,
     rapier_context: Res<RapierContext>,
     time: Res<Time>,
@@ -178,7 +192,14 @@ fn handle_segment_collisions(
         let mut next = segments.get_mut(base).ok();
         let mut prev_transform = transform.compute_transform();
 
-        while let Some((mut transform, data)) = next {
+        while let Some((mut transform, mut data)) = next {
+            let ang_vel = transform.rotation * data.previous_rotation.inverse();
+            data.previous_rotation = transform.rotation;
+            let ang_acc = (data.target_rotation * transform.rotation.inverse());
+            let friction = 0.89;
+            let physics_rotation = Quat::IDENTITY.lerp(ang_vel, friction)
+                * Quat::IDENTITY.lerp(ang_acc, delta_time.powi(2));
+            // transform.rotate(physics_rotation);
             let collider_offset = 0.2;
             let collider_velocity_coefficient = 1.0;
             for contact_pair in rapier_context.contacts_with(data.collider) {
@@ -195,6 +216,7 @@ fn handle_segment_collisions(
                     error!("Couldn't find self collider on entity {:?}", other_entity);
                     continue;
                 };
+
                 let vel = other_velocity.as_ref().map_or(0.0, |v| {
                     v.linvel.length_squared()
                         * delta_time
@@ -211,19 +233,6 @@ fn handle_segment_collisions(
                         self_collider_transform.translation,
                         false,
                     );
-                    // lines.line_colored(
-                    //     prev_transform.translation,
-                    //     self_collider_transform.translation,
-                    //     0.0,
-                    //     Color::PINK,
-                    // );
-                    // lines.line_colored(
-                    //     self_collider_transform.translation,
-                    //     projected_point.point,
-                    //     0.0,
-                    //     Color::LIME_GREEN,
-                    // );
-
                     println!("projected_point.is_inside {:?}", projected_point.is_inside);
 
                     let normal: Vec3 = (projected_point.point
@@ -245,18 +254,7 @@ fn handle_segment_collisions(
                 if let Some(position) = pushed_position {
                     let from = self_collider_transform.translation - prev_transform.translation;
                     let to = position - prev_transform.translation;
-                    // lines.line_colored(
-                    //     prev_transform.translation,
-                    //     prev_transform.translation + from,
-                    //     0.0,
-                    //     Color::ORANGE,
-                    // );
-                    // lines.line_colored(
-                    //     prev_transform.translation,
-                    //     prev_transform.translation + to,
-                    //     0.0,
-                    //     Color::ORANGE_RED,
-                    // );
+
                     let turn = Quat::from_rotation_arc(from.normalize(), to.normalize());
                     transform.rotate(turn);
                     // transform.translation = position.into();
