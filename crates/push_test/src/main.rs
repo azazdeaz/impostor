@@ -4,7 +4,7 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::Selection;
 use bevy_prototype_debug_lines::*;
-use bevy_rapier3d::prelude::*;
+use bevy_rapier3d::{plugin, prelude::*};
 use itertools::Itertools;
 use rand::{seq::IteratorRandom, thread_rng, Rng};
 
@@ -84,6 +84,8 @@ fn setup(
         .map(|i| {
             commands
                 .spawn(Name::new(format!("Segment #{}", i)))
+                .insert(bevy_mod_picking::PickableBundle::default())
+                .insert(bevy_transform_gizmo::GizmoTransformable)
                 .insert(PbrBundle {
                     mesh: meshes.add(Mesh::from(shape::Box::new(0.1, 0.1, 0.1))),
                     material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
@@ -155,7 +157,7 @@ fn setup(
             ..default()
         })
         .insert(Restitution::coefficient(0.7))
-        .insert_bundle(bevy_mod_picking::PickableBundle::default())
+        .insert(bevy_mod_picking::PickableBundle::default())
         .insert(bevy_transform_gizmo::GizmoTransformable)
         .insert(TransformBundle::from(transform));
 
@@ -179,6 +181,7 @@ fn setup(
 struct FabrikComputer {
     global_xyz: HashMap<Entity, Vec3>,
     segments: HashMap<Entity, SegmentData>,
+    // contacts:
 }
 
 enum FabrikDirection {
@@ -221,7 +224,7 @@ impl FabrikComputer {
 
 fn handle_segment_collisions(
     bases: Query<(Entity, &GlobalTransform), With<PlantBase>>,
-    mut segments_query: Query<(&mut Transform, &mut SegmentData)>,
+    mut segments_query: Query<(&mut Transform, &mut SegmentData, &Selection)>,
     mut colliders_query: Query<(&Collider, &GlobalTransform, Option<&mut Velocity>)>,
     rapier_context: Res<RapierContext>,
     time: Res<Time>,
@@ -232,16 +235,23 @@ fn handle_segment_collisions(
     for (base, transform) in bases.iter() {
         let mut global_transforms = HashMap::<Entity, Transform>::new();
         let mut segments = HashMap::<Entity, SegmentData>::new();
+        let mut selected_segment = None;
+        let mut end_segment = base;
 
         // Buffer positions and segment data
         let mut explore = vec![base];
         global_transforms.insert(base, transform.compute_transform());
         while !explore.is_empty() {
             let segment_id = explore.pop().unwrap();
-            let (&transform, &segment) = segments_query.get(segment_id).expect(&format!(
+            let (&transform, &segment, &selection) = segments_query.get(segment_id).expect(&format!(
                 "Can't find segment entity '{:?}' in segments query.",
                 segment_id
             ));
+
+            end_segment = segment_id;
+            if selection.selected() {
+                selected_segment = Some(segment_id)
+            }
 
             segments.insert(segment_id, segment);
 
@@ -272,12 +282,16 @@ fn handle_segment_collisions(
             segments,
         };
 
+        if let Some(seleted_segment) = selected_segment {
+            fabrik_computer.iterate(base, seleted_segment);
+        }
+
         // Iterate the tree from bottom-up
         let mut explore = vec![base];
         // The latest segment that was updated by the IK solver (because it was pushed)
         // Next IK optimizations should only reach back until this segment.
         let mut last_fixed_segment = base;
-        while !explore.is_empty() {
+        while false && !explore.is_empty() {
             let segment_id = explore.pop().unwrap();
             let segment_data = fabrik_computer.segments[&segment_id];
 
@@ -315,7 +329,7 @@ fn handle_segment_collisions(
                         .try_normalize()
                         .unwrap_or(Vec3::Y);
                     if projected_point.is_inside {
-                        Some(projected_point.point + (normal * collider_offset) + (normal * vel)) 
+                        Some(projected_point.point + (normal * collider_offset) + (normal * vel))
                     } else if original_xyz.distance_squared(projected_point.point)
                         < collider_offset * collider_offset
                     {
@@ -343,18 +357,30 @@ fn handle_segment_collisions(
         }
 
         let mut explore = vec![base];
+        // let mut global_transforms = HashMap::<Entity, Transform>::new();
+        // global_transforms.insert(base, transform.compute_transform());
         let mut step_translation = Vec3::ZERO;
         while !explore.is_empty() {
             let segment_id = explore.pop().unwrap();
             let segment_data = fabrik_computer.segments[&segment_id];
 
-            if let Some(forward) = segment_data.forward {
-                explore.push(forward)
-            }
+            // if let Some(backward) = segment_data.backward {
+            //     global_transforms.insert(segment_id, )
+            // }
 
-            if let Some(backward) = segment_data.backward {
+            if let Some(forward) = segment_data.forward {
+                explore.push(forward);
+
+                // let mut this_transform = segments_query.get_mut(segment_id).unwrap().0;
+                // let this_position = fabrik_computer.global_xyz[&segment_id];
+                // let next_position = fabrik_computer.global_xyz[&forward];
+                // let current_direction = global_transforms[&segment_id].rotation * Vec3::Y;
+                // let target_direction = (next_position - this_position).normalize();
+                // this_transform.rotate(Quat::from_rotation_arc(current_direction, target_direction));
+                // global_transforms.insert(forward, )
+
                 lines.line_colored(
-                    step_translation + fabrik_computer.global_xyz[&backward],
+                    step_translation + fabrik_computer.global_xyz[&forward],
                     step_translation + fabrik_computer.global_xyz[&segment_id],
                     0.0,
                     Color::ORANGE_RED,
