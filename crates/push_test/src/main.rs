@@ -1,12 +1,10 @@
-use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
-
 use bevy::{prelude::*, utils::HashMap};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::Selection;
 use bevy_prototype_debug_lines::*;
-use bevy_rapier3d::{plugin, prelude::*};
+use bevy_rapier3d::{prelude::*};
 use itertools::Itertools;
-use rand::{seq::IteratorRandom, thread_rng, Rng};
+use rand::{thread_rng};
 
 fn main() {
     App::new()
@@ -173,7 +171,7 @@ fn setup(
         })
         .insert(Restitution::coefficient(0.7))
         // .insert(Velocity::linear(Vec3::X * 0.6))
-        .insert_bundle(bevy_mod_picking::PickableBundle::default())
+        .insert(bevy_mod_picking::PickableBundle::default())
         .insert(bevy_transform_gizmo::GizmoTransformable)
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
 }

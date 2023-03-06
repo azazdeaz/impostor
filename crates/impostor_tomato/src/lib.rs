@@ -6,3 +6,6 @@
 
 mod create_demo_plant;
 pub use create_demo_plant::*;
+
+mod fabrik;
+pub use fabrik::*;

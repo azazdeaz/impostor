@@ -228,15 +228,13 @@ fn create_stem_skeleton(
     let mut sections = Vec::with_capacity(joint_count as usize + 1);
     let (start_x, start_z) = start_pos.unwrap_or_default();
 
-    let draft = (0..joint_count + 1)
-        .map(|i| {
-            let transform =
+    for i in 0..(joint_count + 1) {
+        let transform =
                 Transform::from_xyz(start_x, joint_height * (i as f32), start_z).with_rotation(rotation);
 
             let r = radius.0 + (radius.1 - radius.0) * (i as f32 / (joint_count - 1) as f32);
             (transform, r)
-        })
-        .collect_vec();
+    }
     let (draft_end, draft_joints) = draft.split_last().unwrap();
 
     for (i, (transform, r)) in draft_joints.iter().enumerate() {
@@ -297,10 +295,10 @@ fn create_stem_skeleton(
 
 pub fn create_demo_plant(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
-    asset_server: Res<AssetServer>,
+    // mut meshes: ResMut<Assets<Mesh>>,
+    // mut materials: ResMut<Assets<StandardMaterial>>,
+    // mut skinned_mesh_inverse_bindposes_assets: ResMut<Assets<SkinnedMeshInverseBindposes>>,
+    // asset_server: Res<AssetServer>,
 ) {
     for ix in -1..1 {
         for iz in -1..1 {
