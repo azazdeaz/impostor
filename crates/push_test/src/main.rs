@@ -5,6 +5,8 @@ use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::{prelude::*};
 use itertools::Itertools;
 use rand::{thread_rng};
+use push_test::*;
+
 
 fn main() {
     App::new()
@@ -31,18 +33,6 @@ struct Pushable {
 #[derive(Component)]
 struct TargetRotation(Quat);
 
-#[derive(Component)]
-struct PlantBase {}
-
-#[derive(Component, Clone, Copy)]
-struct SegmentData {
-    collider: Entity,
-    forward: Option<Entity>,
-    backward: Option<Entity>,
-    length: f32,
-    previous_rotation: Quat,
-    target_rotation: Quat,
-}
 
 fn setup(
     mut commands: Commands,
@@ -108,7 +98,6 @@ fn setup(
         let segment_data = SegmentData {
             length: segment_length,
             previous_rotation: Quat::IDENTITY,
-            target_rotation: Quat::IDENTITY,
             collider: colliders[i],
             forward: if i < segments.len() - 1 {
                 Some(segments[i + 1])
@@ -176,49 +165,7 @@ fn setup(
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
 }
 
-struct FabrikComputer {
-    global_xyz: HashMap<Entity, Vec3>,
-    segments: HashMap<Entity, SegmentData>,
-    // contacts:
-}
 
-enum FabrikDirection {
-    Forward,
-    Backward,
-}
-
-impl FabrikComputer {
-    fn iterate_half(&mut self, from: Entity, to: Entity, direction: FabrikDirection) {
-        let mut from = from;
-        while from != to {
-            let from_segment = self.segments[&from];
-            let from_xyz = self.global_xyz[&from];
-            let next = match direction {
-                FabrikDirection::Forward => from_segment.forward.unwrap(),
-                FabrikDirection::Backward => from_segment.backward.unwrap(),
-            };
-            let next_segment = self.segments[&next];
-            let next_xyz = self.global_xyz[&next];
-            let length = match direction {
-                FabrikDirection::Forward => from_segment.length,
-                FabrikDirection::Backward => next_segment.length,
-            };
-            let from_to_next = next_xyz - from_xyz;
-            self.global_xyz
-                .insert(next, from_xyz + (from_to_next.normalize() * length));
-
-            from = next;
-        }
-    }
-
-    fn iterate(&mut self, start: Entity, end: Entity) {
-        let start_xyz = self.global_xyz[&start];
-        self.iterate_half(end, start, FabrikDirection::Backward);
-        // recover start joint position befor iterating forward
-        self.global_xyz.insert(start, start_xyz);
-        self.iterate_half(start, end, FabrikDirection::Forward);
-    }
-}
 
 fn handle_segment_collisions(
     bases: Query<(Entity, &GlobalTransform), With<PlantBase>>,
