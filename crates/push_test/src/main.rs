@@ -105,15 +105,27 @@ fn setup(
             backward: if i > 0 { Some(segments[i - 1]) } else { None },
         };
 
+        let child_container = commands
+            .spawn(Name::new("Child Container"))
+            .insert(TransformBundle::from_transform(
+                Transform::from_translation(Vec3::Y * segment_data.length),
+            ))
+            .insert(VisibilityBundle::default())
+            .id();
+
         commands
             .entity(segment)
             .insert(segment_data)
             .insert(TransformBundle::from(Transform::from_rotation(
                 Quat::from_rotation_x(0.2),
             )))
+            .add_child(child_container);
+
+        commands
+            .entity(child_container)
             .add_child(segment_data.collider);
         if let Some(next) = segment_data.forward {
-            commands.entity(segment).add_child(next);
+            commands.entity(child_container).add_child(next);
         }
     }
     commands
@@ -162,7 +174,8 @@ fn setup(
 }
 
 fn handle_segment_collisions(
-    bases: Query<(Entity, &GlobalTransform), With<PlantBase>>,
+    bases: Query<Entity, With<PlantBase>>,
+    global_transforms_query: Query<&GlobalTransform>,
     mut segments_query: Query<(&mut Transform, &mut SegmentData, &Selection)>,
     mut colliders_query: Query<(&Collider, &GlobalTransform, Option<&mut Velocity>)>,
     rapier_context: Res<RapierContext>,
@@ -171,7 +184,7 @@ fn handle_segment_collisions(
 ) {
     let delta_time = time.delta_seconds();
 
-    for (base, transform) in bases.iter() {
+    for base in bases.iter() {
         let mut global_transforms = HashMap::<Entity, Transform>::new();
         let mut segments = HashMap::<Entity, SegmentData>::new();
         // Selected with the transform gizmo (mimic grasping)
@@ -180,7 +193,13 @@ fn handle_segment_collisions(
 
         // Buffer positions and segment data
         let mut explore = vec![base];
-        global_transforms.insert(base, transform.compute_transform());
+        global_transforms.insert(
+            base,
+            global_transforms_query
+                .get(base)
+                .unwrap()
+                .compute_transform(),
+        );
         while !explore.is_empty() {
             let segment_id = explore.pop().unwrap();
             let (&transform, &segment, &selection) =
@@ -200,7 +219,11 @@ fn handle_segment_collisions(
                 let &parent_transform = global_transforms.get(&backward).expect(
                     "Incorrect structure! Couldn't find the backward entity in the `global_transforms` buffer",
                 );
-                let global_transform = parent_transform * transform;
+                let global_transform = global_transforms_query
+                    .get(segment_id)
+                    .unwrap()
+                    .compute_transform();
+
                 global_transforms.insert(segment_id, global_transform);
                 lines.line_colored(
                     global_transform.translation,
@@ -343,8 +366,8 @@ fn handle_segment_collisions(
                     Color::LIME_GREEN,
                 );
                 if !selection.selected() {
-                    *this_transform = Transform::from_translation(Vec3::Y * segment_data.length)
-                        * Transform::from_rotation(rotation_difference * this_transform.rotation);
+                    *this_transform =
+                        Transform::from_rotation(rotation_difference * this_transform.rotation);
                 }
 
                 lines.line_colored(
