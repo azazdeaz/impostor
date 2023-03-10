@@ -2,11 +2,10 @@ use bevy::{prelude::*, utils::HashMap};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::Selection;
 use bevy_prototype_debug_lines::*;
-use bevy_rapier3d::{prelude::*};
+use bevy_rapier3d::prelude::*;
 use itertools::Itertools;
-use rand::{thread_rng};
 use push_test::*;
-
+use rand::thread_rng;
 
 fn main() {
     App::new()
@@ -32,7 +31,6 @@ struct Pushable {
 
 #[derive(Component)]
 struct TargetRotation(Quat);
-
 
 fn setup(
     mut commands: Commands,
@@ -110,10 +108,8 @@ fn setup(
         commands
             .entity(segment)
             .insert(segment_data)
-            .insert(TransformBundle::from(Transform::from_xyz(
-                0.0,
-                if i == 0 { 0.0 } else { segment_length },
-                0.0,
+            .insert(TransformBundle::from(Transform::from_rotation(
+                Quat::from_rotation_x(0.2),
             )))
             .add_child(segment_data.collider);
         if let Some(next) = segment_data.forward {
@@ -165,8 +161,6 @@ fn setup(
         .insert(TransformBundle::from(Transform::from_xyz(-2.0, 2.0, 0.0)));
 }
 
-
-
 fn handle_segment_collisions(
     bases: Query<(Entity, &GlobalTransform), With<PlantBase>>,
     mut segments_query: Query<(&mut Transform, &mut SegmentData, &Selection)>,
@@ -180,6 +174,7 @@ fn handle_segment_collisions(
     for (base, transform) in bases.iter() {
         let mut global_transforms = HashMap::<Entity, Transform>::new();
         let mut segments = HashMap::<Entity, SegmentData>::new();
+        // Selected with the transform gizmo (mimic grasping)
         let mut selected_segment = None;
         let mut end_segment = base;
 
@@ -188,10 +183,11 @@ fn handle_segment_collisions(
         global_transforms.insert(base, transform.compute_transform());
         while !explore.is_empty() {
             let segment_id = explore.pop().unwrap();
-            let (&transform, &segment, &selection) = segments_query.get(segment_id).expect(&format!(
-                "Can't find segment entity '{:?}' in segments query.",
-                segment_id
-            ));
+            let (&transform, &segment, &selection) =
+                segments_query.get(segment_id).expect(&format!(
+                    "Can't find segment entity '{:?}' in segments query.",
+                    segment_id
+                ));
 
             end_segment = segment_id;
             if selection.selected() {
@@ -204,14 +200,14 @@ fn handle_segment_collisions(
                 let &parent_transform = global_transforms.get(&backward).expect(
                     "Incorrect structure! Couldn't find the backward entity in the `global_transforms` buffer",
                 );
-                let global_transform = transform * parent_transform;
+                let global_transform = parent_transform * transform;
                 global_transforms.insert(segment_id, global_transform);
-                // lines.line_colored(
-                //     global_transform.translation,
-                //     parent_transform.translation,
-                //     0.0,
-                //     Color::LIME_GREEN,
-                // );
+                lines.line_colored(
+                    global_transform.translation,
+                    parent_transform.translation,
+                    0.0,
+                    Color::GRAY,
+                );
             }
 
             if let Some(forward) = segment.forward {
@@ -227,8 +223,18 @@ fn handle_segment_collisions(
             segments,
         };
 
+        // Solve IK up until the grasped segment
         if let Some(seleted_segment) = selected_segment {
-            fabrik_computer.iterate(base, seleted_segment);
+            for _ in 0..12 {
+                fabrik_computer.iterate(base, seleted_segment);
+                fabrik_computer.iterate_half(
+                    seleted_segment,
+                    end_segment,
+                    FabrikDirection::Forward,
+                );
+            }
+        } else {
+            fabrik_computer.iterate_half(base, end_segment, FabrikDirection::Forward)
         }
 
         // Iterate the tree from bottom-up
@@ -316,13 +322,30 @@ fn handle_segment_collisions(
             if let Some(forward) = segment_data.forward {
                 explore.push(forward);
 
-                // let mut this_transform = segments_query.get_mut(segment_id).unwrap().0;
-                // let this_position = fabrik_computer.global_xyz[&segment_id];
-                // let next_position = fabrik_computer.global_xyz[&forward];
-                // let current_direction = global_transforms[&segment_id].rotation * Vec3::Y;
-                // let target_direction = (next_position - this_position).normalize();
-                // this_transform.rotate(Quat::from_rotation_arc(current_direction, target_direction));
-                // global_transforms.insert(forward, )
+                let (mut this_transform, segment_data, selection) =
+                    segments_query.get_mut(segment_id).unwrap();
+                let this_position = fabrik_computer.global_xyz[&segment_id];
+                let next_position = fabrik_computer.global_xyz[&forward];
+                let current_direction = global_transforms[&segment_id].rotation * Vec3::Y;
+                let target_direction = (next_position - this_position).normalize();
+                let rotation_difference =
+                    Quat::from_rotation_arc(current_direction, target_direction);
+                lines.line_colored(
+                    this_position,
+                    this_position + current_direction * 0.2,
+                    0.0,
+                    Color::PINK,
+                );
+                lines.line_colored(
+                    this_position,
+                    this_position + rotation_difference * current_direction * 0.2,
+                    0.0,
+                    Color::LIME_GREEN,
+                );
+                if !selection.selected() {
+                    *this_transform = Transform::from_translation(Vec3::Y * segment_data.length)
+                        * Transform::from_rotation(rotation_difference * this_transform.rotation);
+                }
 
                 lines.line_colored(
                     step_translation + fabrik_computer.global_xyz[&forward],
