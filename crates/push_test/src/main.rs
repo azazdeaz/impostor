@@ -334,30 +334,21 @@ fn handle_segment_collisions(
         }
 
         let mut explore = vec![base_id];
-        // let mut global_transforms = HashMap::<Entity, Transform>::new();
-        // global_transforms.insert(base, transform.compute_transform());
-        let mut step_translation = Vec3::ZERO;
         while !explore.is_empty() {
             let segment_id = explore.pop().unwrap();
             let segment_data = fabrik_computer.segments[&segment_id];
 
-            // if let Some(backward) = segment_data.backward {
-            //     global_transforms.insert(segment_id, )
-            // }
+            let (_, mut this_transform, _, selection) =
+                colliders_query.get_mut(segment_data.collider).unwrap();
+            let this_position = fabrik_computer.global_xyz[&segment_id];
 
             if let Some(forward) = segment_data.forward {
                 explore.push(forward);
 
-                let segment_data: &SegmentData = segments_query.get_component(segment_id).unwrap();
-                let mut this_transform = colliders_query
-                    .get_component_mut::<Transform>(segment_data.collider)
-                    .unwrap();
-                let this_position = fabrik_computer.global_xyz[&segment_id];
                 let next_position = fabrik_computer.global_xyz[&forward];
                 let current_direction = segment_data.target_rotation * Vec3::Y;
                 let target_direction = (next_position - this_position).normalize();
-                let rotation =
-                    Quat::from_rotation_arc(current_direction, target_direction);
+                let rotation = Quat::from_rotation_arc(current_direction, target_direction);
                 lines.line_colored(
                     this_position,
                     this_position + current_direction * 0.2,
@@ -370,109 +361,111 @@ fn handle_segment_collisions(
                     0.0,
                     Color::LIME_GREEN,
                 );
-                // if !selection.selected() {
-                *this_transform = Transform::from_translation(this_position) *
-                    Transform::from_rotation(rotation   );
-                // }
+                if !selection.selected() {
+                    *this_transform = Transform::from_translation(this_position)
+                        * Transform::from_rotation(rotation);
+                }
 
                 lines.line_colored(
-                    step_translation + fabrik_computer.global_xyz[&forward],
-                    step_translation + fabrik_computer.global_xyz[&segment_id],
+                    fabrik_computer.global_xyz[&forward],
+                    fabrik_computer.global_xyz[&segment_id],
                     0.0,
                     Color::ORANGE_RED,
                 );
-            }
-
-            step_translation.x += 0.0;
-        }
-    }
-}
-
-fn handle_collisions(
-    mut pushables: Query<(Entity, &mut Transform, &mut Pushable, &Selection)>,
-    rapier_context: Res<RapierContext>,
-    mut colliders_query: Query<
-        (&Collider, &GlobalTransform, Option<&mut Velocity>),
-        Without<Pushable>,
-    >,
-    time: Res<Time>,
-    mut lines: ResMut<DebugLines>,
-) {
-    let delta_time = time.delta_seconds();
-
-    for (entity, mut transform, mut pushable, selection) in pushables.iter_mut() {
-        println!(
-            "\n\n\nentity {:?} selected={:?}",
-            entity,
-            selection.selected()
-        );
-        println!("prev={:?}", pushable.prev_position.translation);
-        let lin_vel = transform.translation - pushable.prev_position.translation;
-        pushable.prev_position = transform.clone();
-
-        if (selection.selected()) {
-            continue;
-        }
-        println!("new prev={:?}", pushable.prev_position.translation);
-        let lin_acc = (pushable.home_position.translation - transform.translation);
-        let friction = 0.92;
-        println!("before={:?}", transform.translation);
-        transform.translation =
-            (transform.translation + lin_vel * friction + lin_acc * delta_time.powi(2)).into();
-        println!("lin_vel={:?} lin_acc={:?}", lin_vel, lin_acc);
-        println!("after={:?}", transform.translation);
-
-        let collider_offset = 0.4;
-        let collider_velocity_coefficient = 1.0;
-        for contact_pair in rapier_context.contacts_with(entity) {
-            let other_entity = if contact_pair.collider1() == entity {
-                contact_pair.collider2()
             } else {
-                contact_pair.collider1()
-            };
-            let Ok((other_collider, other_transform, other_velocity)) = colliders_query.get_mut(other_entity) else {
-                // error!("Couldn't find collider on entity {:?}", entity);
-                continue;
-            };
-            let vel = other_velocity.as_ref().map_or(0.0, |v| {
-                v.linvel.length_squared() * delta_time * delta_time * collider_velocity_coefficient
-            });
-            let pushed_position = {
-                let other_transform = other_transform.compute_transform();
-                let projected_point = other_collider.project_point(
-                    other_transform.translation,
-                    other_transform.rotation,
-                    transform.translation,
-                    false,
-                );
-
-                let normal: Vec3 = (projected_point.point - transform.translation)
-                    .try_normalize()
-                    .unwrap_or(Vec3::Y);
-                if projected_point.is_inside {
-                    Some(projected_point.point + (normal * collider_offset) + (normal * vel))
-                } else if transform
-                    .translation
-                    .distance_squared(projected_point.point)
-                    < collider_offset * collider_offset
-                {
-                    Some(projected_point.point - (normal * collider_offset))
-                } else {
-                    None
+                if !selection.selected() {
+                    *this_transform = Transform::from_translation(this_position);
                 }
-            };
-            if let Some(position) = pushed_position {
-                lines.line(transform.translation, position, 0.0);
-                transform.translation = position.into();
             }
-
-            // let collider_dampen_others = Some(0.05);
-            // if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider_dampen_others) {
-            //     let damp = 1.0 - dampen_coef;
-            //     vel.linvel *= damp;
-            //     vel.angvel *= damp;
-            // }
         }
-        // *rapier_collider = get_collider(rendering, collider, None);
     }
 }
+
+// fn handle_collisions(
+//     mut pushables: Query<(Entity, &mut Transform, &mut Pushable, &Selection)>,
+//     rapier_context: Res<RapierContext>,
+//     mut colliders_query: Query<
+//         (&Collider, &GlobalTransform, Option<&mut Velocity>),
+//         Without<Pushable>,
+//     >,
+//     time: Res<Time>,
+//     mut lines: ResMut<DebugLines>,
+// ) {
+//     let delta_time = time.delta_seconds();
+
+//     for (entity, mut transform, mut pushable, selection) in pushables.iter_mut() {
+//         println!(
+//             "\n\n\nentity {:?} selected={:?}",
+//             entity,
+//             selection.selected()
+//         );
+//         println!("prev={:?}", pushable.prev_position.translation);
+//         let lin_vel = transform.translation - pushable.prev_position.translation;
+//         pushable.prev_position = transform.clone();
+
+//         if (selection.selected()) {
+//             continue;
+//         }
+//         println!("new prev={:?}", pushable.prev_position.translation);
+//         let lin_acc = (pushable.home_position.translation - transform.translation);
+//         let friction = 0.92;
+//         println!("before={:?}", transform.translation);
+//         transform.translation =
+//             (transform.translation + lin_vel * friction + lin_acc * delta_time.powi(2)).into();
+//         println!("lin_vel={:?} lin_acc={:?}", lin_vel, lin_acc);
+//         println!("after={:?}", transform.translation);
+
+//         let collider_offset = 0.4;
+//         let collider_velocity_coefficient = 1.0;
+//         for contact_pair in rapier_context.contacts_with(entity) {
+//             let other_entity = if contact_pair.collider1() == entity {
+//                 contact_pair.collider2()
+//             } else {
+//                 contact_pair.collider1()
+//             };
+//             let Ok((other_collider, other_transform, other_velocity)) = colliders_query.get_mut(other_entity) else {
+//                 // error!("Couldn't find collider on entity {:?}", entity);
+//                 continue;
+//             };
+//             let vel = other_velocity.as_ref().map_or(0.0, |v| {
+//                 v.linvel.length_squared() * delta_time * delta_time * collider_velocity_coefficient
+//             });
+//             let pushed_position = {
+//                 let other_transform = other_transform.compute_transform();
+//                 let projected_point = other_collider.project_point(
+//                     other_transform.translation,
+//                     other_transform.rotation,
+//                     transform.translation,
+//                     false,
+//                 );
+
+//                 let normal: Vec3 = (projected_point.point - transform.translation)
+//                     .try_normalize()
+//                     .unwrap_or(Vec3::Y);
+//                 if projected_point.is_inside {
+//                     Some(projected_point.point + (normal * collider_offset) + (normal * vel))
+//                 } else if transform
+//                     .translation
+//                     .distance_squared(projected_point.point)
+//                     < collider_offset * collider_offset
+//                 {
+//                     Some(projected_point.point - (normal * collider_offset))
+//                 } else {
+//                     None
+//                 }
+//             };
+//             if let Some(position) = pushed_position {
+//                 lines.line(transform.translation, position, 0.0);
+//                 transform.translation = position.into();
+//             }
+
+//             // let collider_dampen_others = Some(0.05);
+//             // if let Some((ref mut vel, dampen_coef)) = other_velocity.zip(collider_dampen_others) {
+//             //     let damp = 1.0 - dampen_coef;
+//             //     vel.linvel *= damp;
+//             //     vel.angvel *= damp;
+//             // }
+//         }
+//         // *rapier_collider = get_collider(rendering, collider, None);
+//     }
+// }
