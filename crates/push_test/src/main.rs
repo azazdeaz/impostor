@@ -183,6 +183,24 @@ fn handle_segment_collisions(
     for (base_id, base) in bases.iter() {
         let mut global_transforms = HashMap::<Entity, Transform>::new();
         let mut segments = HashMap::<Entity, SegmentData>::new();
+
+        let mut explore = vec![base_id];
+        while !explore.is_empty() {
+            let segment_id = explore.pop().unwrap();
+            let mut segment = segments_query.get_mut(segment_id).expect(&format!(
+                "Can't find segment entity '{:?}' in segments query.",
+                segment_id
+            ));
+            let &transform: &Transform = colliders_query.get_component(segment.collider).unwrap();
+            let current_rotation = transform.rotation;
+            let rotation_difference = current_rotation * segment.previous_rotation.inverse();
+            // segment.previous_rotation = current_rotation;
+
+            if let Some(forward) = segment.forward {
+                explore.push(forward)
+            }
+        }
+
         // Selected with the transform gizmo (mimic grasping)
         let mut selected_segment = None;
         let mut end_segment = base_id;
@@ -214,17 +232,21 @@ fn handle_segment_collisions(
                 let &parent_segment = segments.get(&backward).expect(
                     "Incorrect structure! Couldn't find the backward entity in the `segments` buffer",
                 );
-                let global_transform = parent_transform
-                    * Transform::from_xyz(0.0, parent_segment.length, 0.0)
-                    * Transform::from_rotation(segment.previous_rotation);
+                let global_transform = Transform::from_matrix(
+                    Transform::from_rotation(segment.previous_rotation).compute_matrix()
+                        * Transform::from_xyz(0.0, parent_segment.length, 0.0).compute_matrix()
+                        * parent_transform.compute_matrix(),
+                );
+
+                // parent_transform.tra
 
                 global_transforms.insert(segment_id, global_transform);
-                lines.line_colored(
-                    global_transform.translation,
-                    parent_transform.translation,
-                    0.0,
-                    Color::GRAY,
-                );
+                // lines.line_colored(
+                //     global_transform.translation,
+                //     parent_transform.translation,
+                //     0.0,
+                //     Color::GRAY,
+                // );
             }
 
             let selection: &Selection = colliders_query
@@ -260,8 +282,6 @@ fn handle_segment_collisions(
                     FabrikDirection::Forward,
                 );
             }
-        } else {
-            fabrik_computer.iterate_half(base_id, end_segment, FabrikDirection::Forward)
         }
 
         // Iterate the tree from bottom-up
@@ -333,10 +353,11 @@ fn handle_segment_collisions(
             }
         }
 
+        // Update transforms (rotations)
         let mut explore = vec![base_id];
         while !explore.is_empty() {
             let segment_id = explore.pop().unwrap();
-            let segment_data = fabrik_computer.segments[&segment_id];
+            let mut segment_data = fabrik_computer.segments[&segment_id];
 
             let (_, mut this_transform, _, selection) =
                 colliders_query.get_mut(segment_data.collider).unwrap();
@@ -345,9 +366,15 @@ fn handle_segment_collisions(
             if let Some(forward) = segment_data.forward {
                 explore.push(forward);
 
+                // Convert translation diff between segments to rotation
+
+                // Find the global global of the next segment
                 let next_position = fabrik_computer.global_xyz[&forward];
-                let current_direction = segment_data.target_rotation * Vec3::Y;
+                // Get the current direction
+                let current_direction = this_transform.rotation * Vec3::Y;
+                // The requested direction
                 let target_direction = (next_position - this_position).normalize();
+                // The rotation difference between the two directions
                 let rotation = Quat::from_rotation_arc(current_direction, target_direction);
                 lines.line_colored(
                     this_position,
@@ -357,21 +384,23 @@ fn handle_segment_collisions(
                 );
                 lines.line_colored(
                     this_position,
-                    this_position + rotation * current_direction * 0.2,
+                    this_position + segment_data.previous_rotation * Vec3::Y * 0.2,
                     0.0,
                     Color::LIME_GREEN,
                 );
+                // Avoid colliding updates with the transform gizmo
                 if !selection.selected() {
                     *this_transform = Transform::from_translation(this_position)
                         * Transform::from_rotation(rotation);
                 }
 
-                lines.line_colored(
-                    fabrik_computer.global_xyz[&forward],
-                    fabrik_computer.global_xyz[&segment_id],
-                    0.0,
-                    Color::ORANGE_RED,
-                );
+                // lines.line_colored(
+                //     fabrik_computer.global_xyz[&forward],
+                //     fabrik_computer.global_xyz[&segment_id],
+                //     0.0,
+                //     Color::ORANGE_RED,
+                // );
+                // The closing segment (forward is None)
             } else {
                 if !selection.selected() {
                     *this_transform = Transform::from_translation(this_position);
