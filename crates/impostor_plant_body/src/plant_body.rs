@@ -102,5 +102,29 @@ impl PlantBody {
             .get_mut(&id)
             .expect("Unknown point ID")
             .mass = mass;
-    } 
+    }
+
+    pub fn step_physics(&mut self, delta: f32) {
+        for mut point in self.points.values_mut() {
+            if point.is_fixed || point.mass == 0.0 {
+                return;
+            }
+            let friction = 0.95;
+            point.velocity = point.position - point.previous_position;
+            point.previous_position = point.position;
+            point.position += point.velocity * friction + point.acceleration * delta * delta;
+        }
+        
+        // self.velocity = self.position - self.previous_position;
+        // self.acceleration = Vec3::ZERO;
+
+        // self.velocity = self.position - self.previous_position;
+        // self.previous_position = self.position;
+        // let friction = 0.98;
+        // self.position += self.velocity * friction + self.acceleration * delta * delta;
+        // self.velocity = self.position - self.previous_position;
+        // self.acceleration = Vec3::ZERO;
+        // self.velocity = self.position - self.previous_position;
+        
+    }
 }

@@ -3,7 +3,7 @@ use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_prototype_debug_lines::*;
 use bevy_rapier3d::prelude::*;
-use impostor_plant_body::{PlantBody, StemStructure, Point, PointId};
+use impostor_plant_body::{PlantBody, Point, PointId, StemStructure};
 use rand::{seq::IteratorRandom, thread_rng, Rng};
 fn main() {
     App::new()
@@ -108,18 +108,12 @@ fn setup(
 }
 
 fn handle_collisions(
-    mut points_query: Query<
-        (
-            Entity,
-            // &Collider,
-            &mut PointId,
-        ),
-    >,
-    rapier_context: Res<RapierContext>,
+    mut points_query: Query<(Entity, &mut PointId)>,
     mut colliders_query: Query<
         (&Collider, &GlobalTransform, Option<&mut Velocity>),
         Without<PointId>,
     >,
+    rapier_context: Res<RapierContext>,
     mut body: ResMut<PlantBody>,
     time: Res<Time>,
 ) {
@@ -164,6 +158,7 @@ fn handle_collisions(
                 }
             };
             if let Some(position) = pushed_position {
+                println!("PUSH {:?} +> {:?}", position, pushed_position);
                 point.position = position;
             }
 
@@ -189,13 +184,11 @@ fn update(
         let b = body.points.get(&stick.point_b).unwrap().position;
         lines.line(a, b, 0.0);
     }
-    // for (mut point, mut transform) in particles.iter_mut() {
-    //     // particle.accelerate(Vec3::Y * -1.8);
-    //     particle.simulate(time.delta_seconds());
-    //     // particle.restrain();
-    //     particle.reset_forces();
-    //     transform.translation = particle.position;
-    // }
+
+    body.step_physics(time.delta_seconds());
+    for (point, mut transform) in points.iter_mut() {
+        transform.translation = body.points.get(&point).unwrap().position;
+    }
     // let iterations = 32;
     // for _ in 0..iterations {
     //     for constraint in constraints.iter() {
