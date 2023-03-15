@@ -2,6 +2,7 @@
 # members = ["crates/", "demos/*"]
 members = [
     "crates/impostor_soft_body",
+    "crates/impostor_plant_body",
     "crates/push_test",
     "crates/impostor_editor_camera",
     "crates/impostor_tomato",

@@ -2007,6 +2007,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "impostor_plant_body"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_mod_picking",
+ "bevy_prototype_debug_lines",
+ "bevy_rapier3d",
+ "bevy_transform_gizmo 0.5.0 (git+https://github.com/woodroww/my_bevy_transform_gizmo.git?branch=with_parents)",
+ "impostor_editor_camera",
+ "itertools",
+ "nalgebra",
+ "rand 0.8.5",
+ "random_color",
+]
+
+[[package]]
 name = "impostor_soft_body"
 version = "0.1.0"
 dependencies = [
@@ -2014,7 +2030,7 @@ dependencies = [
  "bevy_mod_picking",
  "bevy_prototype_debug_lines",
  "bevy_rapier3d",
- "bevy_transform_gizmo 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bevy_transform_gizmo 0.5.0 (git+https://github.com/woodroww/my_bevy_transform_gizmo.git?branch=with_parents)",
  "impostor_editor_camera",
  "itertools",
  "nalgebra",

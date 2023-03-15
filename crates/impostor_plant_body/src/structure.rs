@@ -5,50 +5,53 @@ use rand::{seq::IteratorRandom, thread_rng, Rng};
 use random_color::RandomColor;
 use std::f32::consts::TAU;
 
-use crate::components::{Constraint, Particle};
+use crate::{PlantBody, PointId};
 
 pub struct StemStructure {
     pub sides: usize,
     pub sections: usize,
     pub section_height: f32,
     pub radius: f32,
-    pub particles: HashMap<(usize, usize), (Particle, Entity)>,
+    pub points: HashMap<(usize, usize), PointId>,
     pub start_translation: Vec3,
     pub orientation: Quat,
     pub fix_first_ring: bool,
 }
 
 impl StemStructure {
-    pub fn connect_to_stem(&self, commands: &mut Commands, stem: &StemStructure) {
-        let mut add_constraint = |a: (Particle, Entity), b: (Particle, Entity)| {
-            let target = (a.0.position - b.0.position).length();
-            commands.spawn(Constraint::new(a.1, b.1, target));
-        };
-
+    // Connects the stem to a parent stem
+    //  Add Sticks between the first ring and some of the closest points on the parent stem
+    pub fn connect_to_stem(
+        &self,
+        body: &mut PlantBody,
+        parent_stem: &StemStructure,
+    ) {
         let mut rng = thread_rng();
         for i_side in 0..self.sides {
-            let particle = self.particles.get(&(0 as usize, i_side)).unwrap();
-            let position = particle.0.position.clone();
-            // find N close particle on the parent stem
-            let parent_particles = stem
-                .particles
-                .clone()
-                .into_values()
+            let &root_point = self.points.get(&(0 as usize, i_side)).unwrap();
+            let position = {body.points.get(&root_point).unwrap().position.clone()};
+            // find N close points on the parent stem
+            let parent_points = parent_stem
+                .points
+                .values()
                 .sorted_by(|p1, p2| {
-                    let l1 = (p1.0.position - position).length();
-                    let l2 = (p2.0.position - position).length();
+                    let pos_1 = body.points.get(&p1).unwrap().position;
+                    let pos_2 = body.points.get(&p2).unwrap().position;
+                    let l1 = (pos_1 - position).length();
+                    let l2 = (pos_2 - position).length();
                     l1.total_cmp(&l2)
                 })
-                // sample randomly from the closest particles
+                // sample randomly from the closest points
                 .take(self.sides * 3)
-                .choose_multiple(&mut rng, self.sides);
-            for parent_particle in parent_particles {
-                add_constraint(parent_particle, *particle)
+                .choose_multiple(&mut rng, self.sides).clone();
+            for parent_point in parent_points {
+                body.add_stick(*parent_point, root_point);
             }
         }
     }
     pub fn spawn(
         &mut self,
+        body: &mut PlantBody,
         commands: &mut Commands,
         meshes: &mut ResMut<Assets<Mesh>>,
         materials: &mut ResMut<Assets<StandardMaterial>>,
@@ -76,47 +79,34 @@ impl StemStructure {
                             z * self.radius,
                         ));
                     let [r, g, b] = RandomColor::new().to_rgb_array();
-                    let particle = Particle {
-                        previous_position: transform.translation,
-                        position: transform.translation,
-                        velocity: Vec3::ZERO,
-                        acceleration: Vec3::Y * -0.01,
-                        mass: 0.01,
-                        is_fixed: self.fix_first_ring && i_section == 0,
-                        // constraints: Vec::new(),
-                    };
+                    let point = body
+                        .add_point(transform.translation, self.fix_first_ring && i_section == 0);
 
-                    let entity = commands
+                    commands
                         .spawn(PbrBundle {
                             mesh: meshes.add(Mesh::from(shape::Icosphere {
-                                radius: self.section_height / 2.0,
+                                radius: self.section_height / 20.0,
                                 subdivisions: 3,
                             })),
                             material: materials.add(
                                 Color::rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
                                     .into(),
                             ),
+                            
                             transform,
                             ..default()
                         })
-                        .insert(particle)
+                        .insert(point)
                         .insert((
-                            RigidBody::KinematicPositionBased,
-                            Collider::ball(self.section_height / 2.0),
-                            SolverGroups::new(Group::NONE, Group::NONE),
-                        ))
-                        .id();
+                            // RigidBody::KinematicPositionBased,
+                            Collider::ball(self.section_height / 20.0),
+                            // SolverGroups::new(Group::NONE, Group::NONE),
+                        ));
 
-                    self.particles
-                        .insert((i_section, i_side), (particle, entity));
-                    (entity, transform.translation)
+                    self.points.insert((i_section, i_side), point);
+                    point
                 })
                 .collect();
-
-            let mut add_constraint = |a: (Entity, Vec3), b: (Entity, Vec3)| {
-                let target = (a.1 - b.1).length();
-                commands.spawn(Constraint::new(a.0, b.0, target));
-            };
 
             let create_tube = false;
 
@@ -125,17 +115,17 @@ impl StemStructure {
                 // get the index of the next particle on the ring
                 let i2_side = (i_side + 1) % self.sides;
                 // connect with the neighbouring particle
-                add_constraint(next_ring[i_side], next_ring[i2_side]);
+                body.add_stick(next_ring[i_side], next_ring[i2_side]);
 
                 // Create tube
                 if create_tube {
                     if i_section > 0 {
                         if i_section % 2 > 0 {
-                            add_constraint(prev_ring[i_side], next_ring[i_side]);
-                            add_constraint(prev_ring[i2_side], next_ring[i_side]);
+                            body.add_stick(prev_ring[i_side], next_ring[i_side]);
+                            body.add_stick(prev_ring[i2_side], next_ring[i_side]);
                         } else {
-                            add_constraint(prev_ring[i_side], next_ring[i_side]);
-                            add_constraint(prev_ring[i_side], next_ring[i2_side]);
+                            body.add_stick(prev_ring[i_side], next_ring[i_side]);
+                            body.add_stick(prev_ring[i_side], next_ring[i2_side]);
                         }
                     }
                 }
@@ -143,7 +133,7 @@ impl StemStructure {
                 else {
                     if i_section > 0 {
                         for i2_side in 0..self.sides {
-                            add_constraint(prev_ring[i2_side], next_ring[i_side]);
+                            body.add_stick(prev_ring[i2_side], next_ring[i_side]);
                         }
                     }
                 }
