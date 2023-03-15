@@ -99,7 +99,7 @@ impl StemStructure {
                         .insert(point)
                         .insert((
                             // RigidBody::KinematicPositionBased,
-                            Collider::ball(self.section_height / 20.0),
+                            Collider::ball(self.section_height / 10.0),
                             // SolverGroups::new(Group::NONE, Group::NONE),
                         ));
 

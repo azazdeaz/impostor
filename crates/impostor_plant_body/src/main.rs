@@ -189,15 +189,9 @@ fn update(
     for (point, mut transform) in points.iter_mut() {
         transform.translation = body.points.get(&point).unwrap().position;
     }
-    // let iterations = 32;
-    // for _ in 0..iterations {
-    //     for constraint in constraints.iter() {
-    //         let particle_ab =
-    //             particles.get_many_mut([constraint.particle_a, constraint.particle_b]);
-    //         if let Ok([mut particle_a, mut particle_b]) = particle_ab {
-    //             constraint.relax_weighted(&mut particle_a.0, &mut particle_b.0);
-    //             lines.line(particle_a.0.position, particle_b.0.position, 0.0);
-    //         }
-    //     }
-    // }
+    let iterations = 2;
+    for _ in 0..iterations {
+        let start_points = body.get_fixed_points();
+        body.ripple(start_points);
+    }
 }
