@@ -118,6 +118,7 @@ fn handle_collisions(
     time: Res<Time>,
 ) {
     let delta_time = time.delta_seconds();
+    let mut pushed_points: Vec<PointId> = Vec::new();
     for (entity, point_id) in points_query.iter_mut() {
         let mut point = body.points.get_mut(&point_id).unwrap();
         let collider_offset = 0.1;
@@ -158,8 +159,8 @@ fn handle_collisions(
                 }
             };
             if let Some(position) = pushed_position {
-                println!("PUSH {:?} +> {:?}", position, pushed_position);
                 point.position = position;
+                pushed_points.push(*point_id);
             }
 
             // let collider_dampen_others = Some(0.05);
@@ -170,6 +171,10 @@ fn handle_collisions(
             // }
         }
         // *rapier_collider = get_collider(rendering, collider, None);
+    }
+
+    if !pushed_points.is_empty() {
+        body.ripple(pushed_points);
     }
 }
 
