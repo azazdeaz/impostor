@@ -99,7 +99,7 @@ impl StemStructure {
                         .insert(point)
                         .insert((
                             // RigidBody::KinematicPositionBased,
-                            Collider::ball(self.section_height / 10.0),
+                            Collider::ball(self.section_height / 4.0),
                             // SolverGroups::new(Group::NONE, Group::NONE),
                         ));
 
@@ -115,7 +115,8 @@ impl StemStructure {
                 // get the index of the next particle on the ring
                 let i2_side = (i_side + 1) % self.sides;
                 // connect with the neighbouring particle
-                body.add_stick(next_ring[i_side], next_ring[i2_side]);
+                let stick = body.add_stick(next_ring[i_side], next_ring[i2_side]);
+                body.update_stick_growth_direction(stick, 0.0);
 
                 // Create tube
                 if create_tube {
@@ -133,7 +134,9 @@ impl StemStructure {
                 else {
                     if i_section > 0 {
                         for i2_side in 0..self.sides {
-                            body.add_stick(prev_ring[i2_side], next_ring[i_side]);
+                            
+                            let stick = body.add_stick(prev_ring[i2_side], next_ring[i_side]);
+                            body.update_stick_growth_direction(stick, 1.0);
                         }
                     }
                 }

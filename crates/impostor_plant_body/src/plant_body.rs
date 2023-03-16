@@ -51,6 +51,8 @@ pub struct Stick {
     pub target: f32,
     pub stiffness: f32,
     pub damping: f32,
+    // 0: same level, 1: point_a -> point_b, -1: point_b -> point_a
+    pub growth_direction: f32,
 }
 
 #[derive(Resource)]
@@ -102,6 +104,7 @@ impl PlantBody {
             target: (position_a - position_b).length(),
             stiffness: 1.0,
             damping: 0.1,
+            growth_direction: 0.0,
         };
         let id = self.stick_id_gen.next();
         // Sticks are saved in the points to make exploring neighbours easier
@@ -112,6 +115,12 @@ impl PlantBody {
     }
     pub fn update_point_mass(&mut self, id: PointId, mass: f32) {
         self.points.get_mut(&id).expect("Unknown point ID").mass = mass;
+    }
+    pub fn update_stick_growth_direction(&mut self, id: StickId, growth_direction: f32) {
+        self.sticks
+            .get_mut(&id)
+            .expect("Unknown stick ID")
+            .growth_direction = growth_direction;
     }
 
     pub fn step_physics(&mut self, delta: f32) {
@@ -200,7 +209,13 @@ impl PlantBody {
     pub fn get_fixed_points(&self) -> Vec<PointId> {
         self.points
             .iter()
-            .filter_map(|(id, point)| if point.is_fixed { Some(id.clone()) } else { None })
+            .filter_map(|(id, point)| {
+                if point.is_fixed {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 }
