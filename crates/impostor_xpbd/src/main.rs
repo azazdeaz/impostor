@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::prelude::*;
+use bevy::{input::mouse::MouseMotion, prelude::*};
 
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
 
@@ -12,6 +12,7 @@ fn main() {
         .add_startup_system(setup)
         .add_system(demo)
         .add_system(draw_soft_bodies)
+        .add_system(drag_particles)
         .run();
 }
 
@@ -73,6 +74,78 @@ fn setup(mut commands: Commands) {
         sticks,
         tetras,
     });
+}
+
+struct DragInfo {
+    soft_body: Entity,
+    index: usize,
+    grab_distance: f32,
+}
+
+#[derive(Default)]
+struct DragParticleState {
+    info: Option<DragInfo>,
+}
+
+fn drag_particles(
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+    mut soft_bodies: Query<(Entity, &mut SoftBody)>,
+    buttons: Res<Input<MouseButton>>,
+    windows: Query<&Window>,
+    mut shapes: ResMut<DebugShapes>,
+    mut motion_evr: EventReader<MouseMotion>,
+    mut drag_state: Local<DragParticleState>,
+) {
+    let Some(cursor_position) = windows.single().cursor_position() else { return; };
+    let (camera, camera_transform) = camera_query.single();
+    // Calculate a ray pointing from the camera into the world based on the cursor's position.
+    let Some(ray) = camera.viewport_to_world(camera_transform, cursor_position) else { return; };
+
+    if buttons.just_pressed(MouseButton::Left) {
+        for (soft_body_id, mut soft_body) in soft_bodies.iter_mut() {
+            let mut closest: Option<(&Vec3, f32)> = None;
+            for verticle in soft_body.verticles.iter() {
+                // calculate the verticle distance from the ray
+                let verticle_from_origin = *verticle - ray.origin;
+                let closest_point_on_ray = ray.direction * verticle_from_origin.dot(ray.direction);
+                let distance = (verticle_from_origin - closest_point_on_ray).length();
+                if distance < 0.1 && (closest.is_none() || distance < closest.unwrap().1) {
+                    closest = Some((verticle, distance));
+                }
+            }
+            if let Some((verticle, _)) = closest {
+                drag_state.info = Some(DragInfo {
+                    soft_body: soft_body_id,
+                    index: soft_body
+                        .verticles
+                        .iter()
+                        .position(|v| v == verticle)
+                        .unwrap(),
+                    grab_distance: (*verticle - ray.origin).length(),
+                });
+            }
+        }
+    } else if buttons.just_released(MouseButton::Left) {
+        drag_state.info = None;
+    }
+
+    if let Some(info) = &drag_state.info {
+        let new_pos = ray.origin + ray.direction * info.grab_distance;
+        shapes
+            .cuboid()
+            .position(new_pos)
+            .size(Vec3::ONE * 0.1)
+            .color(Color::PINK);
+        if let Ok((_, mut soft_body)) = soft_bodies.get_mut(info.soft_body) {
+            soft_body.verticles[info.index] = new_pos;
+        }
+    }
+}
+
+fn mouse_motion(mut motion_evr: EventReader<MouseMotion>) {
+    for ev in motion_evr.iter() {
+        println!("Mouse moved: X: {} px, Y: {} px", ev.delta.x, ev.delta.y);
+    }
 }
 
 fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, soft_bodies: Query<&SoftBody>) {
