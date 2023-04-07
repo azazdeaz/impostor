@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{input::mouse::MouseMotion, prelude::*, reflect::erased_serde::__private::serde::__private::de};
 
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
 
@@ -23,24 +23,38 @@ struct Particle {
     prev_position: Vec3,
     velocity: Vec3,
     force: Vec3,
-    mass: f32,
+    inverse_mass: f32,
 }
 impl Particle {
     fn from_position(position: Vec3) -> Self {
         Self {
             position,
             prev_position: position,
-            mass: 0.1,
+            inverse_mass: 1.0,
             ..default()
         }
+    }
+}
+
+struct Edge {
+    a: usize,
+    b: usize,
+    rest_length: f32,
+}
+impl Edge {
+    fn from_particles(particles: &Vec<Particle>, a: usize, b: usize) -> Self {
+        let rest_length = (particles[a].position - particles[b].position).length();
+        Self { a, b, rest_length }
     }
 }
 
 #[derive(Component)]
 struct SoftBody {
     particles: Vec<Particle>,
-    sticks: Vec<(usize, usize)>,
+    edges: Vec<Edge>,
     tetras: Vec<(usize, usize, usize, usize)>,
+    edge_compliance: f32,
+    volume_compliance: f32,
 }
 
 impl SoftBody {
@@ -57,11 +71,101 @@ impl SoftBody {
             }
         }
     }
+
+    fn solve(&mut self, delta: f32) {
+        self.solve_edges(delta);
+        // // solve the edges
+        // for (i, j) in self.edges.iter() {
+        //     let mut p1 = self.particles[*i].position;
+        //     let mut p2 = self.particles[*j].position;
+        //     let mut delta = p2 - p1;
+        //     let distance = delta.length();
+        //     let mut correction = delta / distance * (distance - 0.2);
+        //     let mut correction_half = correction / 2.0;
+        //     p1 -= correction_half;
+        //     p2 += correction_half;
+        //     self.particles[*i].position = p1;
+        //     self.particles[*j].position = p2;
+        // }
+
+        // // solve the tetrahedrons
+        // for (i, j, k, l) in self.tetras.iter() {
+        //     let mut p1 = self.particles[*i].position;
+        //     let mut p2 = self.particles[*j].position;
+        //     let mut p3 = self.particles[*k].position;
+        //     let mut p4 = self.particles[*l].position;
+
+        //     let mut v1 = p2 - p1;
+        //     let mut v2 = p3 - p1;
+        //     let mut v3 = p4 - p1;
+
+        //     let mut d1 = v2.cross(v3);
+        //     let mut d2 = v3.cross(v1);
+        //     let mut d3 = v1.cross(v2);
+        //     let mut d4 = v2.cross(v1);
+
+        //     let mut volume = v1.dot(d1);
+        //     let mut inv_volume = 1.0 / volume;
+
+        //     let mut c1 = d1 * inv_volume;
+        //     let mut c2 = d2 * inv_volume;
+        //     let mut c3 = d3 * inv_volume;
+        //     let mut c4 = d4 * inv_volume;
+
+        //     let mut rest_volume = 0.2 * 0.2 * 0.2;
+        //     let mut pressure = (volume - rest_volume) * 100.0;
+
+        //     let mut f1 = c1 * pressure;
+        //     let mut f2 = c2 * pressure;
+        //     let mut f3 = c3 * pressure;
+        //     let mut f4 = c4 * pressure;
+
+        //     let mut correction = (f1 + f2 + f3 + f4) / 4.0;
+        //     let mut correction_half = correction / 2.0;
+        //     p1 -= correction_half;
+        //     p2 += correction_half;
+        //     p3 += correction_half;
+        //     p4 += correction_half;
+        //     self.particles[*i].position = p1;
+        //     self.particles[*j].position = p2;
+        //     self.particles[*k].position = p3;
+        //     self.particles[*l].position = p4;
+        // }
+    }
+
+    fn post_solve(&mut self, delta: f32) {
+        for particle in self.particles.iter_mut() {
+            particle.velocity = (particle.position - particle.prev_position) * delta;
+        }
+    }
+
+    fn solve_edges(&mut self, delta: f32) {
+        let alpha = self.edge_compliance / delta / delta;
+        for edge in self.edges.iter() {
+            let w = self.particles[edge.a].inverse_mass + self.particles[edge.b].inverse_mass;
+            if w == 0.0 {
+                continue;
+            }
+            let p1 = self.particles[edge.a].position;
+            let p2 = self.particles[edge.b].position;
+            let diff = p1 - p2;
+            let distance = diff.length(); 
+            if distance == 0.0 {
+                continue;
+            }
+            let direction = diff / distance;
+            let delta = p2 - p1;
+            let distance = delta.length();
+            let residual = -(distance - edge.rest_length) / (w + alpha);
+            self.particles[edge.a].position = p1 + direction * residual * self.particles[edge.a].inverse_mass;
+            self.particles[edge.b].position = p2 - direction * residual * self.particles[edge.b].inverse_mass;
+        }
+    }
 }
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 0.0, 5.0),
+        transform: Transform::from_xyz(0.0, 1.0, 5.0),
         ..default()
     });
 
@@ -69,7 +173,7 @@ fn setup(mut commands: Commands) {
     let radius = 0.4;
     let sections = 7;
     let mut particles = Vec::new();
-    let mut sticks = Vec::new();
+    let mut edges = Vec::new();
     let mut tetras = Vec::new();
 
     for i in 0..=sections {
@@ -90,25 +194,27 @@ fn setup(mut commands: Commands) {
         tetras.push((offset, offset + 1, offset + 4, offset + 5));
     }
 
-    // create sticks between neighboring particles
+    // create edges between neighboring particles
     for i in 0..sections {
         let offset = i * 3;
         // connect vertices on this level
-        sticks.push((offset, offset + 1));
-        sticks.push((offset + 1, offset + 2));
-        sticks.push((offset + 2, offset));
+        edges.push(Edge::from_particles(&particles, offset, offset + 1));
+        edges.push(Edge::from_particles(&particles, offset + 1, offset + 2));
+        edges.push(Edge::from_particles(&particles, offset + 2, offset));
         // connect with vertices on the next level
         for j in 0..3 {
             for k in 0..3 {
-                sticks.push((offset + j, offset + 3 + k));
+                edges.push(Edge::from_particles(&particles, offset + j, offset + 3 + k));
             }
         }
     }
 
     commands.spawn(SoftBody {
         particles,
-        sticks,
+        edges,
         tetras,
+        edge_compliance: 0.1,
+        volume_compliance: 0.1,
     });
 }
 
@@ -129,7 +235,6 @@ fn drag_particles(
     buttons: Res<Input<MouseButton>>,
     windows: Query<&Window>,
     mut shapes: ResMut<DebugShapes>,
-    mut motion_evr: EventReader<MouseMotion>,
     mut drag_state: Local<DragParticleState>,
 ) {
     let Some(cursor_position) = windows.single().cursor_position() else { return; };
@@ -180,17 +285,19 @@ fn simulate(time: Res<Time>, mut soft_bodies: Query<&mut SoftBody>) {
     let gravity = Vec3::new(0.0, -9.81, 0.0);
     for mut soft_body in soft_bodies.iter_mut() {
 
-        soft_body.pre_solve(gravity, delta)
+        soft_body.pre_solve(gravity, delta);
+        soft_body.solve(delta);
+        soft_body.post_solve(delta);
     }
 }
 
 fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, soft_bodies: Query<&SoftBody>) {
     for soft_body in soft_bodies.iter() {
-        for (a, b) in soft_body.sticks.iter() {
+        for edge in soft_body.edges.iter() {
             shapes
                 .line()
-                .start(soft_body.particles[*a].position)
-                .end(soft_body.particles[*b].position)
+                .start(soft_body.particles[edge.a].position)
+                .end(soft_body.particles[edge.b].position)
                 .color(Color::WHITE);
         }
     }
