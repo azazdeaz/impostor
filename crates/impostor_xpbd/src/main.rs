@@ -35,7 +35,7 @@ impl Particle {
         Self {
             position,
             prev_position: position,
-            inverse_mass: 1.0,
+            inverse_mass: 0.0,
             ..default()
         }
     }
@@ -61,7 +61,7 @@ struct Tetra {
     rest_volume: f32,
 }
 impl Tetra {
-    fn from_particles(particles: &Vec<Particle>, a: usize, b: usize, c: usize, d: usize) -> Self {
+    fn from_particles(particles: &mut Vec<Particle>, a: usize, b: usize, c: usize, d: usize) -> Self {
         let mut tetra = Self {
             a,
             b,
@@ -70,6 +70,13 @@ impl Tetra {
             rest_volume: 0.0,
         };
         tetra.rest_volume = tetra.volume(particles);
+        if tetra.rest_volume > 0.0 {
+            let quarter_inverse_mass = 1.0 / (tetra.rest_volume / 4.0);
+            particles[a].inverse_mass += quarter_inverse_mass;
+            particles[b].inverse_mass += quarter_inverse_mass;
+            particles[c].inverse_mass += quarter_inverse_mass;
+            particles[d].inverse_mass += quarter_inverse_mass;
+        }
         tetra
     }
     fn volume(&self, particles: &Vec<Particle>) -> f32 {
@@ -212,21 +219,21 @@ fn setup(mut commands: Commands) {
     for i in 0..sections {
         let offset = i * 3;
         tetras.push(Tetra::from_particles(
-            &particles,
+            &mut particles,
             offset,
             offset + 1,
             offset + 2,
             offset + 5,
         ));
         tetras.push(Tetra::from_particles(
-            &particles,
+            &mut particles,
             offset,
             offset + 3,
             offset + 4,
             offset + 5,
         ));
         tetras.push(Tetra::from_particles(
-            &particles,
+            &mut particles,
             offset,
             offset + 1,
             offset + 4,
@@ -253,8 +260,8 @@ fn setup(mut commands: Commands) {
         particles,
         edges,
         tetras,
-        edge_compliance: 0.9,
-        volume_compliance: 0.9,
+        edge_compliance: 0.1,
+        volume_compliance: 0.1,
     });
 }
 
