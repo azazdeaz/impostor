@@ -13,14 +13,50 @@ fn main() {
         .add_system(demo)
         .add_system(draw_soft_bodies)
         .add_system(drag_particles)
+        .add_system(simulate)
         .run();
+}
+
+#[derive(Default)]
+struct Particle {
+    position: Vec3,
+    prev_position: Vec3,
+    velocity: Vec3,
+    force: Vec3,
+    mass: f32,
+}
+impl Particle {
+    fn from_position(position: Vec3) -> Self {
+        Self {
+            position,
+            prev_position: position,
+            mass: 0.1,
+            ..default()
+        }
+    }
 }
 
 #[derive(Component)]
 struct SoftBody {
-    verticles: Vec<Vec3>,
+    particles: Vec<Particle>,
     sticks: Vec<(usize, usize)>,
     tetras: Vec<(usize, usize, usize, usize)>,
+}
+
+impl SoftBody {
+    fn pre_solve(&mut self, gravity: Vec3, delta: f32) {
+        for particle in self.particles.iter_mut() {
+            particle.velocity += gravity * delta;
+            particle.prev_position = particle.position;
+            particle.position += particle.velocity * delta;
+
+            // bounce off the ground
+            if particle.position.y < 0.0 {
+                particle.position = particle.prev_position;
+                particle.position.y = 0.0;
+            }
+        }
+    }
 }
 
 fn setup(mut commands: Commands) {
@@ -32,7 +68,7 @@ fn setup(mut commands: Commands) {
     let length = 6.0;
     let radius = 0.4;
     let sections = 7;
-    let mut verticles = Vec::new();
+    let mut particles = Vec::new();
     let mut sticks = Vec::new();
     let mut tetras = Vec::new();
 
@@ -42,7 +78,7 @@ fn setup(mut commands: Commands) {
             let x = radius * angle.cos();
             let z = radius * angle.sin();
             let y = i as f32 / sections as f32 * length;
-            verticles.push(Vec3::new(x, y, z));
+            particles.push(Particle::from_position(Vec3::new(x, y, z)));
         }
     }
 
@@ -54,7 +90,7 @@ fn setup(mut commands: Commands) {
         tetras.push((offset, offset + 1, offset + 4, offset + 5));
     }
 
-    // create sticks between neighboring verticles
+    // create sticks between neighboring particles
     for i in 0..sections {
         let offset = i * 3;
         // connect vertices on this level
@@ -70,7 +106,7 @@ fn setup(mut commands: Commands) {
     }
 
     commands.spawn(SoftBody {
-        verticles,
+        particles,
         sticks,
         tetras,
     });
@@ -103,25 +139,22 @@ fn drag_particles(
 
     if buttons.just_pressed(MouseButton::Left) {
         for (soft_body_id, mut soft_body) in soft_bodies.iter_mut() {
-            let mut closest: Option<(&Vec3, f32)> = None;
-            for verticle in soft_body.verticles.iter() {
-                // calculate the verticle distance from the ray
-                let verticle_from_origin = *verticle - ray.origin;
-                let closest_point_on_ray = ray.direction * verticle_from_origin.dot(ray.direction);
-                let distance = (verticle_from_origin - closest_point_on_ray).length();
+            let mut closest: Option<(usize, f32)> = None;
+            for (idx, particle) in soft_body.particles.iter().enumerate() {
+                // calculate the particle distance from the ray
+                let particle_from_origin = particle.position - ray.origin;
+                let closest_point_on_ray = ray.direction * particle_from_origin.dot(ray.direction);
+                let distance = (particle_from_origin - closest_point_on_ray).length();
                 if distance < 0.1 && (closest.is_none() || distance < closest.unwrap().1) {
-                    closest = Some((verticle, distance));
+                    closest = Some((idx, distance));
                 }
             }
-            if let Some((verticle, _)) = closest {
+            if let Some((index, _)) = closest {
+                let particle_position = soft_body.particles[index].position;
                 drag_state.info = Some(DragInfo {
                     soft_body: soft_body_id,
-                    index: soft_body
-                        .verticles
-                        .iter()
-                        .position(|v| v == verticle)
-                        .unwrap(),
-                    grab_distance: (*verticle - ray.origin).length(),
+                    index,
+                    grab_distance: (particle_position - ray.origin).length(),
                 });
             }
         }
@@ -137,14 +170,17 @@ fn drag_particles(
             .size(Vec3::ONE * 0.1)
             .color(Color::PINK);
         if let Ok((_, mut soft_body)) = soft_bodies.get_mut(info.soft_body) {
-            soft_body.verticles[info.index] = new_pos;
+            soft_body.particles[info.index].position = new_pos;
         }
     }
 }
 
-fn mouse_motion(mut motion_evr: EventReader<MouseMotion>) {
-    for ev in motion_evr.iter() {
-        println!("Mouse moved: X: {} px, Y: {} px", ev.delta.x, ev.delta.y);
+fn simulate(time: Res<Time>, mut soft_bodies: Query<&mut SoftBody>) {
+    let delta = time.delta_seconds();
+    let gravity = Vec3::new(0.0, -9.81, 0.0);
+    for mut soft_body in soft_bodies.iter_mut() {
+
+        soft_body.pre_solve(gravity, delta)
     }
 }
 
@@ -153,8 +189,8 @@ fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, soft_bodies: Query<&SoftBod
         for (a, b) in soft_body.sticks.iter() {
             shapes
                 .line()
-                .start(soft_body.verticles[*a])
-                .end(soft_body.verticles[*b])
+                .start(soft_body.particles[*a].position)
+                .end(soft_body.particles[*b].position)
                 .color(Color::WHITE);
         }
     }
