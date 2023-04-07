@@ -1,17 +1,19 @@
 use std::f32::consts::PI;
 
-use bevy::{
-    input::mouse::MouseMotion, prelude::*, reflect::erased_serde::__private::serde::__private::de,
-};
-
+use bevy::prelude::*;
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
 use itertools::Itertools;
-
+use smooth_bevy_cameras::{
+    controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
+    LookTransformPlugin,
+};
 fn main() {
     App::new()
         .insert_resource(Msaa::default())
         .add_plugins(DefaultPlugins)
         .add_plugin(DebugLinesPlugin::default())
+        .add_plugin(LookTransformPlugin)
+        .add_plugin(OrbitCameraPlugin::default())
         .add_startup_system(setup)
         .add_system(demo)
         .add_system(draw_soft_bodies)
@@ -139,24 +141,28 @@ impl SoftBody {
     }
 
     fn solve_volumes(&mut self, delta: f32) {
-        let alpha = self.edge_compliance / delta / delta;
+        let alpha = self.volume_compliance / delta / delta;
         for tetra in self.tetras.iter() {
             let mut w = 0.0;
-            // all combinations of [id, ...opposite id]
+            // all combinations of [id, ...opposite ids]
+            // volIdOrder = [[1, 3, 2], [0, 2, 3], [0, 3, 1], [0, 1, 2]];
             let id_views = [
-                (tetra.a, tetra.b, tetra.c, tetra.d),
+                (tetra.a, tetra.b, tetra.d, tetra.c),
                 (tetra.b, tetra.a, tetra.c, tetra.d),
-                (tetra.c, tetra.a, tetra.b, tetra.d),
+                (tetra.c, tetra.a, tetra.d, tetra.b),
                 (tetra.d, tetra.a, tetra.b, tetra.c),
             ];
-            let gradients =  id_views.iter().map(|(pivot, a, b, c)| {
-                let pa = self.particles[*a].position;
-                let pb = self.particles[*b].position;
-                let pc = self.particles[*c].position;
-                let gradient = (pa - pb).cross(pa - pc) / 6.0;
-                w += self.particles[*pivot].inverse_mass * gradient.length_squared();
-                gradient
-            }).collect_vec();
+            let gradients = id_views
+                .iter()
+                .map(|(pivot, a, b, c)| {
+                    let pa = self.particles[*a].position;
+                    let pb = self.particles[*b].position;
+                    let pc = self.particles[*c].position;
+                    let gradient = (pb - pa).cross(pc - pa) / 6.0;
+                    w += self.particles[*pivot].inverse_mass * gradient.length_squared();
+                    gradient
+                })
+                .collect_vec();
             if w == 0.0 {
                 continue;
             }
@@ -165,10 +171,11 @@ impl SoftBody {
             println!("residual: {}, volume: {}", residual, volume);
             for (index, gradient) in gradients.into_iter().enumerate() {
                 let inverse_mass = self.particles[id_views[index].0].inverse_mass;
-                self.particles[id_views[index].0].position += gradient * residual * inverse_mass;
+                let push = gradient * residual * inverse_mass;
+                println!("ID: {}, push: {:?}", id_views[index].0, push.length());
+                self.particles[id_views[index].0].position += push;
             }
         }
-        panic!("stop");
     }
 }
 
@@ -176,7 +183,13 @@ fn setup(mut commands: Commands) {
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(0.0, 1.0, 5.0),
         ..default()
-    });
+    })
+    .insert(OrbitCameraBundle::new(
+        OrbitCameraController::default(),
+        Vec3::new(0.0, 1.0, 5.0),
+        Vec3::new(0., 0., 0.),
+        Vec3::Y,
+    ));
 
     let length = 6.0;
     let radius = 0.4;
@@ -240,8 +253,8 @@ fn setup(mut commands: Commands) {
         particles,
         edges,
         tetras,
-        edge_compliance: 0.1,
-        volume_compliance: 0.1,
+        edge_compliance: 0.9,
+        volume_compliance: 0.9,
     });
 }
 
