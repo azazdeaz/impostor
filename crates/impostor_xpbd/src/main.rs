@@ -1,8 +1,11 @@
 use std::f32::consts::PI;
 
-use bevy::{input::mouse::MouseMotion, prelude::*, reflect::erased_serde::__private::serde::__private::de};
+use bevy::{
+    input::mouse::MouseMotion, prelude::*, reflect::erased_serde::__private::serde::__private::de,
+};
 
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
+use itertools::Itertools;
 
 fn main() {
     App::new()
@@ -48,11 +51,38 @@ impl Edge {
     }
 }
 
+struct Tetra {
+    a: usize,
+    b: usize,
+    c: usize,
+    d: usize,
+    rest_volume: f32,
+}
+impl Tetra {
+    fn from_particles(particles: &Vec<Particle>, a: usize, b: usize, c: usize, d: usize) -> Self {
+        let mut tetra = Self {
+            a,
+            b,
+            c,
+            d,
+            rest_volume: 0.0,
+        };
+        tetra.rest_volume = tetra.volume(particles);
+        tetra
+    }
+    fn volume(&self, particles: &Vec<Particle>) -> f32 {
+        let v1 = particles[self.b].position - particles[self.a].position;
+        let v2 = particles[self.c].position - particles[self.a].position;
+        let v3 = particles[self.d].position - particles[self.a].position;
+        v1.cross(v2).dot(v3) / 6.0
+    }
+}
+
 #[derive(Component)]
 struct SoftBody {
     particles: Vec<Particle>,
     edges: Vec<Edge>,
-    tetras: Vec<(usize, usize, usize, usize)>,
+    tetras: Vec<Tetra>,
     edge_compliance: f32,
     volume_compliance: f32,
 }
@@ -74,63 +104,7 @@ impl SoftBody {
 
     fn solve(&mut self, delta: f32) {
         self.solve_edges(delta);
-        // // solve the edges
-        // for (i, j) in self.edges.iter() {
-        //     let mut p1 = self.particles[*i].position;
-        //     let mut p2 = self.particles[*j].position;
-        //     let mut delta = p2 - p1;
-        //     let distance = delta.length();
-        //     let mut correction = delta / distance * (distance - 0.2);
-        //     let mut correction_half = correction / 2.0;
-        //     p1 -= correction_half;
-        //     p2 += correction_half;
-        //     self.particles[*i].position = p1;
-        //     self.particles[*j].position = p2;
-        // }
-
-        // // solve the tetrahedrons
-        // for (i, j, k, l) in self.tetras.iter() {
-        //     let mut p1 = self.particles[*i].position;
-        //     let mut p2 = self.particles[*j].position;
-        //     let mut p3 = self.particles[*k].position;
-        //     let mut p4 = self.particles[*l].position;
-
-        //     let mut v1 = p2 - p1;
-        //     let mut v2 = p3 - p1;
-        //     let mut v3 = p4 - p1;
-
-        //     let mut d1 = v2.cross(v3);
-        //     let mut d2 = v3.cross(v1);
-        //     let mut d3 = v1.cross(v2);
-        //     let mut d4 = v2.cross(v1);
-
-        //     let mut volume = v1.dot(d1);
-        //     let mut inv_volume = 1.0 / volume;
-
-        //     let mut c1 = d1 * inv_volume;
-        //     let mut c2 = d2 * inv_volume;
-        //     let mut c3 = d3 * inv_volume;
-        //     let mut c4 = d4 * inv_volume;
-
-        //     let mut rest_volume = 0.2 * 0.2 * 0.2;
-        //     let mut pressure = (volume - rest_volume) * 100.0;
-
-        //     let mut f1 = c1 * pressure;
-        //     let mut f2 = c2 * pressure;
-        //     let mut f3 = c3 * pressure;
-        //     let mut f4 = c4 * pressure;
-
-        //     let mut correction = (f1 + f2 + f3 + f4) / 4.0;
-        //     let mut correction_half = correction / 2.0;
-        //     p1 -= correction_half;
-        //     p2 += correction_half;
-        //     p3 += correction_half;
-        //     p4 += correction_half;
-        //     self.particles[*i].position = p1;
-        //     self.particles[*j].position = p2;
-        //     self.particles[*k].position = p3;
-        //     self.particles[*l].position = p4;
-        // }
+        self.solve_volumes(delta);
     }
 
     fn post_solve(&mut self, delta: f32) {
@@ -149,7 +123,7 @@ impl SoftBody {
             let p1 = self.particles[edge.a].position;
             let p2 = self.particles[edge.b].position;
             let diff = p1 - p2;
-            let distance = diff.length(); 
+            let distance = diff.length();
             if distance == 0.0 {
                 continue;
             }
@@ -157,9 +131,44 @@ impl SoftBody {
             let delta = p2 - p1;
             let distance = delta.length();
             let residual = -(distance - edge.rest_length) / (w + alpha);
-            self.particles[edge.a].position = p1 + direction * residual * self.particles[edge.a].inverse_mass;
-            self.particles[edge.b].position = p2 - direction * residual * self.particles[edge.b].inverse_mass;
+            self.particles[edge.a].position =
+                p1 + direction * residual * self.particles[edge.a].inverse_mass;
+            self.particles[edge.b].position =
+                p2 - direction * residual * self.particles[edge.b].inverse_mass;
         }
+    }
+
+    fn solve_volumes(&mut self, delta: f32) {
+        let alpha = self.edge_compliance / delta / delta;
+        for tetra in self.tetras.iter() {
+            let mut w = 0.0;
+            // all combinations of [id, ...opposite id]
+            let id_views = [
+                (tetra.a, tetra.b, tetra.c, tetra.d),
+                (tetra.b, tetra.a, tetra.c, tetra.d),
+                (tetra.c, tetra.a, tetra.b, tetra.d),
+                (tetra.d, tetra.a, tetra.b, tetra.c),
+            ];
+            let gradients =  id_views.iter().map(|(pivot, a, b, c)| {
+                let pa = self.particles[*a].position;
+                let pb = self.particles[*b].position;
+                let pc = self.particles[*c].position;
+                let gradient = (pa - pb).cross(pa - pc) / 6.0;
+                w += self.particles[*pivot].inverse_mass * gradient.length_squared();
+                gradient
+            }).collect_vec();
+            if w == 0.0 {
+                continue;
+            }
+            let volume = tetra.volume(&self.particles);
+            let residual = -(volume - tetra.rest_volume) / (w + alpha);
+            println!("residual: {}, volume: {}", residual, volume);
+            for (index, gradient) in gradients.into_iter().enumerate() {
+                let inverse_mass = self.particles[id_views[index].0].inverse_mass;
+                self.particles[id_views[index].0].position += gradient * residual * inverse_mass;
+            }
+        }
+        panic!("stop");
     }
 }
 
@@ -189,9 +198,27 @@ fn setup(mut commands: Commands) {
     // create three tetraherons filling up each section without overlap
     for i in 0..sections {
         let offset = i * 3;
-        tetras.push((offset, offset + 1, offset + 2, offset + 5));
-        tetras.push((offset, offset + 3, offset + 4, offset + 5));
-        tetras.push((offset, offset + 1, offset + 4, offset + 5));
+        tetras.push(Tetra::from_particles(
+            &particles,
+            offset,
+            offset + 1,
+            offset + 2,
+            offset + 5,
+        ));
+        tetras.push(Tetra::from_particles(
+            &particles,
+            offset,
+            offset + 3,
+            offset + 4,
+            offset + 5,
+        ));
+        tetras.push(Tetra::from_particles(
+            &particles,
+            offset,
+            offset + 1,
+            offset + 4,
+            offset + 5,
+        ));
     }
 
     // create edges between neighboring particles
@@ -284,7 +311,6 @@ fn simulate(time: Res<Time>, mut soft_bodies: Query<&mut SoftBody>) {
     let delta = time.delta_seconds();
     let gravity = Vec3::new(0.0, -9.81, 0.0);
     for mut soft_body in soft_bodies.iter_mut() {
-
         soft_body.pre_solve(gravity, delta);
         soft_body.solve(delta);
         soft_body.post_solve(delta);
