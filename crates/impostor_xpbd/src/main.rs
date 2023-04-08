@@ -27,7 +27,6 @@ struct Particle {
     position: Vec3,
     prev_position: Vec3,
     velocity: Vec3,
-    force: Vec3,
     inverse_mass: f32,
 }
 impl Particle {
@@ -61,7 +60,13 @@ struct Tetra {
     rest_volume: f32,
 }
 impl Tetra {
-    fn from_particles(particles: &mut Vec<Particle>, a: usize, b: usize, c: usize, d: usize) -> Self {
+    fn from_particles(
+        particles: &mut Vec<Particle>,
+        a: usize,
+        b: usize,
+        c: usize,
+        d: usize,
+    ) -> Self {
         let mut tetra = Self {
             a,
             b,
@@ -175,94 +180,169 @@ impl SoftBody {
             }
             let volume = tetra.volume(&self.particles);
             let residual = -(volume - tetra.rest_volume) / (w + alpha);
-            println!("residual: {}, volume: {}", residual, volume);
             for (index, gradient) in gradients.into_iter().enumerate() {
                 let inverse_mass = self.particles[id_views[index].0].inverse_mass;
                 let push = gradient * residual * inverse_mass;
-                println!("ID: {}, push: {:?}", id_views[index].0, push.length());
                 self.particles[id_views[index].0].position += push;
             }
+        }
+    }
+
+    fn new_triangle_pillar() -> Self {
+        let section_length = 0.4;
+        let radius = 0.2;
+        let sections = 7;
+        let mut particles = Vec::new();
+        let mut edges = Vec::new();
+        let mut tetras = Vec::new();
+
+        for i in 0..=sections {
+            // iterate over the angles of the triangle
+            for angle in [0.0, PI * 2.0 / 3.0, PI * 4.0 / 3.0].iter() {
+                let x = radius * angle.cos();
+                let z = radius * angle.sin();
+                let y = i as f32 * section_length;
+                particles.push(Particle::from_position(Vec3::new(x, y, z)));
+            }
+        }
+
+        // create three tetraherons filling up each section without overlap
+        let tetra_ids = [[0, 1, 2, 5], [0, 3, 4, 5], [0, 1, 4, 5]];
+        for i in 0..sections {
+            let offset = i * 3;
+            for tetra in tetra_ids.iter() {
+                tetras.push(Tetra::from_particles(
+                    &mut particles,
+                    offset + tetra[0],
+                    offset + tetra[1],
+                    offset + tetra[2],
+                    offset + tetra[3],
+                ));
+            }
+        }
+
+        // create edges between neighboring particles
+        for i in 0..=sections {
+            let offset = i * 3;
+            // connect vertices on this level
+            edges.push(Edge::from_particles(&particles, offset, offset + 1));
+            edges.push(Edge::from_particles(&particles, offset + 1, offset + 2));
+            edges.push(Edge::from_particles(&particles, offset + 2, offset));
+            // connect with vertices on the next level
+            if i < sections {
+                for j in 0..3 {
+                    for k in 0..3 {
+                        edges.push(Edge::from_particles(&particles, offset + j, offset + 3 + k));
+                    }
+                }
+            }
+        }
+
+        // set the inverse mass of the first section to zero
+        for i in 0..3 {
+            particles[i].inverse_mass = 0.0;
+        }
+
+        SoftBody {
+            particles,
+            edges,
+            tetras,
+            edge_compliance: 0.9,
+            volume_compliance: 0.9,
+        }
+    }
+
+    fn new_octaeder_pillar() -> Self {
+        let section_length = 0.4;
+        let radius = 0.2;
+        let sections = 7;
+        let mut particles = Vec::new();
+        let mut edges = Vec::new();
+        let mut tetras = Vec::new();
+
+        for i in 0..=sections {
+            // iterate over the angles of the triangle
+            for angle in [0.0, PI * 2.0 / 3.0, PI * 4.0 / 3.0].iter() {
+                // make every other sector rotated by 1/3 PI
+                let mut angle = *angle;
+                if i % 2 == 0 {
+                    angle += PI * 1.0 / 3.0;
+                }
+                let x = radius * angle.cos();
+                let z = radius * angle.sin();
+                let y = i as f32 * section_length;
+                particles.push(Particle::from_position(Vec3::new(x, y, z)));
+            }
+        }
+
+        // create three tetraherons filling up each section without overlap
+        let tetra_ids = [[0, 2, 4, 5], [0, 3, 4, 5], [0, 1, 2, 3], [3, 1, 2, 4]];
+        for i in 0..sections {
+            let offset = i * 3;
+            for tetra in tetra_ids.iter() {
+                tetras.push(Tetra::from_particles(
+                    &mut particles,
+                    offset + tetra[0],
+                    offset + tetra[1],
+                    offset + tetra[2],
+                    offset + tetra[3],
+                ));
+            }
+        }
+
+        // create edges between neighboring particles
+        for i in 0..=sections {
+            let offset = i * 3;
+            // connect vertices on this level
+            edges.push(Edge::from_particles(&particles, offset, offset + 1));
+            edges.push(Edge::from_particles(&particles, offset + 1, offset + 2));
+            edges.push(Edge::from_particles(&particles, offset + 2, offset));
+            // connect with vertices on the next level
+            if i < sections {
+                for j in 0..3 {
+                    for k in 0..3 {
+                        edges.push(Edge::from_particles(&particles, offset + j, offset + 3 + k));
+                        let k_next = (k + 1) % 3;
+                        edges.push(Edge::from_particles(
+                            &particles,
+                            offset + j,
+                            offset + 3 + k_next,
+                        ));
+                    }
+                }
+            }
+        }
+
+        // set the inverse mass of the first section to zero
+        for i in 0..3 {
+            particles[i].inverse_mass = 0.0;
+        }
+
+        SoftBody {
+            particles,
+            edges,
+            tetras,
+            edge_compliance: 0.9,
+            volume_compliance: 0.9,
         }
     }
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 1.0, 5.0),
-        ..default()
-    })
-    .insert(OrbitCameraBundle::new(
-        OrbitCameraController::default(),
-        Vec3::new(0.0, 1.0, 5.0),
-        Vec3::new(0., 0., 0.),
-        Vec3::Y,
-    ));
-
-    let length = 6.0;
-    let radius = 0.4;
-    let sections = 7;
-    let mut particles = Vec::new();
-    let mut edges = Vec::new();
-    let mut tetras = Vec::new();
-
-    for i in 0..=sections {
-        // iterate over the angles of the triangle
-        for angle in [0.0, PI * 2.0 / 3.0, PI * 4.0 / 3.0].iter() {
-            let x = radius * angle.cos();
-            let z = radius * angle.sin();
-            let y = i as f32 / sections as f32 * length;
-            particles.push(Particle::from_position(Vec3::new(x, y, z)));
-        }
-    }
-
-    // create three tetraherons filling up each section without overlap
-    for i in 0..sections {
-        let offset = i * 3;
-        tetras.push(Tetra::from_particles(
-            &mut particles,
-            offset,
-            offset + 1,
-            offset + 2,
-            offset + 5,
+    commands
+        .spawn(Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 1.0, 5.0),
+            ..default()
+        })
+        .insert(OrbitCameraBundle::new(
+            OrbitCameraController::default(),
+            Vec3::new(0.0, 1.0, 5.0),
+            Vec3::new(0., 0.0, 0.),
+            Vec3::Y,
         ));
-        tetras.push(Tetra::from_particles(
-            &mut particles,
-            offset,
-            offset + 3,
-            offset + 4,
-            offset + 5,
-        ));
-        tetras.push(Tetra::from_particles(
-            &mut particles,
-            offset,
-            offset + 1,
-            offset + 4,
-            offset + 5,
-        ));
-    }
 
-    // create edges between neighboring particles
-    for i in 0..sections {
-        let offset = i * 3;
-        // connect vertices on this level
-        edges.push(Edge::from_particles(&particles, offset, offset + 1));
-        edges.push(Edge::from_particles(&particles, offset + 1, offset + 2));
-        edges.push(Edge::from_particles(&particles, offset + 2, offset));
-        // connect with vertices on the next level
-        for j in 0..3 {
-            for k in 0..3 {
-                edges.push(Edge::from_particles(&particles, offset + j, offset + 3 + k));
-            }
-        }
-    }
-
-    commands.spawn(SoftBody {
-        particles,
-        edges,
-        tetras,
-        edge_compliance: 0.1,
-        volume_compliance: 0.1,
-    });
+    // commands.spawn(SoftBody::new_triangle_pillar());
+    commands.spawn(SoftBody::new_octaeder_pillar());
 }
 
 struct DragInfo {
@@ -330,10 +410,14 @@ fn drag_particles(
 fn simulate(time: Res<Time>, mut soft_bodies: Query<&mut SoftBody>) {
     let delta = time.delta_seconds();
     let gravity = Vec3::new(0.0, -9.81, 0.0);
-    for mut soft_body in soft_bodies.iter_mut() {
-        soft_body.pre_solve(gravity, delta);
-        soft_body.solve(delta);
-        soft_body.post_solve(delta);
+    let substeps = 12;
+    let sub_delta = delta / substeps as f32;
+    for _ in 0..substeps {
+        for mut soft_body in soft_bodies.iter_mut() {
+            soft_body.pre_solve(gravity, sub_delta);
+            soft_body.solve(sub_delta);
+            soft_body.post_solve(sub_delta);
+        }
     }
 }
 
@@ -345,6 +429,30 @@ fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, soft_bodies: Query<&SoftBod
                 .start(soft_body.particles[edge.a].position)
                 .end(soft_body.particles[edge.b].position)
                 .color(Color::WHITE);
+        }
+    }
+
+    // Draw each tetrahedron slightly smaller
+    for soft_body in soft_bodies.iter() {
+        for tetra in soft_body.tetras.iter() {
+            let a = soft_body.particles[tetra.a].position;
+            let b = soft_body.particles[tetra.b].position;
+            let c = soft_body.particles[tetra.c].position;
+            let d = soft_body.particles[tetra.d].position;
+            let center = (a + b + c + d) / 4.0;
+            let scale = 0.7;
+            let a = (a - center) * scale + center;
+            let b = (b - center) * scale + center;
+            let c = (c - center) * scale + center;
+            let d = (d - center) * scale + center;
+
+            let color = Color::YELLOW;
+            shapes.line().start(a).end(b).color(color);
+            shapes.line().start(b).end(c).color(color);
+            shapes.line().start(c).end(a).color(color);
+            shapes.line().start(a).end(d).color(color);
+            shapes.line().start(b).end(d).color(color);
+            shapes.line().start(c).end(d).color(color);
         }
     }
 }
