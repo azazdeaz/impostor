@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use bevy::prelude::*;
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
 use itertools::Itertools;
+use serde_json::json;
 use smooth_bevy_cameras::{
     controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
     LookTransformPlugin,
@@ -75,6 +76,7 @@ impl Tetra {
             rest_volume: 0.0,
         };
         tetra.rest_volume = tetra.volume(particles);
+        assert!(tetra.rest_volume > 0.0, "initial rest_volume must be positive (make sure the tetra indices order is correct)");
         if tetra.rest_volume > 0.0 {
             let quarter_inverse_mass = 1.0 / (tetra.rest_volume / 4.0);
             particles[a].inverse_mass += quarter_inverse_mass;
@@ -85,9 +87,10 @@ impl Tetra {
         tetra
     }
     fn volume(&self, particles: &Vec<Particle>) -> f32 {
-        let v1 = particles[self.b].position - particles[self.a].position;
-        let v2 = particles[self.c].position - particles[self.a].position;
-        let v3 = particles[self.d].position - particles[self.a].position;
+        let a_position = particles[self.a].position;
+        let v1 = particles[self.b].position - a_position;
+        let v2 = particles[self.c].position - a_position;
+        let v3 = particles[self.d].position - a_position;
         v1.cross(v2).dot(v3) / 6.0
     }
 }
@@ -188,6 +191,60 @@ impl SoftBody {
         }
     }
 
+    fn export(&self) {
+        // flat vertices
+        let vertices = self
+            .particles
+            .iter()
+            .map(|p| [p.position.x, p.position.y, p.position.z])
+            .flatten()
+            .collect_vec();
+        // flat edge indices
+        let edges = self
+            .edges
+            .iter()
+            .map(|e| [e.a as u32, e.b as u32])
+            .flatten()
+            .collect_vec();
+        // flat tetra indices
+        let tetras = self
+            .tetras
+            .iter()
+            .map(|t| [t.a as u32, t.b as u32, t.c as u32, t.d as u32])
+            .flatten()
+            .collect_vec();
+        // surfate mesh triangle indices
+        let triangles = self
+            .tetras
+            .iter()
+            .flat_map(|t| {
+                [
+                    [t.a, t.b, t.d],
+                    [t.b, t.a, t.c],
+                    [t.c, t.a, t.d],
+                    [t.d, t.a, t.b],
+                ]
+            })
+            .flatten()
+            .collect_vec();
+
+        // print as json
+        let json = json!({
+                "tet": {
+                    // "verts": vertices,
+                    "inverse_masses": self.particles.iter().map(|p| p.inverse_mass).collect_vec(),
+                //     "tetIds": tetras,
+                //     "tetVolumes": self.tetras.iter().map(|t| t.rest_volume).collect_vec(),
+                //     "edgeIds": edges,
+                // },
+                // "viz": {
+                //     "triIds": triangles
+                }
+            }
+        );
+        println!("{}", json);
+    }
+
     fn new_triangle_pillar() -> Self {
         let section_length = 0.4;
         let radius = 0.2;
@@ -263,11 +320,8 @@ impl SoftBody {
         for i in 0..=sections {
             // iterate over the angles of the triangle
             for angle in [0.0, PI * 2.0 / 3.0, PI * 4.0 / 3.0].iter() {
-                // make every other sector rotated by 1/3 PI
-                let mut angle = *angle;
-                if i % 2 == 0 {
-                    angle += PI * 1.0 / 3.0;
-                }
+                // make every following sector rotated by 1/3 PI
+                let angle = angle + (PI * 1.0 / 3.0) * i as f32;
                 let x = radius * angle.cos();
                 let z = radius * angle.sin();
                 let y = i as f32 * section_length;
@@ -276,7 +330,7 @@ impl SoftBody {
         }
 
         // create three tetraherons filling up each section without overlap
-        let tetra_ids = [[0, 2, 4, 5], [0, 3, 4, 5], [0, 1, 2, 3], [3, 1, 2, 4]];
+        let tetra_ids = [[0, 5, 2, 4], [0, 3, 5, 4], [0, 2, 1, 3], [3, 4, 2, 1]];
         for i in 0..sections {
             let offset = i * 3;
             for tetra in tetra_ids.iter() {
@@ -322,8 +376,8 @@ impl SoftBody {
             particles,
             edges,
             tetras,
-            edge_compliance: 0.9,
-            volume_compliance: 0.9,
+            edge_compliance: 0.1,
+            volume_compliance: 0.1,
         }
     }
 }
@@ -342,7 +396,9 @@ fn setup(mut commands: Commands) {
         ));
 
     // commands.spawn(SoftBody::new_triangle_pillar());
-    commands.spawn(SoftBody::new_octaeder_pillar());
+    let body = SoftBody::new_octaeder_pillar();
+    body.export();
+    commands.spawn(body);
 }
 
 struct DragInfo {
