@@ -1,8 +1,8 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, ops::Mul};
 
 use bevy::prelude::*;
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
-use itertools::Itertools;
+use itertools::{Itertools, izip};
 use serde_json::json;
 use smooth_bevy_cameras::{
     controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
@@ -16,7 +16,7 @@ fn main() {
         .add_plugin(LookTransformPlugin)
         .add_plugin(OrbitCameraPlugin::default())
         .add_startup_system(setup)
-        .add_system(demo)
+        // .add_system(demo)
         .add_system(draw_soft_bodies)
         .add_system(drag_particles)
         .add_system(simulate)
@@ -76,7 +76,10 @@ impl Tetra {
             rest_volume: 0.0,
         };
         tetra.rest_volume = tetra.volume(particles);
-        assert!(tetra.rest_volume > 0.0, "initial rest_volume must be positive (make sure the tetra indices order is correct)");
+        assert!(
+            tetra.rest_volume > 0.0,
+            "initial rest_volume must be positive (make sure the tetra indices order is correct)"
+        );
         if tetra.rest_volume > 0.0 {
             let quarter_inverse_mass = 1.0 / (tetra.rest_volume / 4.0);
             particles[a].inverse_mass += quarter_inverse_mass;
@@ -95,13 +98,112 @@ impl Tetra {
     }
 }
 
+struct BendConstraint {
+    // pivot particle (shared by both triangles)
+    a: usize,
+    // the other particle shared by both triangles
+    b: usize,
+    // head of the first triangle
+    c: usize,
+    // head of the second triangle
+    d: usize,
+    rest_bend: f32,
+}
+
+impl BendConstraint {
+    fn from_particles(particles: &Vec<Particle>, a: usize, b: usize, c: usize, d: usize) -> Self {
+        let mut bend = Self {
+            a,
+            b,
+            c,
+            d,
+            rest_bend: 0.0,
+        };
+        bend.rest_bend = bend.get_bend(particles);
+        bend
+    }
+
+    fn get_bend(&self, particles: &Vec<Particle>) -> f32 {
+        let pa = particles[self.a].position;
+        let pb = particles[self.b].position;
+        let pc = particles[self.c].position;
+        let pd = particles[self.d].position;
+        let vab = pb - pa;
+        let vac = pc - pa;
+        let vad = pd - pa;
+        let norm1 = vab.cross(vac).normalize();
+        let norm2 = vab.cross(vad).normalize();
+        let bend = norm1.dot(norm2).acos();
+        bend
+    }
+
+    fn solve(&self, particles: &mut Vec<Particle>, alpha: f32) {
+        // As described  in "Position Based Dynamics" Appendix A, by Müller et al.
+        let pa = particles[self.a].position;
+        let pb = particles[self.b].position;
+        let pc = particles[self.c].position;
+        let pd = particles[self.d].position;
+        let wa = particles[self.a].inverse_mass;
+        let wb = particles[self.b].inverse_mass;
+        let wc = particles[self.c].inverse_mass;
+        let wd = particles[self.d].inverse_mass;
+        let vab = pb - pa;
+        let vac = pc - pa;
+        let vad = pd - pa;
+
+        let outer = |a: Vec3, b: Vec3| -> Mat3 { Mat3::from_cols(a * b.x, a * b.y, a * b.z) };
+
+        // Transposed cross product matrix
+        let tcpm = |vec: Vec3| -> Mat3 {
+            Mat3::from_cols(
+                Vec3::new(0.0, vec.z, -vec.y),
+                Vec3::new(-vec.z, 0.0, vec.x),
+                Vec3::new(vec.y, -vec.x, 0.0),
+            )
+        };
+
+        // Gradient of the normalized cross product
+        let norm_grads = |p1: Vec3, p2: Vec3| {
+            let normal = p1.cross(p2);
+            let normal_length = normal.length();
+            let normal = normal / normal_length;
+            let inverse_normal_length = 1.0 / normal_length;
+            let grad1 = inverse_normal_length * (-tcpm(p2) + outer(normal, normal.cross(p2)));
+            let grad2 = inverse_normal_length * (-tcpm(p1) + outer(normal, normal.cross(p1)));
+            (normal, grad1, grad2)
+        };
+
+        let (n1, dn1_dpb, dn1_dpc) = norm_grads(vab, vac);
+        let (n2, dn2_dpb, dn2_dpd) = norm_grads(vab, vad);
+
+        let d = n1.dot(n2);
+        let d_arccos_dx = -1.0 / (1.0 - d * d).sqrt();
+        let delta_c = d_arccos_dx * (dn1_dpc.transpose() * n2);
+        let delta_d = d_arccos_dx * (dn2_dpd.transpose() * n1);
+        let delta_b = d_arccos_dx * (dn1_dpb.transpose() * n2 + dn2_dpb.transpose() * n1);
+        let delta_a = -delta_b - delta_c - delta_d;
+
+        let ids = [self.a, self.b, self.c, self.d];
+        let ws = [wa, wb, wc, wd];
+        let deltas = [delta_a, delta_b, delta_c, delta_d];
+        let divisor = izip!(&ws, &deltas).map(|(w, delta)| w * delta.length_squared()).sum::<f32>();
+        for (particle, &delta, w) in izip!(&ids, &deltas, &ws) {
+            let offset = -(((w * (1.0 - d * d).sqrt()) * d.acos() - self.rest_bend) / divisor) * delta;
+            let particle = &mut particles[*particle];
+            particle.position += alpha * offset;
+        }
+    }
+}
+
 #[derive(Component)]
 struct SoftBody {
     particles: Vec<Particle>,
     edges: Vec<Edge>,
     tetras: Vec<Tetra>,
+    bending_constraints: Vec<BendConstraint>,
     edge_compliance: f32,
     volume_compliance: f32,
+    bending_compliance: f32,
 }
 
 impl SoftBody {
@@ -122,6 +224,11 @@ impl SoftBody {
     fn solve(&mut self, delta: f32) {
         self.solve_edges(delta);
         self.solve_volumes(delta);
+
+        let bending_alpha = self.bending_compliance / delta / delta;
+        for bending_constraint in self.bending_constraints.iter() {
+            // bending_constraint.solve(&mut self.particles, bending_alpha);
+        }
     }
 
     fn post_solve(&mut self, delta: f32) {
@@ -186,7 +293,7 @@ impl SoftBody {
             for (index, gradient) in gradients.into_iter().enumerate() {
                 let inverse_mass = self.particles[id_views[index].0].inverse_mass;
                 let push = gradient * residual * inverse_mass;
-                self.particles[id_views[index].0].position += push;
+                // self.particles[id_views[index].0].position += push;
             }
         }
     }
@@ -304,8 +411,10 @@ impl SoftBody {
             particles,
             edges,
             tetras,
+            bending_constraints: Vec::new(),
             edge_compliance: 0.9,
             volume_compliance: 0.9,
+            bending_compliance: 0.9,
         }
     }
 
@@ -316,6 +425,7 @@ impl SoftBody {
         let mut particles = Vec::new();
         let mut edges = Vec::new();
         let mut tetras = Vec::new();
+        let mut bending_constraints = Vec::new();
 
         for i in 0..=sections {
             // iterate over the angles of the triangle
@@ -341,6 +451,20 @@ impl SoftBody {
                     offset + tetra[2],
                     offset + tetra[3],
                 ));
+            }
+        }
+
+        // add bending constraints
+        for i in 1..sections {
+            for j in 0..3 {
+                //head of the lower triangle
+                let c = (i-1) * 3 + j;
+                // the common mase of the triangles
+                let a = i * 3 + j;
+                let b = i * 3 + (j + 2) % 3;
+                // head of the upper triangle
+                let d = (i+1) * 3 + (j + 2) % 3;
+                bending_constraints.push(BendConstraint::from_particles(&particles, a, b, c, d));
             }
         }
 
@@ -376,8 +500,10 @@ impl SoftBody {
             particles,
             edges,
             tetras,
+            bending_constraints,
             edge_compliance: 0.1,
             volume_compliance: 0.1,
+            bending_compliance: 0.9,
         }
     }
 }
@@ -478,23 +604,47 @@ fn simulate(time: Res<Time>, mut soft_bodies: Query<&mut SoftBody>) {
 }
 
 fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, soft_bodies: Query<&SoftBody>) {
-    for soft_body in soft_bodies.iter() {
-        for edge in soft_body.edges.iter() {
-            shapes
-                .line()
-                .start(soft_body.particles[edge.a].position)
-                .end(soft_body.particles[edge.b].position)
-                .color(Color::WHITE);
-        }
-    }
+    // for soft_body in soft_bodies.iter() {
+    //     for edge in soft_body.edges.iter() {
+    //         shapes
+    //             .line()
+    //             .start(soft_body.particles[edge.a].position)
+    //             .end(soft_body.particles[edge.b].position)
+    //             .color(Color::WHITE);
+    //     }
+    // }
 
-    // Draw each tetrahedron slightly smaller
+    // // Draw each tetrahedron slightly smaller
+    // for soft_body in soft_bodies.iter() {
+    //     for tetra in soft_body.tetras.iter() {
+    //         let a = soft_body.particles[tetra.a].position;
+    //         let b = soft_body.particles[tetra.b].position;
+    //         let c = soft_body.particles[tetra.c].position;
+    //         let d = soft_body.particles[tetra.d].position;
+    //         let center = (a + b + c + d) / 4.0;
+    //         let scale = 0.7;
+    //         let a = (a - center) * scale + center;
+    //         let b = (b - center) * scale + center;
+    //         let c = (c - center) * scale + center;
+    //         let d = (d - center) * scale + center;
+
+    //         let color = Color::YELLOW;
+    //         shapes.line().start(a).end(b).color(color);
+    //         shapes.line().start(b).end(c).color(color);
+    //         shapes.line().start(c).end(a).color(color);
+    //         shapes.line().start(a).end(d).color(color);
+    //         shapes.line().start(b).end(d).color(color);
+    //         shapes.line().start(c).end(d).color(color);
+    //     }
+    // }
+
+    // Draw each bending constraint
     for soft_body in soft_bodies.iter() {
-        for tetra in soft_body.tetras.iter() {
-            let a = soft_body.particles[tetra.a].position;
-            let b = soft_body.particles[tetra.b].position;
-            let c = soft_body.particles[tetra.c].position;
-            let d = soft_body.particles[tetra.d].position;
+        for constraint in soft_body.bending_constraints.iter() {
+            let a = soft_body.particles[constraint.a].position;
+            let b = soft_body.particles[constraint.b].position;
+            let c = soft_body.particles[constraint.c].position;
+            let d = soft_body.particles[constraint.d].position;
             let center = (a + b + c + d) / 4.0;
             let scale = 0.7;
             let a = (a - center) * scale + center;
@@ -502,13 +652,14 @@ fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, soft_bodies: Query<&SoftBod
             let c = (c - center) * scale + center;
             let d = (d - center) * scale + center;
 
-            let color = Color::YELLOW;
-            shapes.line().start(a).end(b).color(color);
-            shapes.line().start(b).end(c).color(color);
-            shapes.line().start(c).end(a).color(color);
-            shapes.line().start(a).end(d).color(color);
-            shapes.line().start(b).end(d).color(color);
-            shapes.line().start(c).end(d).color(color);
+            let color_base = Color::BLUE;
+            let color_up = Color::ALICE_BLUE;
+            let color_down = Color::MIDNIGHT_BLUE;
+            shapes.line().start(a).end(b).color(color_base);
+            shapes.line().start(a).end(c).color(color_down);
+            shapes.line().start(a).end(d).color(color_up);
+            shapes.line().start(b).end(c).color(color_down);
+            shapes.line().start(b).end(d).color(color_up);
         }
     }
 }
