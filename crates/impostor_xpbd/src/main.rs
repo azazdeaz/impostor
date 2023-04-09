@@ -61,6 +61,13 @@ struct Tetra {
     rest_volume: f32,
 }
 impl Tetra {
+    // The particles should beordered so the volume function returns a positive value
+    // The order good if the normal of (b-a) x (c-a) should point to (d-a) (and not in the opposite direction)
+    // Another way to validate the order:
+    //  - Right thumb points from a to d
+    //  - Right index finger points from a to b
+    //  - If you rotate your hand around the right thumb to point the index finger to c, 
+    //  - The order is correct if the rotation is clockwise (when the thumb points towards you)
     fn from_particles(
         particles: &mut Vec<Particle>,
         a: usize,
@@ -95,6 +102,41 @@ impl Tetra {
         let v2 = particles[self.c].position - a_position;
         let v3 = particles[self.d].position - a_position;
         v1.cross(v2).dot(v3) / 6.0
+    }
+
+
+
+    fn solve(&self, particles: &mut Vec<Particle>, alpha: f32) {
+        let mut w = 0.0;
+        // all combinations of [id, ...opposite ids]
+        // TODO: I think the order doesnt matter because ||AB x AC||^2 is the same regardless of the order, but i should check if this is true
+        let id_views = [
+            (self.a, self.b, self.d, self.c),
+            (self.b, self.a, self.c, self.d),
+            (self.c, self.a, self.d, self.b),
+            (self.d, self.a, self.b, self.c),
+        ];
+        let gradients = id_views
+            .iter()
+            .map(|(pivot, a, b, c)| {
+                let pa = particles[*a].position;
+                let pb = particles[*b].position;
+                let pc = particles[*c].position;
+                let gradient = (pb - pa).cross(pc - pa) / 6.0;
+                w += particles[*pivot].inverse_mass * gradient.length_squared();
+                gradient
+            })
+            .collect_vec();
+        if w == 0.0 {
+            return;
+        }
+        let volume = self.volume(&particles);
+        let residual = -(volume - self.rest_volume) / (w + alpha);
+        for (index, gradient) in gradients.into_iter().enumerate() {
+            let inverse_mass = particles[id_views[index].0].inverse_mass;
+            let push = gradient * residual * inverse_mass;
+            particles[id_views[index].0].position += push;
+        }
     }
 }
 
@@ -189,8 +231,9 @@ impl BendConstraint {
         let divisor = izip!(&ws, &deltas).map(|(w, delta)| w * delta.length_squared()).sum::<f32>();
         for (particle, &delta, w) in izip!(&ids, &deltas, &ws) {
             let offset = -(((w * (1.0 - d * d).sqrt()) * d.acos() - self.rest_bend) / divisor) * delta;
+            println!("particle {} push: {:?}", particle, alpha * offset);
             let particle = &mut particles[*particle];
-            particle.position += alpha * offset;
+            // particle.position += alpha * offset;
         }
     }
 }
@@ -223,11 +266,16 @@ impl SoftBody {
 
     fn solve(&mut self, delta: f32) {
         self.solve_edges(delta);
-        self.solve_volumes(delta);
+        
+        let volume_alpha = self.volume_compliance / delta / delta;
+        for volume_constraint in self.tetras.iter() {
+            volume_constraint.solve(&mut self.particles, volume_alpha);
+        }
 
+        println!("bending constraints---------------------");
         let bending_alpha = self.bending_compliance / delta / delta;
         for bending_constraint in self.bending_constraints.iter() {
-            // bending_constraint.solve(&mut self.particles, bending_alpha);
+            bending_constraint.solve(&mut self.particles, bending_alpha);
         }
     }
 
@@ -259,42 +307,6 @@ impl SoftBody {
                 p1 + direction * residual * self.particles[edge.a].inverse_mass;
             self.particles[edge.b].position =
                 p2 - direction * residual * self.particles[edge.b].inverse_mass;
-        }
-    }
-
-    fn solve_volumes(&mut self, delta: f32) {
-        let alpha = self.volume_compliance / delta / delta;
-        for tetra in self.tetras.iter() {
-            let mut w = 0.0;
-            // all combinations of [id, ...opposite ids]
-            // volIdOrder = [[1, 3, 2], [0, 2, 3], [0, 3, 1], [0, 1, 2]];
-            let id_views = [
-                (tetra.a, tetra.b, tetra.d, tetra.c),
-                (tetra.b, tetra.a, tetra.c, tetra.d),
-                (tetra.c, tetra.a, tetra.d, tetra.b),
-                (tetra.d, tetra.a, tetra.b, tetra.c),
-            ];
-            let gradients = id_views
-                .iter()
-                .map(|(pivot, a, b, c)| {
-                    let pa = self.particles[*a].position;
-                    let pb = self.particles[*b].position;
-                    let pc = self.particles[*c].position;
-                    let gradient = (pb - pa).cross(pc - pa) / 6.0;
-                    w += self.particles[*pivot].inverse_mass * gradient.length_squared();
-                    gradient
-                })
-                .collect_vec();
-            if w == 0.0 {
-                continue;
-            }
-            let volume = tetra.volume(&self.particles);
-            let residual = -(volume - tetra.rest_volume) / (w + alpha);
-            for (index, gradient) in gradients.into_iter().enumerate() {
-                let inverse_mass = self.particles[id_views[index].0].inverse_mass;
-                let push = gradient * residual * inverse_mass;
-                // self.particles[id_views[index].0].position += push;
-            }
         }
     }
 
@@ -421,7 +433,7 @@ impl SoftBody {
     fn new_octaeder_pillar() -> Self {
         let section_length = 0.4;
         let radius = 0.2;
-        let sections = 7;
+        let sections = 2;
         let mut particles = Vec::new();
         let mut edges = Vec::new();
         let mut tetras = Vec::new();
