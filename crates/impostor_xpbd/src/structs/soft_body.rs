@@ -1,19 +1,13 @@
 use std::f32::consts::PI;
 
 use bevy::prelude::*;
-use serde_json::json;
-use crate::constraints::{XPBDConstraint, IsometricBendingConstraint, VolumeConstraint};
-use itertools::{izip, Itertools};
+use crate::constraints::*;
 
 use super::Particle;
 
 pub struct SoftBody {
     pub particles: Vec<Particle>,
-    pub edges: Vec<Edge>,
     pub constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>>,
-    pub edge_compliance: f32,
-    pub volume_compliance: f32,
-    pub bending_compliance: f32,
 }
 
 pub struct Edge {
@@ -52,38 +46,11 @@ impl SoftBody {
         for constrain in self.constraints.iter() {
             constrain.solve(&mut self.particles, delta_squared);
         }
-
-        self.solve_edges(delta);
     }
 
     pub fn post_solve(&mut self, delta: f32) {
         for particle in self.particles.iter_mut() {
             particle.velocity = (particle.position - particle.prev_position) * delta;
-        }
-    }
-
-    pub fn solve_edges(&mut self, delta: f32) {
-        let alpha = self.edge_compliance / delta / delta;
-        for edge in self.edges.iter() {
-            let w = self.particles[edge.a].inverse_mass + self.particles[edge.b].inverse_mass;
-            if w == 0.0 {
-                continue;
-            }
-            let p1 = self.particles[edge.a].position;
-            let p2 = self.particles[edge.b].position;
-            let diff = p1 - p2;
-            let distance = diff.length();
-            if distance == 0.0 {
-                continue;
-            }
-            let direction = diff / distance;
-            let delta = p2 - p1;
-            let distance = delta.length();
-            let residual = -(distance - edge.rest_length) / (w + alpha);
-            self.particles[edge.a].position =
-                p1 + direction * residual * self.particles[edge.a].inverse_mass;
-            self.particles[edge.b].position =
-                p2 - direction * residual * self.particles[edge.b].inverse_mass;
         }
     }
 
@@ -159,7 +126,6 @@ impl SoftBody {
         let radius = 0.2;
         let sections = 7;
         let mut particles = Vec::new();
-        let mut edges = Vec::new();
         let mut constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>> = Vec::new();
 
         for i in 0..=sections {
@@ -208,20 +174,20 @@ impl SoftBody {
         for i in 0..=sections {
             let offset = i * 3;
             // connect vertices on this level
-            edges.push(Edge::from_particles(&particles, offset, offset + 1));
-            edges.push(Edge::from_particles(&particles, offset + 1, offset + 2));
-            edges.push(Edge::from_particles(&particles, offset + 2, offset));
+            constraints.push(Box::new(EdgeConstraint::from_particles(&particles, offset, offset + 1)));
+            constraints.push(Box::new(EdgeConstraint::from_particles(&particles, offset + 1, offset + 2)));
+            constraints.push(Box::new(EdgeConstraint::from_particles(&particles, offset + 2, offset)));
             // connect with vertices on the next level
             if i < sections {
                 for j in 0..3 {
                     for k in 0..3 {
-                        edges.push(Edge::from_particles(&particles, offset + j, offset + 3 + k));
+                        constraints.push(Box::new(EdgeConstraint::from_particles(&particles, offset + j, offset + 3 + k)));
                         let k_next = (k + 1) % 3;
-                        edges.push(Edge::from_particles(
+                        constraints.push(Box::new(EdgeConstraint::from_particles(
                             &particles,
                             offset + j,
                             offset + 3 + k_next,
-                        ));
+                        )));
                     }
                 }
             }
@@ -234,11 +200,7 @@ impl SoftBody {
 
         SoftBody {
             particles,
-            edges,
             constraints,
-            edge_compliance: 0.9,
-            volume_compliance: 0.9,
-            bending_compliance: 0.9,
         }
     }
 }
