@@ -38,7 +38,7 @@ fn setup(mut commands: Commands, mut xpbd: ResMut<XPBDContext>) {
         .insert(OrbitCameraBundle::new(
             OrbitCameraController::default(),
             Vec3::new(0.0, 1.0, 5.0),
-            Vec3::new(0., 0.0, 0.),
+            Vec3::new(0., 1.0, 0.),
             Vec3::Y,
         ));
 

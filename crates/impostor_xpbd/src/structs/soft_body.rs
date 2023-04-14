@@ -10,21 +10,6 @@ pub struct SoftBody {
     pub constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>>,
 }
 
-pub struct Edge {
-    pub a: usize,
-    pub b: usize,
-    pub rest_length: f32,
-}
-impl Edge {
-    fn from_particles(particles: &Vec<Particle>, a: usize, b: usize) -> Self {
-        let rest_length = (particles[a].position - particles[b].position).length();
-        Self { a, b, rest_length }
-    }
-}
-
-
-
-
 impl SoftBody {
     pub fn pre_solve(&mut self, gravity: Vec3, delta: f32) {
         for particle in self.particles.iter_mut() {
@@ -50,7 +35,12 @@ impl SoftBody {
 
     pub fn post_solve(&mut self, delta: f32) {
         for particle in self.particles.iter_mut() {
-            particle.velocity = (particle.position - particle.prev_position) * delta;
+            if particle.inverse_mass == 0.0 {
+                continue;
+            }
+            if delta > 0.0 {
+                particle.velocity = (particle.position - particle.prev_position) / delta * 0.9;
+            }
         }
     }
 
@@ -124,7 +114,7 @@ impl SoftBody {
     pub fn new_octaeder_pillar() -> Self {
         let section_length = 0.4;
         let radius = 0.2;
-        let sections = 7;
+        let sections = 6;
         let mut particles = Vec::new();
         let mut constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>> = Vec::new();
 
@@ -155,20 +145,20 @@ impl SoftBody {
             }
         }
 
-        // add bending constraints
-        for i in 1..sections {
-            for j in 0..3 {
-                //head of the lower triangle
-                let c = (i - 1) * 3 + j;
-                // the common mase of the triangles
-                let a = i * 3 + j;
-                let b = i * 3 + (j + 2) % 3;
-                // head of the upper triangle
-                let d = (i + 1) * 3 + (j + 2) % 3;
-                let constraint = IsometricBendingConstraint::from_particles(&particles, a, b, c, d);
-                constraints.push(Box::new(constraint));
-            }
-        }
+        // // add bending constraints
+        // for i in 1..sections {
+        //     for j in 0..3 {
+        //         //head of the lower triangle
+        //         let c = (i - 1) * 3 + j;
+        //         // the common mase of the triangles
+        //         let a = i * 3 + j;
+        //         let b = i * 3 + (j + 2) % 3;
+        //         // head of the upper triangle
+        //         let d = (i + 1) * 3 + (j + 2) % 3;
+        //         let constraint = IsometricBendingConstraint::from_particles(&particles, a, b, c, d);
+        //         constraints.push(Box::new(constraint));
+        //     }
+        // }
 
         // create edges between neighboring particles
         for i in 0..=sections {
@@ -190,6 +180,19 @@ impl SoftBody {
                         )));
                     }
                 }
+            }
+            // add bending constraints betwen up-down triangle pairs
+            if i < (sections - 1) {
+                for j in 0..3 {
+                    let j_prev = (j + 2) % 3;
+                    let mut constraint = EdgeConstraint::from_particles(
+                        &particles,
+                        offset + j,
+                        offset + 6 + j_prev,
+                    );
+                    constraints.push(Box::new(constraint));
+                }
+
             }
         }
 
