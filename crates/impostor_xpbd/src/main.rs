@@ -127,40 +127,45 @@ fn simulate(
     }
 }
 
-fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, mut xpbd: ResMut<XPBDContext>,) {
-    for soft_body in xpbd.get_bodies().iter() {
-        for edge in soft_body.edges.iter() {
-            shapes
-                .line()
-                .start(soft_body.particles[edge.a].position)
-                .end(soft_body.particles[edge.b].position)
-                .color(Color::WHITE);
+fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, xpbd: Res<XPBDContext>,) {
+    for body in xpbd.get_bodies().iter() {
+        for constraint in body.constraints.iter() {
+            constraint.debug_draw(&body.particles, &mut *shapes)
         }
     }
+    // for soft_body in xpbd.get_bodies().iter() {
+    //     for edge in soft_body.edges.iter() {
+    //         shapes
+    //             .line()
+    //             .start(soft_body.particles[edge.a].position)
+    //             .end(soft_body.particles[edge.b].position)
+    //             .color(Color::WHITE);
+    //     }
+    // }
 
-    // Draw each tetrahedron slightly smaller
-    for soft_body in xpbd.get_bodies().iter() {
-        for tetra in soft_body.tetras.iter() {
-            let a = soft_body.particles[tetra.a].position;
-            let b = soft_body.particles[tetra.b].position;
-            let c = soft_body.particles[tetra.c].position;
-            let d = soft_body.particles[tetra.d].position;
-            let center = (a + b + c + d) / 4.0;
-            let scale = 0.7;
-            let a = (a - center) * scale + center;
-            let b = (b - center) * scale + center;
-            let c = (c - center) * scale + center;
-            let d = (d - center) * scale + center;
+    // // Draw each tetrahedron slightly smaller
+    // for soft_body in xpbd.get_bodies().iter() {
+    //     for tetra in soft_body.tetras.iter() {
+    //         let a = soft_body.particles[tetra.a].position;
+    //         let b = soft_body.particles[tetra.b].position;
+    //         let c = soft_body.particles[tetra.c].position;
+    //         let d = soft_body.particles[tetra.d].position;
+    //         let center = (a + b + c + d) / 4.0;
+    //         let scale = 0.7;
+    //         let a = (a - center) * scale + center;
+    //         let b = (b - center) * scale + center;
+    //         let c = (c - center) * scale + center;
+    //         let d = (d - center) * scale + center;
 
-            let color = Color::YELLOW;
-            shapes.line().start(a).end(b).color(color);
-            shapes.line().start(b).end(c).color(color);
-            shapes.line().start(c).end(a).color(color);
-            shapes.line().start(a).end(d).color(color);
-            shapes.line().start(b).end(d).color(color);
-            shapes.line().start(c).end(d).color(color);
-        }
-    }
+    //         let color = Color::YELLOW;
+    //         shapes.line().start(a).end(b).color(color);
+    //         shapes.line().start(b).end(c).color(color);
+    //         shapes.line().start(c).end(a).color(color);
+    //         shapes.line().start(a).end(d).color(color);
+    //         shapes.line().start(b).end(d).color(color);
+    //         shapes.line().start(c).end(d).color(color);
+    //     }
+    // }
 
     // Draw each bending constraint
     // for soft_body in xpbd.get_bodies().iter() {

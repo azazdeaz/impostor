@@ -1,8 +1,8 @@
+use crate::constraints::XPBDConstraint;
+use crate::structs::*;
 use bevy::prelude::*;
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
 use itertools::izip;
-use crate::structs::*;
-use crate::constraints::XPBDConstraint;
 
 pub struct IsometricBendingConstraint {
     // pivot particle (shared by both triangles)
@@ -18,7 +18,13 @@ pub struct IsometricBendingConstraint {
 }
 
 impl IsometricBendingConstraint {
-    pub fn from_particles(particles: &Vec<Particle>, a: usize, b: usize, c: usize, d: usize) -> Self {
+    pub fn from_particles(
+        particles: &Vec<Particle>,
+        a: usize,
+        b: usize,
+        c: usize,
+        d: usize,
+    ) -> Self {
         let mut bend = Self {
             a,
             b,
@@ -46,7 +52,7 @@ impl IsometricBendingConstraint {
     }
 }
 
-// TODO debug, something is obvously not right. 
+// TODO debug, something is obvously not right.
 impl XPBDConstraint for IsometricBendingConstraint {
     fn get_compliance(&self) -> f32 {
         self.compliance
@@ -114,7 +120,10 @@ impl XPBDConstraint for IsometricBendingConstraint {
                 -((w * (1.0 - d * d).sqrt() * (d.acos() - self.rest_bend)) / divisor) * delta;
             // TODO: find out how alpha works
             let push = constraint_violation / (w + alpha);
-            println!("particle {} constraint_violation: {:?} alpha: {:?}", particle, constraint_violation, alpha);
+            println!(
+                "particle {} constraint_violation: {:?} alpha: {:?}",
+                particle, constraint_violation, alpha
+            );
 
             let particle = &mut particles[*particle];
 
@@ -127,9 +136,29 @@ impl XPBDConstraint for IsometricBendingConstraint {
             particle.position += push;
         }
     }
+
+    fn debug_draw(&self, particles: &Vec<Particle>, shapes: &mut DebugShapes) {
+        let a = particles[self.a].position;
+        let b = particles[self.b].position;
+        let c = particles[self.c].position;
+        let d = particles[self.d].position;
+        let center = (a + b + c + d) / 4.0;
+        let scale = 1.0;
+        let a = (a - center) * scale + center;
+        let b = (b - center) * scale + center;
+        let c = (c - center) * scale + center;
+        let d = (d - center) * scale + center;
+
+        let color_base = Color::BLUE;
+        let color_up = Color::ALICE_BLUE;
+        let color_down = Color::MIDNIGHT_BLUE;
+        shapes.line().start(a).end(b).color(color_base);
+        shapes.line().start(a).end(c).color(color_down);
+        shapes.line().start(a).end(d).color(color_up);
+        shapes.line().start(b).end(c).color(color_down);
+        shapes.line().start(b).end(d).color(color_up);
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    
-}
+mod tests {}
