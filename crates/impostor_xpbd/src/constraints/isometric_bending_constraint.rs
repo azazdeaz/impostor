@@ -37,7 +37,7 @@ impl IsometricBendingConstraint {
         bend
     }
 
-    pub fn get_bend(&self, particles: &Vec<Particle>) -> f32 {
+    fn get_bend(&self, particles: &Vec<Particle>) -> f32 {
         let pa = particles[self.a].position;
         let pb = particles[self.b].position;
         let pc = particles[self.c].position;
@@ -52,11 +52,12 @@ impl IsometricBendingConstraint {
     }
 }
 
-// TODO debug, something is obvously not right.
+
 impl XPBDConstraint for IsometricBendingConstraint {
     fn get_compliance(&self) -> f32 {
         self.compliance
     }
+    // TODO debug, something is obvously not right.
     fn solve(&self, particles: &mut Vec<Particle>, delta_squared: f32) {
         let alpha = self.compliance / delta_squared;
         // As described  in "Position Based Dynamics" Appendix A, by Müller et al.

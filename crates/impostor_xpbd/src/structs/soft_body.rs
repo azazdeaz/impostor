@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use serde_json::json;
-use crate::constraints::{XPBDConstraint, IsometricBendingConstraint};
+use crate::constraints::{XPBDConstraint, IsometricBendingConstraint, VolumeConstraint};
 use itertools::{izip, Itertools};
 
 use super::Particle;
@@ -10,7 +10,6 @@ use super::Particle;
 pub struct SoftBody {
     pub particles: Vec<Particle>,
     pub edges: Vec<Edge>,
-    pub tetras: Vec<Tetra>,
     pub constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>>,
     pub edge_compliance: f32,
     pub volume_compliance: f32,
@@ -29,203 +28,7 @@ impl Edge {
     }
 }
 
-pub struct Tetra {
-    pub a: usize,
-    pub b: usize,
-    pub c: usize,
-    pub d: usize,
-    pub rest_volume: f32,
-}
-impl Tetra {
-    // The particles should beordered so the volume function returns a positive value
-    // The order good if the normal of (b-a) x (c-a) should point to (d-a) (and not in the opposite direction)
-    // Another way to validate the order:
-    //  - Right thumb points from a to d
-    //  - Right index finger points from a to b
-    //  - If you rotate your hand around the right thumb to point the index finger to c,
-    //  - The order is correct if the rotation is clockwise (when the thumb points towards you)
-    fn from_particles(
-        particles: &mut Vec<Particle>,
-        a: usize,
-        b: usize,
-        c: usize,
-        d: usize,
-    ) -> Self {
-        let mut tetra = Self {
-            a,
-            b,
-            c,
-            d,
-            rest_volume: 0.0,
-        };
-        tetra.rest_volume = tetra.volume(particles);
-        assert!(tetra.rest_volume > 0.0, "initial rest_volume must be positive (make sure the tetra indices order is correct)");
-        if tetra.rest_volume > 0.0 {
-            let quarter_inverse_mass = 1.0 / (tetra.rest_volume / 4.0);
-            particles[a].inverse_mass += quarter_inverse_mass;
-            particles[b].inverse_mass += quarter_inverse_mass;
-            particles[c].inverse_mass += quarter_inverse_mass;
-            particles[d].inverse_mass += quarter_inverse_mass;
-        }
-        tetra
-    }
-    fn volume(&self, particles: &Vec<Particle>) -> f32 {
-        let a_position = particles[self.a].position;
-        let v1 = particles[self.b].position - a_position;
-        let v2 = particles[self.c].position - a_position;
-        let v3 = particles[self.d].position - a_position;
-        v1.cross(v2).dot(v3) / 6.0
-    }
 
-    fn solve(&self, particles: &mut Vec<Particle>, alpha: f32) {
-        let mut w = 0.0;
-        // all combinations of [id, ...opposite ids]
-        // TODO: I think the order doesnt matter because ||AB x AC||^2 is the same regardless of the order, but i should check if this is true
-        let id_views = [
-            (self.a, self.b, self.d, self.c),
-            (self.b, self.a, self.c, self.d),
-            (self.c, self.a, self.d, self.b),
-            (self.d, self.a, self.b, self.c),
-        ];
-        let gradients = id_views
-            .iter()
-            .map(|(pivot, a, b, c)| {
-                let pa = particles[*a].position;
-                let pb = particles[*b].position;
-                let pc = particles[*c].position;
-                let gradient = (pb - pa).cross(pc - pa) / 6.0;
-                w += particles[*pivot].inverse_mass * gradient.length_squared();
-                gradient
-            })
-            .collect_vec();
-        if w == 0.0 {
-            return;
-        }
-        let volume = self.volume(&particles);
-        let residual = -(volume - self.rest_volume) / (w + alpha);
-        for (index, gradient) in gradients.into_iter().enumerate() {
-            let inverse_mass = particles[id_views[index].0].inverse_mass;
-            let push = gradient * residual * inverse_mass;
-            particles[id_views[index].0].position += push;
-        }
-    }
-}
-
-struct BendConstraint {
-    // pivot particle (shared by both triangles)
-    a: usize,
-    // the other particle shared by both triangles
-    b: usize,
-    // head of the first triangle
-    c: usize,
-    // head of the second triangle
-    d: usize,
-    rest_bend: f32,
-}
-
-impl BendConstraint {
-    fn from_particles(particles: &Vec<Particle>, a: usize, b: usize, c: usize, d: usize) -> Self {
-        let mut bend = Self {
-            a,
-            b,
-            c,
-            d,
-            rest_bend: 0.0,
-        };
-        bend.rest_bend = bend.get_bend(particles);
-        bend
-    }
-
-    fn get_bend(&self, particles: &Vec<Particle>) -> f32 {
-        let pa = particles[self.a].position;
-        let pb = particles[self.b].position;
-        let pc = particles[self.c].position;
-        let pd = particles[self.d].position;
-        let vab = pb - pa;
-        let vac = pc - pa;
-        let vad = pd - pa;
-        let norm1 = vab.cross(vac).normalize();
-        let norm2 = vab.cross(vad).normalize();
-        let bend = norm1.dot(norm2).acos();
-        bend
-    }
-
-    fn solve(&self, particles: &mut Vec<Particle>, alpha: f32) {
-        // As described  in "Position Based Dynamics" Appendix A, by Müller et al.
-        let pa = particles[self.a].position;
-        let pb = particles[self.b].position;
-        let pc = particles[self.c].position;
-        let pd = particles[self.d].position;
-        let wa = particles[self.a].inverse_mass;
-        let wb = particles[self.b].inverse_mass;
-        let wc = particles[self.c].inverse_mass;
-        let wd = particles[self.d].inverse_mass;
-        let vab = pb - pa;
-        let vac = pc - pa;
-        let vad = pd - pa;
-
-        let outer = |a: Vec3, b: Vec3| -> Mat3 { Mat3::from_cols(a * b.x, a * b.y, a * b.z) };
-
-        // Transposed cross product matrix
-        let tcpm = |vec: Vec3| -> Mat3 {
-            Mat3::from_cols(
-                Vec3::new(0.0, vec.z, -vec.y),
-                Vec3::new(-vec.z, 0.0, vec.x),
-                Vec3::new(vec.y, -vec.x, 0.0),
-            )
-        };
-
-        // Gradient of the normalized cross product
-        let norm_grads = |p1: Vec3, p2: Vec3| {
-            let normal = p1.cross(p2);
-            let normal_length = normal.length();
-            let normal = normal / normal_length;
-            let inverse_normal_length = 1.0 / normal_length;
-            let grad1 = inverse_normal_length * (-tcpm(p2) + outer(normal, normal.cross(p2)));
-            let grad2 = inverse_normal_length * (-tcpm(p1) + outer(normal, normal.cross(p1)));
-            (normal, grad1, grad2)
-        };
-
-        let (n1, dn1_dpb, dn1_dpc) = norm_grads(vab, vac);
-        let (n2, dn2_dpb, dn2_dpd) = norm_grads(vab, vad);
-
-        // let c1 = (pa + pb + pc) / 3.0;
-        // let c2 = (pa + pb + pd) / 3.0;
-        // debug.line().start(c1).end(c1 + n1).color(Color::RED);
-        // debug.line().start(c2).end(c2 + n2).color(Color::RED);
-
-        let d = n1.dot(n2);
-        let d_arccos_dx = -1.0 / (1.0 - d * d).sqrt();
-        let delta_c = d_arccos_dx * (dn1_dpc.transpose() * n2);
-        let delta_d = d_arccos_dx * (dn2_dpd.transpose() * n1);
-        let delta_b = d_arccos_dx * (dn1_dpb.transpose() * n2 + dn2_dpb.transpose() * n1);
-        let delta_a = -delta_b - delta_c - delta_d;
-
-        let ids = [self.a, self.b, self.c, self.d];
-        let ws = [wa, wb, wc, wd];
-        let deltas = [delta_a, delta_b, delta_c, delta_d];
-        let divisor = izip!(&ws, &deltas)
-            .map(|(w, delta)| w * delta.length_squared())
-            .sum::<f32>();
-        for (particle, &delta, w) in izip!(&ids, &deltas, &ws) {
-            let C: Vec3 =
-                -((w * (1.0 - d * d).sqrt() * (d.acos() - self.rest_bend)) / divisor) * delta;
-
-            let push = C / (w + alpha);
-            println!("particle {} C: {:?} alpha: {:?}", particle, C, alpha);
-
-            let particle = &mut particles[*particle];
-
-            // debug
-            //     .line()
-            //     .start(particle.position)
-            //     .end(particle.position + push)
-            //     .color(Color::LIME_GREEN);
-
-            particle.position += push;
-        }
-    }
-}
 
 
 impl SoftBody {
@@ -251,12 +54,6 @@ impl SoftBody {
         }
 
         self.solve_edges(delta);
-        
-        
-        let volume_alpha = self.volume_compliance / delta / delta;
-        for volume_constraint in self.tetras.iter() {
-            volume_constraint.solve(&mut self.particles, volume_alpha);
-        }
     }
 
     pub fn post_solve(&mut self, delta: f32) {
@@ -290,59 +87,6 @@ impl SoftBody {
         }
     }
 
-    pub fn export(&self) {
-        // flat vertices
-        let vertices = self
-            .particles
-            .iter()
-            .map(|p| [p.position.x, p.position.y, p.position.z])
-            .flatten()
-            .collect_vec();
-        // flat edge indices
-        let edges = self
-            .edges
-            .iter()
-            .map(|e| [e.a as u32, e.b as u32])
-            .flatten()
-            .collect_vec();
-        // flat tetra indices
-        let tetras = self
-            .tetras
-            .iter()
-            .map(|t| [t.a as u32, t.b as u32, t.c as u32, t.d as u32])
-            .flatten()
-            .collect_vec();
-        // surfate mesh triangle indices
-        let triangles = self
-            .tetras
-            .iter()
-            .flat_map(|t| {
-                [
-                    [t.a, t.b, t.d],
-                    [t.b, t.a, t.c],
-                    [t.c, t.a, t.d],
-                    [t.d, t.a, t.b],
-                ]
-            })
-            .flatten()
-            .collect_vec();
-
-        // print as json
-        let json = json!({
-                "tet": {
-                    // "verts": vertices,
-                    "inverse_masses": self.particles.iter().map(|p| p.inverse_mass).collect_vec(),
-                //     "tetIds": tetras,
-                //     "tetVolumes": self.tetras.iter().map(|t| t.rest_volume).collect_vec(),
-                //     "edgeIds": edges,
-                // },
-                // "viz": {
-                //     "triIds": triangles
-                }
-            }
-        );
-        println!("{}", json);
-    }
 
     // pub fn new_triangle_pillar() -> Self {
     //     let section_length = 0.4;
@@ -416,7 +160,6 @@ impl SoftBody {
         let sections = 7;
         let mut particles = Vec::new();
         let mut edges = Vec::new();
-        let mut tetras = Vec::new();
         let mut constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>> = Vec::new();
 
         for i in 0..=sections {
@@ -436,13 +179,13 @@ impl SoftBody {
         for i in 0..sections {
             let offset = i * 3;
             for tetra in tetra_ids.iter() {
-                tetras.push(Tetra::from_particles(
+                constraints.push(Box::new(VolumeConstraint::from_particles(
                     &mut particles,
                     offset + tetra[0],
                     offset + tetra[1],
                     offset + tetra[2],
                     offset + tetra[3],
-                ));
+                )));
             }
         }
 
@@ -492,7 +235,6 @@ impl SoftBody {
         SoftBody {
             particles,
             edges,
-            tetras,
             constraints,
             edge_compliance: 0.9,
             volume_compliance: 0.9,
