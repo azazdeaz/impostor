@@ -4,6 +4,9 @@ pub use edge_constraint::*;
 mod isometric_bending_constraint;
 pub use isometric_bending_constraint::*;
 
+mod isometric_bending_constraint_wip;
+pub use isometric_bending_constraint_wip::*;
+
 mod volume_constraint;
 pub use volume_constraint::*;
 
