@@ -145,20 +145,20 @@ impl SoftBody {
             }
         }
 
-        // // add bending constraints
-        // for i in 1..sections {
-        //     for j in 0..3 {
-        //         //head of the lower triangle
-        //         let c = (i - 1) * 3 + j;
-        //         // the common mase of the triangles
-        //         let a = i * 3 + j;
-        //         let b = i * 3 + (j + 2) % 3;
-        //         // head of the upper triangle
-        //         let d = (i + 1) * 3 + (j + 2) % 3;
-        //         let constraint = IsometricBendingConstraint::from_particles(&particles, a, b, c, d);
-        //         constraints.push(Box::new(constraint));
-        //     }
-        // }
+        // add bending constraints
+        for i in 1..sections {
+            for j in 0..3 {
+                //head of the lower triangle
+                let c = (i - 1) * 3 + j;
+                // the common mase of the triangles
+                let a = i * 3 + j;
+                let b = i * 3 + (j + 2) % 3;
+                // head of the upper triangle
+                let d = (i + 1) * 3 + (j + 2) % 3;
+                let constraint = IsometricBendingConstraint::from_particles(&particles, a, b, c, d);
+                constraints.push(Box::new(constraint));
+            }
+        }
 
         // create edges between neighboring particles
         for i in 0..=sections {
@@ -182,18 +182,18 @@ impl SoftBody {
                 }
             }
             // add bending constraints betwen up-down triangle pairs
-            if i < (sections - 1) {
-                for j in 0..3 {
-                    let j_prev = (j + 2) % 3;
-                    let mut constraint = EdgeConstraint::from_particles(
-                        &particles,
-                        offset + j,
-                        offset + 6 + j_prev,
-                    );
-                    constraints.push(Box::new(constraint));
-                }
+            // if i < (sections - 1) {
+            //     for j in 0..3 {
+            //         let j_prev = (j + 2) % 3;
+            //         let mut constraint = EdgeConstraint::from_particles(
+            //             &particles,
+            //             offset + j,
+            //             offset + 6 + j_prev,
+            //         );
+            //         constraints.push(Box::new(constraint));
+            //     }
 
-            }
+            // }
         }
 
         // set the inverse mass of the first section to zero
@@ -204,6 +204,126 @@ impl SoftBody {
         SoftBody {
             particles,
             constraints,
+        }
+    }
+
+    pub fn new_triangle_pie_pillar() -> Self {
+        let section_length = 0.17    ;
+        let radius = 0.1;
+        let sections = 7;
+        // triangles per section
+        let slices = 5;
+        let mut particles = Vec::new();
+        let mut constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>> = Vec::new();
+        
+
+        for i in 0..=sections {
+            let y = i as f32 * section_length;
+            // center of the slice
+            particles.push(Particle::from_position(Vec3::new(0.0, y, 0.0)));
+            // iterate over the angles of the section
+            for j in 0..slices {
+                let angle = PI * 2.0 * j as f32 / slices as f32;
+                let x = radius * angle.cos();
+                let z = radius * angle.sin();
+                particles.push(Particle::from_position(Vec3::new(x, y, z)));
+            }
+        }
+
+        macro_rules! edge {
+            ($a:expr, $b:expr) => {
+                constraints.push(Box::new(EdgeConstraint::from_particles(&particles, $a, $b)));
+            };
+        }
+
+        macro_rules! volume {
+            ($a:expr, $b:expr, $c:expr, $d:expr) => {
+                constraints.push(Box::new(VolumeConstraint::from_particles(
+                    &mut particles,
+                    $a,
+                    $b,
+                    $c,
+                    $d,
+                )));
+            };
+        }
+        
+
+        // number of particles per section (slices + 1 center particle)
+        let up = slices + 1; 
+        
+        for i in 0..sections {
+            // Fill each slice with three tetraherons
+            let lower_center = i * up;
+            let upper_center = (i + 1) * up;
+            for j in 0..slices {
+                let pa_offset = 1 + j;
+                let pb_offset = 1 + ((j + 1) % slices);
+                println!("lower_center: {}, upper_center: {}, pa_offset: {}, pb_offset: {}", lower_center, upper_center, pa_offset, pb_offset);
+                let lower = [lower_center, lower_center + pa_offset, lower_center + pb_offset];
+                let upper = [upper_center, upper_center + pa_offset, upper_center + pb_offset];
+                
+                // create three tetraherons filling up each slice without overlap
+                // If up=6, the first three tetraherons are [[0,1,2,9], [0,1,8,9], [0,7,8,9]]
+                volume!(lower[0], lower[1], lower[2], upper[2]);
+                volume!(lower[0], lower[1], upper[1], upper[2]);
+                volume!(lower[0], upper[0], upper[1], upper[2]);
+                }
+                
+        }
+
+        // // create edges between neighboring particles
+        // for i in 0..=sections {
+        //     // Connect each neighboring particle with an EdgeConstraint
+        //     let lower_center = i * up;
+        //     let upper_center = (i + 1) * up;
+        //     // Center vertical edge
+        //     if i < sections {
+        //         edge!(lower_center, upper_center);
+        //     }
+        //     for j in 0..slices {
+        //         let pb_offset = 1 + ((j + 1) % slices);
+        //         let pa_offset = 1 + j;
+                
+        //         if i < sections {
+        //             // Side vertical edge
+        //             edge!(lower_center + pa_offset, upper_center + pa_offset);
+        //             // Diagonal edges
+        //             edge!(lower_center + pa_offset, upper_center + pb_offset); 
+        //             edge!(lower_center + pb_offset, upper_center + pa_offset);
+        //             edge!(lower_center, upper_center + pa_offset);
+        //             edge!(upper_center, lower_center + pa_offset)
+        //         }
+        //         // Horizontal edges
+        //         edge!(lower_center, lower_center + pa_offset);
+        //         edge!(lower_center + pa_offset, lower_center + pb_offset);
+
+        //     }
+            
+        // }
+
+        // Add EdgeConstraints between each particle on the same level and the next level
+        for i in 0..=sections {
+            for j in 0..slices {
+                let start = i * up + j;
+                // iterate all the following particles up until the next level
+                for k in (start+1)..(start + 2 * up - 1 - j) {
+                    if k >= particles.len() {
+                        break;
+                    }
+                    edge!(start, k);
+                }
+            }
+        }  
+
+        // set the inverse mass of the first section
+        for i in 0..=slices {
+            particles[i].inverse_mass = 0.0;
+        }
+
+        SoftBody {
+            particles,
+            constraints
         }
     }
 }

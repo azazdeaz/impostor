@@ -13,13 +13,6 @@ pub struct VolumeConstraint {
     pub compliance: f32,
 }
 impl VolumeConstraint {
-    // The particles should beordered so the volume function returns a positive value
-    // The order good if the normal of (b-a) x (c-a) should point to (d-a) (and not in the opposite direction)
-    // Another way to validate the order:
-    //  - Right thumb points from a to d
-    //  - Right index finger points from a to b
-    //  - If you rotate your hand around the right thumb to point the index finger to c,
-    //  - The order is correct if the rotation is clockwise (when the thumb points towards you)
     pub fn from_particles(
         particles: &mut Vec<Particle>,
         a: usize,
@@ -36,9 +29,17 @@ impl VolumeConstraint {
             compliance: 0.1,
         };
         tetra.rest_volume = tetra.volume(particles);
+        // Swap b and c if the volume is negative
+        if tetra.rest_volume < 0.0 {
+            let tmp = tetra.b;
+            tetra.b = tetra.c;
+            tetra.c = tmp;
+            tetra.rest_volume = tetra.volume(particles);
+        }
         assert!(
             tetra.rest_volume > 0.0,
-            "initial rest_volume must be positive (make sure the tetra indices order is correct)"
+            "initial rest_volume is still not positive (={}) after swapping b and c",
+            tetra.rest_volume
         );
         if tetra.rest_volume > 0.0 {
             let quarter_inverse_mass = 1.0 / (tetra.rest_volume / 4.0);
