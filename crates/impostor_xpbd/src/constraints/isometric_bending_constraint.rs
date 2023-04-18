@@ -13,10 +13,20 @@ pub struct IsometricBendingConstraint {
     pub c: usize,
     // head of the second triangle
     pub d: usize,
-    pub rest_bend: f32,
+    // Q
+    pub initial_bending_energy: Mat4,
     pub compliance: f32,
 }
 
+//              pb
+//            /-^<\
+//       e1/--  |  --\e4
+//      /--     |     --\
+// pd <-        e0       -> pc
+//      \--     |     --/
+//       e2\--  |  --/e3
+//            \>|-/
+//              pa
 impl IsometricBendingConstraint {
     pub fn from_particles(
         particles: &Vec<Particle>,
@@ -30,112 +40,136 @@ impl IsometricBendingConstraint {
             b,
             c,
             d,
-            rest_bend: 0.0,
+            initial_bending_energy: Mat4::default(),
             compliance: 0.1,
         };
-        bend.rest_bend = bend.get_bend(particles);
+        bend.initial_bending_energy = bend.get_bending_energy(particles);
         bend
     }
 
-    fn get_bend(&self, particles: &Vec<Particle>) -> f32 {
+    // fn get_bend(&self, particles: &Vec<Particle>) -> f32 {
+    //     let pa = particles[self.a].position;
+    //     let pb = particles[self.b].position;
+    //     let pc = particles[self.c].position;
+    //     let pd = particles[self.d].position;
+    //     let vab = pb - pa;
+    //     let vac = pc - pa;
+    //     let vad = pd - pa;
+    //     let norm1 = vab.cross(vac).normalize();
+    //     let norm2 = vab.cross(vad).normalize();
+    //     let bend = norm1.dot(norm2).acos();
+    //     bend
+    // }
+
+    // Q
+    fn get_bending_energy(&self, particles: &Vec<Particle>) -> Mat4 {
         let pa = particles[self.a].position;
         let pb = particles[self.b].position;
         let pc = particles[self.c].position;
         let pd = particles[self.d].position;
-        let vab = pb - pa;
-        let vac = pc - pa;
-        let vad = pd - pa;
-        let norm1 = vab.cross(vac).normalize();
-        let norm2 = vab.cross(vad).normalize();
-        let bend = norm1.dot(norm2).acos();
-        bend
+
+        let e0 = pb - pa;
+        let e1 = pd - pb;
+        let e2 = pa - pd;
+        let e3 = pc - pa;
+        let e4 = pb - pc;
+
+        let area_left = e0.cross(pd - pa).length() * 0.5;
+        let area_right = e0.cross(e3).length() * 0.5;
+        let area = area_left + area_right;
+
+        let cot = |v0: Vec3, v1: Vec3| -> f32 { v0.dot(v1) / v0.cross(v1).length() };
+        // K = (c01 + c04, c02 + c03, −c01 − c02, −c03 − c04)
+        let c01 = cot(e0, e1);
+        let c02 = cot(e0, e2);
+        let c03 = cot(e0, e3);
+        let c04 = cot(e0, e4);
+        let k = Vec4::new(c01 + c04, c02 + c03, -c01 - c02, -c03 - c04);
+        outer_product(k, k) * (3.0 / area)
+    }
+
+    fn calculate_constraint_value(&self, particles: &Vec<Particle>) -> f32 {
+        let mut sum = 0.0;
+        let particles = [
+            particles[self.a].position,
+            particles[self.b].position,
+            particles[self.c].position,
+            particles[self.d].position,
+        ];
+        for i in 0..4 {
+            for j in 0..4 {
+                sum += self.initial_bending_energy.row(i)[j] * particles[i].dot(particles[j]);
+            }
+        }
+        sum / 2.0
+    }
+
+    fn calculate_gradient(&self, particles: &Vec<Particle>) -> Vec<Vec3> {
+        let mut gradient = vec![Vec3::default(); 4];
+        let particles = [
+            particles[self.a].position,
+            particles[self.b].position,
+            particles[self.c].position,
+            particles[self.d].position,
+        ];
+        for i in 0..4 {
+            for j in 0..4 {
+                gradient[i] += self.initial_bending_energy.row(i)[j] * particles[j];
+            }
+        }
+        gradient
     }
 }
 
+fn outer_product(v0: Vec4, v1: Vec4) -> Mat4 {
+    Mat4::from_cols(
+        Vec4::new(v0.x * v1.x, v0.x * v1.y, v0.x * v1.z, v0.x * v1.w),
+        Vec4::new(v0.y * v1.x, v0.y * v1.y, v0.y * v1.z, v0.y * v1.w),
+        Vec4::new(v0.z * v1.x, v0.z * v1.y, v0.z * v1.z, v0.z * v1.w),
+        Vec4::new(v0.w * v1.x, v0.w * v1.y, v0.w * v1.z, v0.w * v1.w),
+    )
+}
 
 impl XPBDConstraint for IsometricBendingConstraint {
     fn get_compliance(&self) -> f32 {
         self.compliance
     }
-    // TODO debug, something is obvously not right.
+
     fn solve(&self, particles: &mut Vec<Particle>, delta_squared: f32) {
         let alpha = self.compliance / delta_squared;
         // As described  in "Position Based Dynamics" Appendix A, by Müller et al.
-        let pa = particles[self.a].position;
-        let pb = particles[self.b].position;
-        let pc = particles[self.c].position;
-        let pd = particles[self.d].position;
-        let wa = particles[self.a].inverse_mass;
-        let wb = particles[self.b].inverse_mass;
-        let wc = particles[self.c].inverse_mass;
-        let wd = particles[self.d].inverse_mass;
-        let vab = pb - pa;
-        let vac = pc - pa;
-        let vad = pd - pa;
+        // let pa = particles[self.a].position;
+        // let pb = particles[self.b].position;
+        // let pc = particles[self.c].position;
+        // let pd = particles[self.d].position;
+        let ima = particles[self.a].inverse_mass;
+        let imb = particles[self.b].inverse_mass;
+        let imc = particles[self.c].inverse_mass;
+        let imd = particles[self.d].inverse_mass;
 
-        let outer = |a: Vec3, b: Vec3| -> Mat3 { Mat3::from_cols(a * b.x, a * b.y, a * b.z) };
-
-        // Transposed cross product matrix
-        let tcpm = |vec: Vec3| -> Mat3 {
-            Mat3::from_cols(
-                Vec3::new(0.0, vec.z, -vec.y),
-                Vec3::new(-vec.z, 0.0, vec.x),
-                Vec3::new(vec.y, -vec.x, 0.0),
-            )
-        };
-
-        // Gradient of the normalized cross product
-        let norm_grads = |p1: Vec3, p2: Vec3| {
-            let normal = p1.cross(p2);
-            let normal_length = normal.length();
-            let normal = normal / normal_length;
-            let inverse_normal_length = 1.0 / normal_length;
-            let grad1 = inverse_normal_length * (-tcpm(p2) + outer(normal, normal.cross(p2)));
-            let grad2 = inverse_normal_length * (-tcpm(p1) + outer(normal, normal.cross(p1)));
-            (normal, grad1, grad2)
-        };
-
-        let (n1, dn1_dpb, dn1_dpc) = norm_grads(vab, vac);
-        let (n2, dn2_dpb, dn2_dpd) = norm_grads(vab, vad);
-
-        // let c1 = (pa + pb + pc) / 3.0;
-        // let c2 = (pa + pb + pd) / 3.0;
-        // debug.line().start(c1).end(c1 + n1).color(Color::RED);
-        // debug.line().start(c2).end(c2 + n2).color(Color::RED);
-
-        let d = n1.dot(n2);
-        let d_arccos_dx = -1.0 / (1.0 - d * d).sqrt();
-        let delta_c = d_arccos_dx * (dn1_dpc.transpose() * n2);
-        let delta_d = d_arccos_dx * (dn2_dpd.transpose() * n1);
-        let delta_b = d_arccos_dx * (dn1_dpb.transpose() * n2 + dn2_dpb.transpose() * n1);
-        let delta_a = -delta_b - delta_c - delta_d;
-
-        let ids = [self.a, self.b, self.c, self.d];
-        let ws = [wa, wb, wc, wd];
-        let deltas = [delta_a, delta_b, delta_c, delta_d];
-        let divisor = izip!(&ws, &deltas)
-            .map(|(w, delta)| w * delta.length_squared())
-            .sum::<f32>();
-        for (particle, &delta, w) in izip!(&ids, &deltas, &ws) {
-            let constraint_violation: Vec3 =
-                -((w * (1.0 - d * d).sqrt() * (d.acos() - self.rest_bend)) / divisor) * delta;
-            // TODO: find out how alpha works
-            let push = constraint_violation / (w + alpha);
-            println!(
-                "particle {} constraint_violation: {:?} alpha: {:?}",
-                particle, constraint_violation, alpha
-            );
-
-            let particle = &mut particles[*particle];
-
-            // debug
-            //     .line()
-            //     .start(particle.position)
-            //     .end(particle.position + push)
-            //     .color(Color::LIME_GREEN);
-
-            particle.position += push;
+        let energy = self.calculate_constraint_value(particles);
+        if energy < 1e-12 {
+            return;
         }
+
+        let grad = self.calculate_gradient(particles);
+        let mut sum_normal_grad = 0.0;
+        sum_normal_grad += ima * grad[0].length_squared();
+        sum_normal_grad += imb * grad[1].length_squared();
+        sum_normal_grad += imc * grad[2].length_squared();
+        sum_normal_grad += imd * grad[3].length_squared();
+
+        if sum_normal_grad.abs() < 1e-9 {
+            return;
+        }
+
+        // compute impulse-based scaling factor
+        let s = energy / sum_normal_grad;
+
+        particles[self.a].position += s * ima * grad[0] * alpha;
+        particles[self.b].position += s * imb * grad[1] * alpha;
+        particles[self.c].position += s * imc * grad[2] * alpha;
+        particles[self.d].position += s * imd * grad[3] * alpha;
     }
 
     fn debug_draw(&self, particles: &Vec<Particle>, shapes: &mut DebugShapes) {
