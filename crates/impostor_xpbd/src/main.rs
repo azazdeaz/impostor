@@ -43,8 +43,9 @@ fn setup(mut commands: Commands, mut xpbd: ResMut<XPBDContext>) {
         ));
 
     // commands.spawn(SoftBody::new_triangle_pillar());
-    let body = SoftBody::new_octaeder_pillar();
+    // let body = SoftBody::new_octaeder_pillar();
     // let body = SoftBody::new_triangle_pie_pillar();
+    let body = SoftBody::new_stem_bend_based();
     xpbd.add_body(body);
 }
 
@@ -117,6 +118,7 @@ fn simulate(
 ) {
     let delta = time.delta_seconds();
     let gravity = Vec3::new(0.0, -9.81, 0.0);
+    let gravity = Vec3::ZERO;
     let substeps = 36;
     let sub_delta = delta / substeps as f32;
     for _ in 0..substeps {

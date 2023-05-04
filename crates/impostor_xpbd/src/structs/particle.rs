@@ -4,6 +4,8 @@ use bevy::prelude::*;
 pub struct Particle {
     pub position: Vec3,
     pub prev_position: Vec3,
+    pub rotation: Quat,
+    pub prev_rotation: Quat,
     pub velocity: Vec3,
     pub inverse_mass: f32,
 }

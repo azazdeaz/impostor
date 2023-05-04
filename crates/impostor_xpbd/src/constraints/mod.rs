@@ -9,3 +9,6 @@ pub use volume_constraint::*;
 
 mod xpbd_constraint;
 pub use xpbd_constraint::*;
+
+mod stem_bend_constraint;
+pub use stem_bend_constraint::*;
