@@ -328,14 +328,14 @@ impl SoftBody {
     }
 
     pub fn new_stem_bend_based() -> Self {
-        let sections = 7;
+        let sections = 3;
         let section_length = 0.4;
         let mut particles = Vec::new();
         let mut constraints: Vec<Box<dyn XPBDConstraint + Send + Sync>> = Vec::new();
 
         for i in 0..sections {
             let y = i as f32 * section_length;
-            particles.push(Particle::from_position(Vec3::new(0.0, y, 0.0)));
+            particles.push(Particle::from_position(Vec3::new(0.1*i as f32, y, 0.0)));
         }
         for i in 0..(sections-1) {
             let constraint = StemBendConstraint::from_particles(&particles, i, i+1);

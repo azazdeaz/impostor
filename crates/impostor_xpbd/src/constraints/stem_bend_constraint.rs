@@ -3,45 +3,48 @@ use crate::structs::*;
 use bevy::prelude::*;
 use bevy_prototype_debug_lines::DebugShapes;
 
+#[derive(Default)]
 pub struct StemBendConstraint {
     pub a: usize,
     pub b: usize,
     pub rest_direction: f32,
     pub rest_radius: f32,
     pub rest_length: f32,
+    pub normal: Vec3,
+    pub zero: Vec3,
     pub compliance: f32,
 }
 impl StemBendConstraint {
     pub fn from_particles(particles: &Vec<Particle>, a: usize, b: usize) -> Self {
-        let rest_length = (particles[a].position - particles[b].position).length();
-        let transform_a =
-            Transform::from_translation(particles[a].position).with_rotation(particles[a].rotation);
-        let transform_b =
-            Transform::from_translation(particles[b].position).with_rotation(particles[b].rotation);
-        let local = Transform::from_matrix(
-            transform_a.compute_matrix().inverse() * transform_b.compute_matrix(),
-        );
-        Self {
+        let mut constraint = Self {
             a,
             b,
-            rest_direction: local.translation.z.atan2(local.translation.x),
-            rest_radius: local.translation.x.hypot(local.translation.z),
-            rest_length,
-            compliance: 0.1,
-        }
+            normal: Vec3::Y,
+            zero: Vec3::Z,
+            ..Default::default()
+        };
+        let (direction, radius, length) = constraint.compute_params(particles);
+        constraint.rest_direction = direction;
+        constraint.rest_radius = radius;
+        constraint.rest_length = length;
+        constraint
     }
 
     fn compute_params(&self, particles: &Vec<Particle>) -> (f32, f32, f32) {
-        let transform_a =
-            Transform::from_translation(particles[self.a].position).with_rotation(particles[self.a].rotation);
-        let transform_b =
-            Transform::from_translation(particles[self.b].position).with_rotation(particles[self.b].rotation);
-        let local = Transform::from_matrix(
-            transform_a.compute_matrix().inverse() * transform_b.compute_matrix()
-        );
-        let direction = local.translation.z.atan2(local.translation.x);
-        let radius = local.translation.x.hypot(local.translation.z);
-        let length = radius.hypot(local.translation.y);
+        let pa = particles[self.a].position;
+        let pb = particles[self.b].position;
+        // project pb onto the plane defined by pa and normal
+        let ab = pb - pa;
+        let length = ab.length();
+        let projection = ab - self.normal * ab.dot(self.normal);
+        let radius = projection.length();
+        // find the unsigned angle distance between the projection and the zero vector 
+        let mut direction = self.zero.angle_between(projection);  
+        // if the projection is in the negative direction, flip the angle 
+        // normal ⋅ (zero × b) < 0 (compute the triple product)
+        if projection.cross(self.zero).dot(self.normal) < 0.0 {
+            direction = -direction;
+        }
         (direction, radius, length)
     }
 }
@@ -51,7 +54,24 @@ impl XPBDConstraint for StemBendConstraint {
         self.compliance
     }
     fn solve(&self, particles: &mut Vec<Particle>, delta_squared: f32) {
+        println!("solve {} -> {} * {}", self.a, self.b, delta_squared);
         let alpha = self.compliance / delta_squared;
+        let (direction, radius, length) = self.compute_params(particles);
+        let radius = radius + (self.rest_radius - radius) * alpha;
+        let length = length + (self.rest_length - length) * alpha;
+        println!("direction {} -> {}", self.rest_direction, direction);
+        println!("radius {} -> {}", self.rest_radius, radius);
+        println!("length {} -> {}", self.rest_length, length);
+        // let direction = self.rest_direction;
+        // let radius = self.rest_radius;
+        // let length = self.rest_length;
+
+        // Compute the position on the section plane
+        let mut ab_translation = Quat::from_axis_angle(self.normal, self.rest_direction) * self.zero;
+        // Add the height
+        ab_translation += self.normal * (length.powi(2) - radius.powi(2)).sqrt();
+        particles[self.b].position = particles[self.a].position + ab_translation;
+
         // let w = particles[self.a].inverse_mass + particles[self.b].inverse_mass;
         // if w == 0.0 {
         //     return;
@@ -77,6 +97,11 @@ impl XPBDConstraint for StemBendConstraint {
             .start(particles[self.a].position)
             .end(particles[self.b].position)
             .color(Color::WHITE);
+        shapes
+            .cuboid()
+            .position(particles[self.a].position)
+            .size(Vec3::ONE * 0.1)
+            .color(Color::PINK);
     }
 }
 

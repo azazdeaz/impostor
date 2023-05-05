@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::petgraph::matrix_graph::Zero};
 use bevy_prototype_debug_lines::{DebugLinesPlugin, DebugShapes};
 use impostor_xpbd::{structs::*, constraints::XPBDConstraint};
 use itertools::{izip, Itertools};
@@ -117,6 +117,9 @@ fn simulate(
     mut shapes: ResMut<DebugShapes>,
 ) {
     let delta = time.delta_seconds();
+    if delta.is_zero() {
+        return;
+    }
     let gravity = Vec3::new(0.0, -9.81, 0.0);
     let gravity = Vec3::ZERO;
     let substeps = 36;
