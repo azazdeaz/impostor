@@ -13,7 +13,7 @@ impl Particle {
         Self {
             position,
             prev_position: position,
-            inverse_mass: 0.0,
+            inverse_mass: 1.0,
             ..default()
         }
     }

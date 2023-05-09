@@ -45,13 +45,13 @@ fn setup(mut commands: Commands, mut xpbd: ResMut<XPBDContext>) {
     // commands.spawn(SoftBody::new_triangle_pillar());
     // let body = SoftBody::new_octaeder_pillar();
     // let body = SoftBody::new_triangle_pie_pillar();
-    let body = SoftBody::new_stem_bend_based();
+    let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -5.0, 10.0 * PI, 50);
     xpbd.add_body(body);
 }
 
 struct DragInfo {
     soft_body_index: usize,
-    index: usize,
+    key: ParticleKey,
     grab_distance: f32,
 }
 
@@ -75,21 +75,21 @@ fn drag_particles(
 
     if buttons.just_pressed(MouseButton::Left) {
         for (soft_body_id, soft_body) in xpbd.get_bodies().iter().enumerate() {
-            let mut closest: Option<(usize, f32)> = None;
-            for (idx, particle) in soft_body.particles.iter().enumerate() {
+            let mut closest: Option<(ParticleKey, f32)> = None;
+            for (key, particle) in soft_body.data.particles.iter() {
                 // calculate the particle distance from the ray
                 let particle_from_origin = particle.position - ray.origin;
                 let closest_point_on_ray = ray.direction * particle_from_origin.dot(ray.direction);
                 let distance = (particle_from_origin - closest_point_on_ray).length();
                 if distance < 0.1 && (closest.is_none() || distance < closest.unwrap().1) {
-                    closest = Some((idx, distance));
+                    closest = Some((key, distance));
                 }
             }
-            if let Some((index, _)) = closest {
-                let particle_position = soft_body.particles[index].position;
+            if let Some((key, _)) = closest {
+                let particle_position = soft_body.data.particles[key].position;
                 drag_state.info = Some(DragInfo {
                     soft_body_index: soft_body_id,
-                    index,
+                    key,
                     grab_distance: (particle_position - ray.origin).length(),
                 });
             }
@@ -106,7 +106,7 @@ fn drag_particles(
             .size(Vec3::ONE * 0.1)
             .color(Color::PINK);
         if let Some( body) = xpbd.get_bodies_mut().get_mut(info.soft_body_index) {
-            body.particles[info.index].position = new_pos;
+            body.data.particles[info.key].position = new_pos;
         }
     }
 }
@@ -136,67 +136,9 @@ fn simulate(
 fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, xpbd: Res<XPBDContext>,) {
     for body in xpbd.get_bodies().iter() {
         for constraint in body.constraints.iter() {
-            constraint.debug_draw(&body.particles, &mut *shapes)
+            constraint.debug_draw(&body.data, &mut *shapes)
         }
     }
-    // for soft_body in xpbd.get_bodies().iter() {
-    //     for edge in soft_body.edges.iter() {
-    //         shapes
-    //             .line()
-    //             .start(soft_body.particles[edge.a].position)
-    //             .end(soft_body.particles[edge.b].position)
-    //             .color(Color::WHITE);
-    //     }
-    // }
-
-    // // Draw each tetrahedron slightly smaller
-    // for soft_body in xpbd.get_bodies().iter() {
-    //     for tetra in soft_body.tetras.iter() {
-    //         let a = soft_body.particles[tetra.a].position;
-    //         let b = soft_body.particles[tetra.b].position;
-    //         let c = soft_body.particles[tetra.c].position;
-    //         let d = soft_body.particles[tetra.d].position;
-    //         let center = (a + b + c + d) / 4.0;
-    //         let scale = 0.7;
-    //         let a = (a - center) * scale + center;
-    //         let b = (b - center) * scale + center;
-    //         let c = (c - center) * scale + center;
-    //         let d = (d - center) * scale + center;
-
-    //         let color = Color::YELLOW;
-    //         shapes.line().start(a).end(b).color(color);
-    //         shapes.line().start(b).end(c).color(color);
-    //         shapes.line().start(c).end(a).color(color);
-    //         shapes.line().start(a).end(d).color(color);
-    //         shapes.line().start(b).end(d).color(color);
-    //         shapes.line().start(c).end(d).color(color);
-    //     }
-    // }
-
-    // Draw each bending constraint
-    // for soft_body in xpbd.get_bodies().iter() {
-    //     for constraint in soft_body.bending_constraints.iter() {
-    //         let a = soft_body.particles[constraint.a].position;
-    //         let b = soft_body.particles[constraint.b].position;
-    //         let c = soft_body.particles[constraint.c].position;
-    //         let d = soft_body.particles[constraint.d].position;
-    //         let center = (a + b + c + d) / 4.0;
-    //         let scale = 1.0;
-    //         let a = (a - center) * scale + center;
-    //         let b = (b - center) * scale + center;
-    //         let c = (c - center) * scale + center;
-    //         let d = (d - center) * scale + center;
-
-    //         let color_base = Color::BLUE;
-    //         let color_up = Color::ALICE_BLUE;
-    //         let color_down = Color::MIDNIGHT_BLUE;
-    //         shapes.line().start(a).end(b).color(color_base);
-    //         shapes.line().start(a).end(c).color(color_down);
-    //         shapes.line().start(a).end(d).color(color_up);
-    //         shapes.line().start(b).end(c).color(color_down);
-    //         shapes.line().start(b).end(d).color(color_up);
-    //     }
-    // }
 }
 
 fn demo(time: Res<Time>, mut shapes: ResMut<DebugShapes>) {
