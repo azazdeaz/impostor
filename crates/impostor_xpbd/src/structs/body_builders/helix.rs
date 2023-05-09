@@ -1,4 +1,4 @@
-use crate::{structs::{SoftBody, Particle, Orientation}, constraints::StretchShearConstraint};
+use crate::{structs::{SoftBody, Particle, Orientation}, constraints::{StretchShearConstraint, BendTwistConstraint}};
 use bevy::prelude::*;
 
 impl SoftBody {
@@ -165,6 +165,21 @@ impl SoftBody {
         //     const unsigned int q2 = edges[i + 1].m_quat + offsetQuaternions;
         //     model->addBendTwistConstraint(q1, q2, model->getRodTwistingStiffness(), model->getRodBendingStiffnessX(), model->getRodBendingStiffnessY());
         // }
+        
+        // TODO what is offsetQuaternions?
+        for i in 0..n_quaternions-1 {
+            let q1 = orientations[i];
+            let q2 = orientations[i + 1];
+            let constraint = BendTwistConstraint::new(
+                &body.data,
+                q1,
+                q2,
+                twisting_stiffness,
+                bending_stiffness_x,
+                bending_stiffness_y,
+            );
+            body.constraints.push(Box::new(constraint));
+        }
         body
     }
 }
