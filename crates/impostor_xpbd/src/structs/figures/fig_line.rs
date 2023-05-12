@@ -1,28 +1,13 @@
 use bevy::prelude::{Vec3, Color};
 use bevy_prototype_debug_lines::DebugShapes;
 
+
 pub struct FigLine {
     start: Vec3,
     end: Vec3,
     start_color: Color,
     end_color: Color,
-    duration: f32,
 }
-
-pub enum DebugFigure {
-    Line(FigLine),
-}
-
-impl DebugFigure {
-    pub fn draw_with_debug_shapes(&self, lines: &mut DebugShapes) {
-        match self {
-            DebugFigure::Line(line) => line.draw_with_debug_shapes(lines),
-        }
-    }
-}
-
-
-
 
 impl FigLine {
     pub fn new() -> Self {
@@ -31,7 +16,6 @@ impl FigLine {
             end: Vec3::X,
             start_color: Color::WHITE,
             end_color: Color::WHITE,
-            duration: 0.0,
         }
     }
 
@@ -62,11 +46,5 @@ impl FigLine {
             .start(self.start)
             .end(self.end)
             .gradient(self.start_color, self.end_color);
-    }
-}
-
-impl From<FigLine> for DebugFigure {
-    fn from(line: FigLine) -> Self {
-        Self::Line(line)
     }
 }
