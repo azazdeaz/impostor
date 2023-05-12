@@ -12,3 +12,6 @@ pub use body_builders::*;
 
 mod xpbd_context;
 pub use xpbd_context::*;
+
+mod debug_figure;
+pub use debug_figure::*;

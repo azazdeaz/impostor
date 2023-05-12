@@ -1,6 +1,6 @@
 use bevy_prototype_debug_lines::DebugShapes;
 
-use crate::structs::{Particle, SoftBodyData};
+use crate::structs::{SoftBodyData, DebugFigure};
 
 pub trait XPBDConstraint {
     fn solve(&self, body: &mut SoftBodyData, delta_squared: f32);

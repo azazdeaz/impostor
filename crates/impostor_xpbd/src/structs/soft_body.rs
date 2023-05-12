@@ -1,10 +1,8 @@
-use std::f32::consts::PI;
-
 use bevy::prelude::*;
 use slotmap::{new_key_type, SlotMap};
 use crate::constraints::*;
 
-use super::{Particle, Orientation};
+use super::{Particle, Orientation, DebugFigure};
 
 new_key_type! { pub struct OrientationKey; }
 new_key_type! { pub struct ParticleKey; }
@@ -13,6 +11,13 @@ new_key_type! { pub struct ParticleKey; }
 pub struct SoftBodyData {
     pub particles: SlotMap<ParticleKey, Particle>,
     pub orientations: SlotMap<OrientationKey, Orientation>,
+    pub debug_figures: Vec<DebugFigure>,
+}
+
+impl SoftBodyData {
+    pub fn add_fig(&mut self, fig: DebugFigure) {
+        self.debug_figures.push(fig);
+    }
 }
 
 #[derive(Default)]

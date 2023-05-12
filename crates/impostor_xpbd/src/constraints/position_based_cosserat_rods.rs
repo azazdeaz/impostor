@@ -5,6 +5,7 @@ use crate::structs::*;
 use bevy::prelude::*;
 use bevy_prototype_debug_lines::DebugShapes;
 
+#[derive(Default)]
 pub struct StretchShearConstraint {
     particle_1: ParticleKey,
     particle_2: ParticleKey,
@@ -13,6 +14,7 @@ pub struct StretchShearConstraint {
     shearing_stiffness_1: f32,
     shearing_stiffness_2: f32,
     rest_length: f32,
+    _debug_d3: Vec3,
 }
 impl StretchShearConstraint {
     pub fn new(
@@ -36,6 +38,7 @@ impl StretchShearConstraint {
             shearing_stiffness_1,
             shearing_stiffness_2,
             rest_length,
+            ..Default::default()
         }
     }
 }
@@ -89,6 +92,12 @@ impl XPBDConstraint for StretchShearConstraint {
                 - orientation.y * orientation.y
                 + orientation.z * orientation.z,
         );
+        println!("d3: {}", d3);
+        body.add_fig(
+            FigLine::new()
+                .start_travel(body.particles[self.particle_1].position, d3)
+                .color(Color::BLUE).into(),
+        );
 
         // Vector3r gamma = (p1 - p0) / restLength - d3;
         // gamma /= (invMass1 + invMass0) / restLength + invMassq0 * static_cast<Real>(4.0)*restLength + eps;
@@ -98,9 +107,11 @@ impl XPBDConstraint for StretchShearConstraint {
         let inv_mass_2 = body.particles[self.particle_2].inverse_mass;
         let inv_mass_quat = body.orientations[self.orientation_1].inverse_mass;
         let mut gamma = (position_2 - position_1) / self.rest_length - d3;
+        println!("gamma (position): {}", gamma);
         gamma /= (inv_mass_1 + inv_mass_2) / self.rest_length
             + inv_mass_quat * 4.0 * self.rest_length
             + EPSILON;
+        println!("gamma (scaled position): {}", gamma);
 
         // if (std::abs(stretchingAndShearingKs[0] - stretchingAndShearingKs[1]) < eps && std::abs(stretchingAndShearingKs[0] - stretchingAndShearingKs[2]) < eps)	//all Ks are approx. equal
         //     for (int i = 0; i<3; i++) gamma[i] *= stretchingAndShearingKs[i];
@@ -132,7 +143,8 @@ impl XPBDConstraint for StretchShearConstraint {
         // corrq0.coeffs() *= static_cast<Real>(2.0) * invMassq0 * restLength;
 
         let corr_quat = Quat::from_xyzw(0.0, gamma.x, gamma.y, gamma.z).normalize()
-            * Quat::from_xyzw(orientation.z, -orientation.y, orientation.x, -orientation.w).normalize();
+            * Quat::from_xyzw(orientation.z, -orientation.y, orientation.x, -orientation.w)
+                .normalize();
         let corr_quat = corr_quat * (2.0 * inv_mass_quat * self.rest_length);
 
         // if (res)
@@ -157,7 +169,6 @@ impl XPBDConstraint for StretchShearConstraint {
             body.orientations[self.orientation_1].quaternion =
                 (body.orientations[self.orientation_1].quaternion + corr_quat).normalize();
         }
-        // return res;
     }
 
     fn debug_draw(&self, body: &SoftBodyData, shapes: &mut DebugShapes) {
@@ -166,6 +177,15 @@ impl XPBDConstraint for StretchShearConstraint {
             .start(body.particles[self.particle_1].position)
             .end(body.particles[self.particle_2].position)
             .color(Color::WHITE);
+
+        shapes
+            .line()
+            .start(body.particles[self.particle_1].position)
+            .end(
+                body.particles[self.particle_1].position
+                    + body.orientations[self.orientation_1].quaternion * Vec3::Y,
+            )
+            .color(Color::PINK);
     }
 }
 

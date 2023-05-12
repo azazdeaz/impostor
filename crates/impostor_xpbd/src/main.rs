@@ -19,7 +19,7 @@ fn main() {
         .add_plugin(OrbitCameraPlugin::default())
         .add_startup_system(setup)
         .add_system(draw_soft_bodies)
-        // .add_system(demo)
+        .add_system(manual_step)
         .add_system(drag_particles)
         .add_system(simulate)
         .run();
@@ -45,7 +45,7 @@ fn setup(mut commands: Commands, mut xpbd: ResMut<XPBDContext>) {
     // commands.spawn(SoftBody::new_triangle_pillar());
     // let body = SoftBody::new_octaeder_pillar();
     // let body = SoftBody::new_triangle_pie_pillar();
-    let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -5.0, 10.0 * PI, 50);
+    let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -1.0, 1.0 * PI, 6 );
     xpbd.add_body(body);
 }
 
@@ -111,19 +111,14 @@ fn drag_particles(
     }
 }
 
-fn simulate(
-    time: Res<Time>,
-    mut xpbd: ResMut<XPBDContext>,
-    mut shapes: ResMut<DebugShapes>,
-) {
-    let delta = time.delta_seconds();
-    if delta.is_zero() {
-        return;
-    }
+fn step(xpbd: &mut XPBDContext, delta: f32) {
     let gravity = Vec3::new(0.0, -9.81, 0.0);
     let gravity = Vec3::ZERO;
-    let substeps = 36;
+    let substeps = 1;
     let sub_delta = delta / substeps as f32;
+    for mut body in xpbd.get_bodies_mut().iter_mut() {
+        body.data.debug_figures.clear();
+    }
     for _ in 0..substeps {
         for mut body in xpbd.get_bodies_mut().iter_mut() {
             body.pre_solve(gravity, sub_delta);
@@ -133,11 +128,35 @@ fn simulate(
     }
 }
 
-fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, xpbd: Res<XPBDContext>,) {
-    for body in xpbd.get_bodies().iter() {
+fn simulate(
+    time: Res<Time>,
+    mut xpbd: ResMut<XPBDContext>,
+) {
+    let delta = time.delta_seconds();
+    if delta.is_zero() {
+        return;
+    }
+    // step(&mut xpbd, delta);
+}
+
+fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, mut xpbd: ResMut<XPBDContext>,) {
+    for body in xpbd.get_bodies_mut().iter_mut() {
+        for fig in body.data.debug_figures.iter() {
+            fig.draw_with_debug_shapes(&mut *shapes);
+        }
         for constraint in body.constraints.iter() {
             constraint.debug_draw(&body.data, &mut *shapes)
         }
+    }
+}
+
+
+fn manual_step(
+    keys: Res<Input<KeyCode>>,
+    mut xpbd: ResMut<XPBDContext>,
+) {
+    if keys.just_pressed(KeyCode::Space) {
+        step(&mut xpbd, 0.01);
     }
 }
 

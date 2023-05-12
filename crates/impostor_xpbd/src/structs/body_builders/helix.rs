@@ -43,8 +43,8 @@ impl SoftBody {
         for i in 0..n_points {
             let angle = total_angle / (n_points as f32) * (i as f32);
             let x = radius * angle.cos();
-            let y = radius * angle.sin();
-            let z = height / (n_points as f32) * (i as f32);
+            let z = radius * angle.sin();
+            let y = 0.5 - height / (n_points as f32) * (i as f32);
             let mut point = Vec3::new(x, y, z);
             point = orientation * point + position;
             points.push(point);
@@ -63,7 +63,7 @@ impl SoftBody {
         // }
 
         // init quaternions
-        let mut from = Vec3::Z;
+        let mut from = Vec3::Y;
         for i in 0..n_quaternions {
             let to = (points[i + 1] - points[i]).normalize();
             let mut dq = Quat::from_rotation_arc(from, to);
