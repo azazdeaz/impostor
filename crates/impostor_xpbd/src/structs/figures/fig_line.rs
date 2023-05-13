@@ -1,7 +1,5 @@
 use bevy::prelude::{Vec3, Color};
 use bevy_prototype_debug_lines::DebugShapes;
-
-
 pub struct FigLine {
     start: Vec3,
     end: Vec3,

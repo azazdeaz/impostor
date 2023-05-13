@@ -9,6 +9,8 @@ use smooth_bevy_cameras::{
     controllers::orbit::{OrbitCameraBundle, OrbitCameraController, OrbitCameraPlugin},
     LookTransformPlugin,
 };
+
+
 fn main() {
     App::new()
         .insert_resource(Msaa::default())
@@ -45,7 +47,7 @@ fn setup(mut commands: Commands, mut xpbd: ResMut<XPBDContext>) {
     // commands.spawn(SoftBody::new_triangle_pillar());
     // let body = SoftBody::new_octaeder_pillar();
     // let body = SoftBody::new_triangle_pie_pillar();
-    let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -1.0, 1.0 * PI, 6 );
+    let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -3.0, 10.0 * PI, 60 );
     xpbd.add_body(body);
 }
 

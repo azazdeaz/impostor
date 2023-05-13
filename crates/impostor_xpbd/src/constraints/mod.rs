@@ -15,6 +15,3 @@ pub use xpbd_constraint::*;
 
 mod position_based_cosserat_rods;
 pub use position_based_cosserat_rods::*;
-
-mod bend_twist_constraint;
-pub use bend_twist_constraint::*;

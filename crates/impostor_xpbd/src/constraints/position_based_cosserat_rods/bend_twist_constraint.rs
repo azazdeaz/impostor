@@ -6,6 +6,12 @@ use bevy::prelude::*;
 use bevy_prototype_debug_lines::DebugShapes;
 use bevy_prototype_debug_lines::shapes::Shape;
 
+/**
+ * Implementation is based on:
+ *  - https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/blob/d2d1d7b48408e1c0e05e5cad5b3b0fa78da3b1eb/Simulation/Constraints.cpp#L2391-L2454
+ *  - https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/blob/abd45249c2763cdd07497c314344f7749042e199/PositionBasedDynamics/PositionBasedElasticRods.cpp#LL57C28-L79C2
+ */
+
 pub struct BendTwistConstraint {
     orientation_1: OrientationKey,
     orientation_2: OrientationKey,
@@ -116,7 +122,7 @@ impl XPBDConstraint for BendTwistConstraint {
         omega.y *= stiffness.y / inv_mass_sum;
         omega.z *= stiffness.z / inv_mass_sum;
         omega.w = 0.0; //discrete Darboux vector does not have vanishing scalar part
-        omega = omega.normalize();
+        // omega = omega.normalize();
 
         // corrq0 = q1 * omega;
         // corrq1 = q0 * omega;

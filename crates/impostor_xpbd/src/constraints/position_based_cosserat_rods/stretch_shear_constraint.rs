@@ -5,6 +5,12 @@ use crate::structs::*;
 use bevy::prelude::*;
 use bevy_prototype_debug_lines::DebugShapes;
 
+/**
+ * Implementation is based on:
+ *  - https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/blob/d2d1d7b48408e1c0e05e5cad5b3b0fa78da3b1eb/Simulation/Constraints.cpp#L2327-L2389
+ *  - https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/blob/abd45249c2763cdd07497c314344f7749042e199/PositionBasedDynamics/PositionBasedElasticRods.cpp#L19-L54
+ */
+
 #[derive(Default)]
 pub struct StretchShearConstraint {
     particle_1: ParticleKey,
@@ -84,19 +90,20 @@ impl XPBDConstraint for StretchShearConstraint {
 
         //third director d3 = q0 * e_3 * q0_conjugate
         let orientation = body.orientations[self.orientation_1].quaternion;
-        let d3 = Vec3::new(
-            2.0 * (orientation.x * orientation.z + orientation.w * orientation.y),
-            2.0 * (orientation.y * orientation.z - orientation.w * orientation.x),
-            orientation.w * orientation.w
-                - orientation.x * orientation.x
-                - orientation.y * orientation.y
-                + orientation.z * orientation.z,
-        );
-        println!("d3: {}", d3);
+        // let d3 = Vec3::new(
+        //     2.0 * (orientation.x * orientation.z + orientation.w * orientation.y),
+        //     2.0 * (orientation.y * orientation.z - orientation.w * orientation.x),
+        //     orientation.w * orientation.w
+        //         - orientation.x * orientation.x
+        //         - orientation.y * orientation.y
+        //         + orientation.z * orientation.z,
+        // );
+        let d3 = orientation * Vec3::Y;
         body.add_fig(
             FigLine::new()
                 .start_travel(body.particles[self.particle_1].position, d3)
-                .color(Color::BLUE).into(),
+                .color(Color::BLUE)
+                .into(),
         );
 
         // Vector3r gamma = (p1 - p0) / restLength - d3;
@@ -112,6 +119,13 @@ impl XPBDConstraint for StretchShearConstraint {
             + inv_mass_quat * 4.0 * self.rest_length
             + EPSILON;
         println!("gamma (scaled position): {}", gamma);
+
+        body.add_fig(
+            FigLine::new()
+                .start_travel(position_1, gamma)
+                .color(Color::GREEN)
+                .into(),
+        );
 
         // if (std::abs(stretchingAndShearingKs[0] - stretchingAndShearingKs[1]) < eps && std::abs(stretchingAndShearingKs[0] - stretchingAndShearingKs[2]) < eps)	//all Ks are approx. equal
         //     for (int i = 0; i<3; i++) gamma[i] *= stretchingAndShearingKs[i];
@@ -142,9 +156,13 @@ impl XPBDConstraint for StretchShearConstraint {
         // corrq0 = Quaternionr(0.0, gamma.x(), gamma.y(), gamma.z()) * q_e_3_bar;
         // corrq0.coeffs() *= static_cast<Real>(2.0) * invMassq0 * restLength;
 
-        let corr_quat = Quat::from_xyzw(0.0, gamma.x, gamma.y, gamma.z).normalize()
-            * Quat::from_xyzw(orientation.z, -orientation.y, orientation.x, -orientation.w)
-                .normalize();
+        let corr_quat = Quat::from_xyzw(0.0, gamma.x, gamma.y, gamma.z)
+            * Quat::from_xyzw(orientation.z, -orientation.y, orientation.x, -orientation.w);
+        println!("corr quat: {}", corr_quat);
+        let corr_quat = Quat::from_xyzw(gamma.x, gamma.y, gamma.z, 0.0)
+            * orientation
+            * Quat::from_xyzw(0.0, 1.0, 0.0, 0.0);
+        println!("corr quat: {}", corr_quat);
         let corr_quat = corr_quat * (2.0 * inv_mass_quat * self.rest_length);
 
         // if (res)

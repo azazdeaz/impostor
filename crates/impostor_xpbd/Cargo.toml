@@ -14,4 +14,4 @@ serde_json = "1.0"
 slotmap = "1.0.6"
 
 [dependencies.glam]
-features = ["debug-glam-assert"]
+# features = ["debug-glam-assert"]
