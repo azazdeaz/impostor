@@ -15,3 +15,6 @@ pub use xpbd_context::*;
 
 mod figures;
 pub use figures::*;
+
+mod time_integration;
+pub use time_integration::*;

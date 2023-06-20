@@ -44,7 +44,7 @@ impl SoftBody {
             let angle = total_angle / (n_points as f32) * (i as f32);
             let x = radius * angle.cos();
             let z = radius * angle.sin();
-            let y = 0.5 + height / (n_points as f32) * (i as f32);
+                let y = 0.5 + height / (n_points as f32) * (i as f32);
             let mut point = Vec3::new(x, y, z);
             point = orientation * point + position;
             points.push(point);

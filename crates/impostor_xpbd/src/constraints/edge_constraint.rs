@@ -28,25 +28,25 @@ impl XPBDConstraint for EdgeConstraint {
     }
     fn solve(&self, particles: &mut Vec<Particle>, delta_squared: f32) {
         let alpha = self.compliance / delta_squared;
-            let w = particles[self.a].inverse_mass + particles[self.b].inverse_mass;
-            if w == 0.0 {
-                return;
-            }
-            let p1 = particles[self.a].position;
-            let p2 = particles[self.b].position;
-            let diff = p1 - p2;
-            let distance = diff.length();
-            if distance == 0.0 {
-                return;
-            }
-            let direction = diff / distance;
-            let delta = p2 - p1;
-            let distance = delta.length();
-            let residual = -(distance - self.rest_length) / (w + alpha);
-            particles[self.a].position =
-                p1 + direction * residual * particles[self.a].inverse_mass;
-            particles[self.b].position =
-                p2 - direction * residual * particles[self.b].inverse_mass;
+        let w = particles[self.a].inverse_mass + particles[self.b].inverse_mass;
+        if w == 0.0 {
+            return;
+        }
+        let p1 = particles[self.a].position;
+        let p2 = particles[self.b].position;
+        let diff = p1 - p2;
+        let distance = diff.length();
+        if distance == 0.0 {
+            return;
+        }
+        let direction = diff / distance;
+        let delta = p2 - p1;
+        let distance = delta.length();
+        let residual = -(distance - self.rest_length) / (w + alpha);
+        particles[self.a].position =
+            p1 + direction * residual * particles[self.a].inverse_mass;
+        particles[self.b].position =
+            p2 - direction * residual * particles[self.b].inverse_mass;
         
     }
 

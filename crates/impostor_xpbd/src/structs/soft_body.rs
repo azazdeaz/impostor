@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use slotmap::{new_key_type, SlotMap};
 use crate::constraints::*;
 
-use super::{Particle, Orientation, DebugFigure};
+use super::{Particle, Orientation, DebugFigure, orientation, time_integration};
 
 new_key_type! { pub struct OrientationKey; }
 new_key_type! { pub struct ParticleKey; }
@@ -18,7 +18,7 @@ impl SoftBodyData {
     pub fn add_fig(&mut self, fig: DebugFigure) {
         self.debug_figures.push(fig);
     }
-}
+}   
 
 #[derive(Default)]
 pub struct SoftBody {
@@ -29,15 +29,22 @@ pub struct SoftBody {
 impl SoftBody {
     pub fn pre_solve(&mut self, gravity: Vec3, delta: f32) {
         for particle in self.data.particles.values_mut() {
-            particle.velocity += gravity * delta;
-            particle.prev_position = particle.position;
-            particle.position += particle.velocity * delta;
-
-            // bounce off the ground
-            if particle.position.y < 0.0 {
-                particle.position = particle.prev_position;
-                particle.position.y = 0.0;
+            if particle.inverse_mass == 0.0 {
+                continue;
             }
+            particle.prev_position = particle.position;
+            
+            // Semi-implicit Euler integration
+            particle.velocity += gravity * delta;
+            particle.position += particle.velocity * delta;
+        }
+
+        for orientation in self.data.orientations.values_mut() {
+            if orientation.inverse_mass == 0.0 {
+                continue;
+            }
+            orientation.old_quaternion = orientation.quaternion;
+            time_integration::semi_implicit_euler_rotation(delta, Vec3::ZERO, orientation);
         }
     }
 
@@ -55,8 +62,12 @@ impl SoftBody {
                 continue;
             }
             if delta > 0.0 {
-                particle.velocity = (particle.position - particle.prev_position) / delta * 0.9;
+                particle.velocity = (particle.position - particle.prev_position) / delta;
             }
+        }
+
+        for orientation in self.data.orientations.values_mut() {
+            time_integration::angular_velocity_update_first_order(delta, orientation);
         }
     }
 

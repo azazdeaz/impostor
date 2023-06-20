@@ -47,7 +47,8 @@ fn setup(mut commands: Commands, mut xpbd: ResMut<XPBDContext>) {
     // commands.spawn(SoftBody::new_triangle_pillar());
     // let body = SoftBody::new_octaeder_pillar();
     // let body = SoftBody::new_triangle_pie_pillar();
-    let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -3.0, 10.0 * PI, 60 );
+    // let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -3.0, 10.0 * PI, 60 );
+    let body = SoftBody::build_rod(Vec3::ZERO, Quat::IDENTITY, 3.0, 12 );
     xpbd.add_body(body);
 }
 
@@ -115,7 +116,7 @@ fn drag_particles(
 
 fn step(xpbd: &mut XPBDContext, delta: f32) {
     let gravity = Vec3::new(0.0, -9.81, 0.0);
-    let gravity = Vec3::ZERO;
+    // let gravity = Vec3::ZERO;
     let substeps = 1;
     let sub_delta = delta / substeps as f32;
     for mut body in xpbd.get_bodies_mut().iter_mut() {
@@ -138,7 +139,7 @@ fn simulate(
     if delta.is_zero() {
         return;
     }
-    // step(&mut xpbd, delta);
+    step(&mut xpbd, delta);
 }
 
 fn draw_soft_bodies(mut shapes: ResMut<DebugShapes>, mut xpbd: ResMut<XPBDContext>,) {
