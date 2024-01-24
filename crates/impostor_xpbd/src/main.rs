@@ -44,7 +44,7 @@ fn setup(mut commands: Commands, mut xpbd: ResMut<XPBDContext>) {
             Vec3::Y,
         ));
 
-    // commands.spawn(SoftBody::new_triangle_pillar());
+    commands.spawn(SoftBody::new_triangle_pillar());
     // let body = SoftBody::new_octaeder_pillar();
     // let body = SoftBody::new_triangle_pie_pillar();
     // let body = SoftBody::build_helix(Vec3::ZERO, Quat::IDENTITY, 0.5, -3.0, 10.0 * PI, 60 );
