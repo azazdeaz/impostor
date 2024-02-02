@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use crate::{structs::{SoftBody, Particle, Orientation}, constraints::{StretchShearConstraint, BendTwistConstraint}};
+use crate::{structs::{SoftBody, Particle, Orientation}, constraints::{BendTwistConstraint, EdgeConstraint, StretchShearConstraint}};
 use bevy::prelude::*;
 
 impl SoftBody {
@@ -8,7 +8,7 @@ impl SoftBody {
         let section_length = 0.4;
         let radius = 0.2;
         let sections = 7;
-        let mut particles = Vec::new();
+        let mut body = SoftBody::default();
         let mut edges = Vec::new();
         let mut tetras = Vec::new();
 
@@ -18,7 +18,7 @@ impl SoftBody {
                 let x = radius * angle.cos();
                 let z = radius * angle.sin();
                 let y = i as f32 * section_length;
-                particles.push(Particle::from_position(Vec3::new(x, y, z)));
+                body.particles.push(Particle::from_position(Vec3::new(x, y, z)));
             }
         }
 
@@ -41,9 +41,9 @@ impl SoftBody {
         for i in 0..=sections {
             let offset = i * 3;
             // connect vertices on this level
-            edges.push(EdgeConstraint::from_particles(&particles, offset, offset + 1));
-            edges.push(EdgeConstraint::from_particles(&particles, offset + 1, offset + 2));
-            edges.push(EdgeConstraint::from_particles(&particles, offset + 2, offset));
+            edges.push(EdgeConstraint::from_particles(&body.particles, offset, offset + 1));
+            edges.push(EdgeConstraint::from_particles(&body.particles, offset + 1, offset + 2));
+            edges.push(EdgeConstraint::from_particles(&body.particles, offset + 2, offset));
             // connect with vertices on the next level
             if i < sections {
                 for j in 0..3 {
