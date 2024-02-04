@@ -119,16 +119,16 @@ impl PlantBody {
     }
 
     fn _add_stick_to_point(&mut self, new_stick_id: &StickId, point_id: &PointId) {
-        let point = self.points.get_mut(&point).unwrap();
+        let point = self.points.get_mut(&point_id).unwrap();
         let new_stick = self.sticks.get_mut(&new_stick_id).unwrap();
         // Point at the opposite end of the new stick
-        let point_o1_id = new_stick.other_point(point_id);
+        let point_o1_id = new_stick.other_point(*point_id);
         let point_o1 = self.points.get_mut(&point_o1_id).unwrap();
         let translation_o1 = self.point_translation(point_id, &point_o1_id);
 
         for stick_id in point.sticks.clone() {
             // Point at the opposite end of an existing stick
-            let point_o2_id = new_stick.other_point(point_id);
+            let point_o2_id = new_stick.other_point(*point_id);
             let point_o2 = self.points.get_mut(&point_o1_id).unwrap();
             let translation_o2 = self.point_translation(point_id, &point_o1_id);
             // Translation from stick

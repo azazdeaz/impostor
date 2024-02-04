@@ -11,7 +11,7 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
-        .add_plugin(impostor_editor_camera::EditorCameraPlugin)
+        // .add_plugin(impostor_editor_camera::EditorCameraPlugin)
         .add_plugins(bevy_mod_picking::DefaultPickingPlugins)
         .add_plugin(bevy_transform_gizmo::TransformGizmoPlugin::default())
         .insert_resource(PlantBody::new())
