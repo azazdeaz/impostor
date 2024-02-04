@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use necklace_solver::{draw_points, DragParticlePlugin, StemStructure};
+use necklace_solver::{draw_bonds, draw_points, DragParticlePlugin, StemStructure};
 
 fn main() {
     App::new()
@@ -10,7 +10,7 @@ fn main() {
         .add_systems(Startup, setup)
         .add_plugins(PanOrbitCameraPlugin)
         .add_plugins(DragParticlePlugin)
-        .add_systems(Update, (draw_points, update_config))
+        .add_systems(Update, (draw_points, draw_bonds, update_config))
         .run();
 }
 

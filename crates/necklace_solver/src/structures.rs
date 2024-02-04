@@ -1,9 +1,9 @@
-use bevy::{ecs::system::Command, prelude::*, utils::HashMap};
+use bevy::{ecs::system::Command, prelude::*, utils::hashbrown::HashMap};
 // use bevy_rapier3d::prelude::*;
 use rand::Rng;
 use std::f32::consts::TAU;
 
-use crate::{DragParticle, Point};
+use crate::{Bond, DragParticle, Point};
 
 #[derive(Default)]
 pub struct StemStructure {
@@ -180,8 +180,41 @@ impl StemStructure {
 impl Command for StemStructure {
     fn apply(self, world: &mut World) {
         // Spawn all points
-        for point in self.points.values() {
-            world.spawn((*point, DragParticle::enabled()));
+        let mut entities = HashMap::<(usize, usize), Entity>::default();
+        for (id, point) in &self.points {
+            let entity = world.spawn((*point, DragParticle::enabled())).id();
+            entities.insert(*id, entity);
         }
+
+        let mut bond = |a: (usize, usize), b: (usize, usize)| {
+            world.spawn(Bond {
+                a: entities[&a],
+                b: entities[&b],
+                length: self.points[&a].0.distance(self.points[&b].0),
+                compliance: 0.1,
+            });
+        };
+        // Spawn Bonds
+        for i_section in 0..self.sections {
+            // iterate through the ring
+            for i_side in 0..self.sides {
+                // get the index of the next particle on the ring
+                let next_side = (i_side + 1) % self.sides;
+                // connect with the neighbouring particle
+                bond((i_section, i_side), (i_section, next_side));
+                if i_section > 0 {
+                    let prev_section = i_section - 1;
+                    if i_section % 2 > 0 {
+                        bond((prev_section, i_side), (i_section, i_side));
+                        bond((prev_section, next_side), (i_section, i_side));
+                    } else {
+                        bond((prev_section, i_side), (i_section, i_side));
+                        bond((prev_section, i_side), (i_section, next_side));
+                    }
+                }
+            }
+        }
+
+        // prev_ring = next_ring;
     }
 }
