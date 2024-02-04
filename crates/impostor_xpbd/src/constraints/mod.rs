@@ -1,3 +1,5 @@
+mod bend_constraint;
+
 mod edge_constraint;
 pub use edge_constraint::*;
 

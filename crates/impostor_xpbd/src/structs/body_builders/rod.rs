@@ -1,5 +1,6 @@
-use crate::{structs::{SoftBody, Particle, Orientation}, constraints::{StretchShearConstraint, BendTwistConstraint}};
+use crate::{structs::{SoftBody, Particle, Orientation}, constraints::{BendTwistConstraint, EdgeConstraint, StretchShearConstraint}};
 use bevy::prelude::*;
+use itertools::Itertools;
 
 impl SoftBody {
     pub fn build_rod(
@@ -174,6 +175,8 @@ impl SoftBody {
             );
             body.constraints.push(Box::new(constraint));
         }
+        
+        
         body
     }
 }
