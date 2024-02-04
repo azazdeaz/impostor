@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_panorbit_camera::PanOrbitCamera;
 
 use crate::Point;
 
@@ -33,6 +34,7 @@ fn drag_particles(
     windows: Query<&Window>,
     mut gizmos: Gizmos,
     mut drag_state: Local<Option<DragState>>,
+    mut cameras: Query<&mut PanOrbitCamera>,
 ) {
     let Some(cursor_position) = windows.single().cursor_position() else {
         return;
@@ -93,9 +95,17 @@ fn drag_particles(
         }
         if let Some((info, _)) = closest.take() {
             update_drag_state(Some(info), &mut particles);
+
+            for mut camera in &mut cameras {
+                camera.enabled = false;
+            }
         }
     } else if buttons.just_released(MouseButton::Left) {
         update_drag_state(None, &mut particles);
+
+        for mut camera in &mut cameras {
+            camera.enabled = true;
+        }   
     }
 
     if let Some(info) = &*drag_state {
