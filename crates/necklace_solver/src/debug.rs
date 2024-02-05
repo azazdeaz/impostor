@@ -1,10 +1,21 @@
 use bevy::prelude::*;
 
-use crate::{Bond, Point};
+use crate::{Bond, Point, StressLevel};
 
-pub fn draw_points(mut gizmos: Gizmos, points: Query<&Point>) {
-    for point in points.iter() {
-        gizmos.sphere(**point, Quat::IDENTITY, 0.1, Color::RED);
+pub fn draw_points(mut gizmos: Gizmos, points: Query<(&Point, Option<&StressLevel>)>) {
+    for (point, stress) in points.iter() {
+        let color = colorgrad::viridis().repeat_at(stress.map(|s| s.0 as f64).unwrap_or(0.0));
+        gizmos.sphere(
+            **point,
+            Quat::IDENTITY,
+            0.1,
+            Color::rgba(
+                color.r as f32,
+                color.g as f32,
+                color.b as f32,
+                color.a as f32,
+            ),
+        );
     }
 }
 

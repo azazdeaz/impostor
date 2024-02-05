@@ -3,7 +3,7 @@ use bevy::{
     utils::hashbrown::{HashMap, HashSet},
 };
 
-use crate::{Bond, Point};
+use crate::{Bond, Point, StressLevel};
 
 pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
     for bond in &bonds {
@@ -17,7 +17,7 @@ pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
     }
 }
 
-pub fn grapgh_relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
+pub fn grapgh_relax_bonds(mut commands: Commands, mut points: Query<&mut Point>, bonds: Query<&Bond>) {
     // find the most stressed point
     let mut stresses = HashMap::new();
     for bond in &bonds {
@@ -34,6 +34,11 @@ pub fn grapgh_relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
         .map(|(k, v)| (k, v.iter().sum::<f32>() / v.len() as f32))
         .collect::<HashMap<_, _>>();
 
+    // Update stress levels
+    for (entity, stress) in &stresses {
+        commands.entity(*entity).insert(StressLevel(*stress));
+    }
+
     let Some(most_stressed) = stresses
         .iter()
         .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
@@ -44,6 +49,7 @@ pub fn grapgh_relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
 
     let mut visiteds = HashSet::new();
     let mut prev_ring = vec![most_stressed];
+    let substeps = 10;
 
     while prev_ring.len() > 0 {
         let mut next_ring = Vec::new();
@@ -58,31 +64,24 @@ pub fn grapgh_relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
             }
         }
         // relax bonds between prev_ring and next_ring
-        for bond in &bonds {
-            let (prev, next) = if prev_ring.contains(&bond.a) && next_ring.contains(&bond.b) {
-                (bond.a, bond.b)
-            } else if prev_ring.contains(&bond.b) && next_ring.contains(&bond.a) {
-                (bond.b, bond.a)
-            } else {
-                continue;
-            };
-            if let Ok([pa, mut pb]) = points.get_many_mut([prev, next]) {
-                let distance = pa.distance(pb.0);
-                let displacement = distance - bond.length;
-                let direction = (pb.0 - pa.0).normalize();
-                pb.0 -= direction * displacement;
+        for substep in 0..substeps {
+            let step_progress = substep as f32 / substeps as f32;
+            for bond in &bonds {
+                let (prev, next) = if prev_ring.contains(&bond.a) && next_ring.contains(&bond.b) {
+                    (bond.a, bond.b)
+                } else if prev_ring.contains(&bond.b) && next_ring.contains(&bond.a) {
+                    (bond.b, bond.a)
+                } else {
+                    continue;
+                };
+                if let Ok([pa, mut pb]) = points.get_many_mut([prev, next]) {
+                    let distance = pa.distance(pb.0);
+                    let displacement = distance - bond.length;
+                    let direction = (pb.0 - pa.0).normalize();
+                    pb.0 -= direction * displacement * step_progress;
+                }
             }
         }
         prev_ring = next_ring;
-    }
-
-    for bond in &bonds {
-        if let Ok([mut pa, mut pb]) = points.get_many_mut([bond.a, bond.b]) {
-            let distance = pa.distance(pb.0);
-            let displacement = distance - bond.length;
-            let direction = (pb.0 - pa.0).normalize();
-            pa.0 += direction * displacement * 0.5;
-            pb.0 -= direction * displacement * 0.5;
-        }
     }
 }

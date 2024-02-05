@@ -23,3 +23,6 @@ pub struct Bond {
     pub length: f32,
     pub compliance: f32,
 }
+
+#[derive(Component)]
+pub struct StressLevel(pub f32);
