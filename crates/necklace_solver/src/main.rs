@@ -2,7 +2,9 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use necklace_solver::{draw_bonds, draw_points, relax_bonds, DragParticlePlugin, StemStructure};
+use necklace_solver::{
+    draw_bonds, draw_points, grapgh_relax_bonds, relax_bonds, DragParticlePlugin, StemStructure,
+};
 
 fn main() {
     App::new()
@@ -10,7 +12,16 @@ fn main() {
         .add_systems(Startup, setup)
         .add_plugins(PanOrbitCameraPlugin)
         .add_plugins(DragParticlePlugin)
-        .add_systems(Update, (draw_points, draw_bonds, update_config,relax_bonds))
+        .add_systems(
+            Update,
+            (
+                draw_points,
+                draw_bonds,
+                update_config,
+                // relax_bonds,
+                grapgh_relax_bonds,
+            ),
+        )
         .run();
 }
 
@@ -19,11 +30,13 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn((Camera3dBundle {
-        transform: Transform::from_xyz(0., 1.5, 6.).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    }, 
-    PanOrbitCamera::default()));
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(0., 1.5, 6.).looking_at(Vec3::ZERO, Vec3::Y),
+            ..default()
+        },
+        PanOrbitCamera::default(),
+    ));
     // plane
     commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane::from_size(5.0))),
@@ -53,7 +66,6 @@ fn setup(
     stem.build();
     commands.add(stem);
 }
-
 
 fn update_config(mut config: ResMut<GizmoConfig>, keyboard: Res<Input<KeyCode>>, time: Res<Time>) {
     if keyboard.just_pressed(KeyCode::D) {
