@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use bevy::prelude::*;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use necklace_solver::{
-    draw_bonds, draw_points, grapgh_relax_bonds, relax_bonds, DragParticlePlugin, StemStructure,
+    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, StemStructure,
 };
 
 fn main() {
@@ -19,7 +19,7 @@ fn main() {
                 draw_bonds,
                 update_config,
                 // relax_bonds,
-                grapgh_relax_bonds,
+                graph_relax_bonds,
             ),
         )
         .run();
