@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use bevy::prelude::*;
 
 use crate::{Bond, Point, StressLevel};
@@ -24,5 +26,16 @@ pub fn draw_bonds(mut gizmos: Gizmos, bonds: Query<&Bond>, points: Query<&Point>
         if let (Ok(a), Ok(b)) = (points.get(bond.a), points.get(bond.b)) {
             gizmos.line(**a, **b, Color::WHITE);
         }
+    }
+}
+
+#[derive(Resource)]
+pub struct Rec(pub rerun::RecordingStream);
+
+impl Deref for Rec {
+    type Target = rerun::RecordingStream;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

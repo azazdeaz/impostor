@@ -2,8 +2,9 @@ use bevy::{
     prelude::*,
     utils::hashbrown::{HashMap, HashSet},
 };
+use rerun::Vec3D;
 
-use crate::{Bond, Point, StressLevel};
+use crate::{Bond, Point, Rec, StressLevel};
 
 pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
     for bond in &bonds {
@@ -20,12 +21,21 @@ pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
 pub fn graph_relax_bonds(
     mut commands: Commands,
     mut points: Query<&mut Point>,
-    bonds: Query<&Bond>,
+    bonds: Query<(Entity, &Bond)>,
+    rec: ResMut<Rec>,
+    time: Res<Time>,
 ) {
+    rec.set_time_seconds("bevy_time", time.elapsed_seconds_f64());
     // find the most stressed point
     let mut stresses = HashMap::new();
-    for bond in &bonds {
+    for (bond_id, bond) in &bonds {
+        
         if let Ok([pa, pb]) = points.get_many([bond.a, bond.b]) {
+            rec.log(
+                format!("bonds/{}", bond_id.index()),
+                &rerun::LineStrips3D::new(vec![vec![pa.to_rr(), pb.to_rr()]])
+                    .with_colors([rerun::Color::from([128, 128, 128, 255])])
+            ).ok();
             let distance = pa.distance(pb.0);
             let displacement = distance - bond.length;
             let stress = displacement.abs() / bond.length;
@@ -60,7 +70,7 @@ pub fn graph_relax_bonds(
     while prev_ring.len() > 0 {
         // find the next ring
         let mut next_ring = Vec::new();
-        for bond in &bonds {
+        for (_, bond) in &bonds {
             if prev_ring.contains(&bond.a) && !visiteds.contains(&bond.b) {
                 next_ring.push(bond.b);
                 visiteds.insert(bond.b);
@@ -74,11 +84,13 @@ pub fn graph_relax_bonds(
         // all the bonds connecting prev_ring to next_ring
         let reach_bonds = bonds
             .iter()
+            .map(|(_, bond)| bond)
             .filter(|bond| prev_ring.contains(&bond.a) && !prev_ring.contains(&bond.b))
             .collect::<Vec<_>>();
         // all the bonds connecting points in the next_ring
         let arch_bonds = bonds
             .iter()
+            .map(|(_, bond)| bond)
             .filter(|bond| next_ring.contains(&bond.a) && next_ring.contains(&bond.b))
             .collect::<Vec<_>>();
 

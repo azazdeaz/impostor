@@ -1,17 +1,22 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, ops::Deref};
 
 use bevy::prelude::*;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use necklace_solver::{
-    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, StemStructure,
+    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, Rec, StemStructure
 };
+use rerun::{demo_util::grid, external::glam};
 
-fn main() {
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rec = rerun::RecordingStreamBuilder::new("rerun_example_minimal").spawn()?;
+
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
         .add_plugins(PanOrbitCameraPlugin)
         .add_plugins(DragParticlePlugin)
+        .insert_resource(Rec(rec))
         .add_systems(
             Update,
             (
@@ -23,6 +28,9 @@ fn main() {
             ),
         )
         .run();
+
+        Ok(())
+    
 }
 
 fn setup(

@@ -15,6 +15,11 @@ impl From<Vec3> for Point {
         Self(v)
     }
 }
+impl Point {
+    pub fn to_rr(self) -> rerun::Vec3D {
+        rerun::Vec3D::from(self.0.to_array())
+    }
+}
 
 #[derive(Component, Clone, Copy, Debug)]
 pub struct Bond {
