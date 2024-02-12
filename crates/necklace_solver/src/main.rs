@@ -3,7 +3,7 @@ use std::{f32::consts::PI, ops::Deref};
 use bevy::prelude::*;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use necklace_solver::{
-    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, Rec, StemStructure
+    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, Rec, RecTime, StemStructure
 };
 use rerun::{demo_util::grid, external::glam};
 
@@ -17,6 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_plugins(PanOrbitCameraPlugin)
         .add_plugins(DragParticlePlugin)
         .insert_resource(Rec(rec))
+        .insert_resource(RecTime(0.0))
         .add_systems(
             Update,
             (

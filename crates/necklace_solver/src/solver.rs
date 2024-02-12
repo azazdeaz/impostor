@@ -2,9 +2,10 @@ use bevy::{
     prelude::*,
     utils::hashbrown::{HashMap, HashSet},
 };
+use itertools::Itertools;
 use rerun::Vec3D;
 
-use crate::{Bond, Point, Rec, StressLevel};
+use crate::{Bond, Point, Rec, RecTime, StressLevel};
 
 pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
     for bond in &bonds {
@@ -23,19 +24,18 @@ pub fn graph_relax_bonds(
     mut points: Query<&mut Point>,
     bonds: Query<(Entity, &Bond)>,
     rec: ResMut<Rec>,
-    time: Res<Time>,
+    mut time: ResMut<RecTime>,
 ) {
-    rec.set_time_seconds("bevy_time", time.elapsed_seconds_f64());
     // find the most stressed point
     let mut stresses = HashMap::new();
     for (bond_id, bond) in &bonds {
-        
         if let Ok([pa, pb]) = points.get_many([bond.a, bond.b]) {
             rec.log(
-                format!("bonds/{}", bond_id.index()),
+                format!("bonds/all/{}", bond_id.index()),
                 &rerun::LineStrips3D::new(vec![vec![pa.to_rr(), pb.to_rr()]])
-                    .with_colors([rerun::Color::from([128, 128, 128, 255])])
-            ).ok();
+                    .with_colors([rerun::Color::from_rgb(128, 128, 128)]),
+            )
+            .ok();
             let distance = pa.distance(pb.0);
             let displacement = distance - bond.length;
             let stress = displacement.abs() / bond.length;
@@ -68,6 +68,8 @@ pub fn graph_relax_bonds(
     let substeps = 12;
 
     while prev_ring.len() > 0 {
+        rec.set_time_seconds("bevy_time", time.step());
+
         // find the next ring
         let mut next_ring = Vec::new();
         for (_, bond) in &bonds {
@@ -84,20 +86,52 @@ pub fn graph_relax_bonds(
         // all the bonds connecting prev_ring to next_ring
         let reach_bonds = bonds
             .iter()
-            .map(|(_, bond)| bond)
-            .filter(|bond| prev_ring.contains(&bond.a) && !prev_ring.contains(&bond.b))
+            // .map(|(_, bond)| bond)
+            .filter(|(_, bond)| prev_ring.contains(&bond.a) && !prev_ring.contains(&bond.b))
             .collect::<Vec<_>>();
         // all the bonds connecting points in the next_ring
         let arch_bonds = bonds
             .iter()
-            .map(|(_, bond)| bond)
-            .filter(|bond| next_ring.contains(&bond.a) && next_ring.contains(&bond.b))
+            // .map(|(_, bond)| bond)
+            .filter(|(_, bond)| next_ring.contains(&bond.a) && next_ring.contains(&bond.b))
             .collect::<Vec<_>>();
+
+        // draw the reach bonds
+        let log = reach_bonds
+            .iter()
+            .map(|bond| {
+                vec![
+                    points.get(bond.1.a).unwrap().to_rr(),
+                    points.get(bond.1.b).unwrap().to_rr(),
+                ]
+            })
+            .collect_vec();
+        rec.log(
+            "bonds/reach",
+            &rerun::LineStrips3D::new(log).with_colors([rerun::Color::from_rgb(255, 0, 0)]),
+        )
+        .ok();
+
+        // draw the arch bonds
+        let log = arch_bonds
+            .iter()
+            .map(|bond| {
+                vec![
+                    points.get(bond.1.a).unwrap().to_rr(),
+                    points.get(bond.1.b).unwrap().to_rr(),
+                ]
+            })
+            .collect_vec();
+        rec.log(
+            "bonds/arch",
+            &rerun::LineStrips3D::new(log).with_colors([rerun::Color::from_rgb(0, 255, 0)]),
+        )
+        .ok();
 
         // Create virtual points. For each point in next_ring, create a point on the prev ring
         //  by cloning the other side of the forward bond
         let mut virtual_points = HashMap::new();
-        for bond in &reach_bonds {
+        for (_, bond) in &reach_bonds {
             let (prev, next) = bond.get_from_to(&prev_ring);
             let point = points.get(prev).unwrap();
             virtual_points.insert(next, point.clone());
@@ -107,7 +141,7 @@ pub fn graph_relax_bonds(
         for substep in 0..substeps {
             let step_progress = (substep + 1) as f32 / substeps as f32;
             println!("\n\nstep_progress: {:?}", step_progress);
-            for bond in &reach_bonds {
+            for (_, bond) in &reach_bonds {
                 println!("\nbond: {:?}", bond);
                 let (_, next) = bond.get_from_to(&prev_ring);
                 let virtual_point = virtual_points.get_mut(&next).unwrap();
@@ -122,16 +156,13 @@ pub fn graph_relax_bonds(
                     continue;
                 }
                 let direction = (target_point.0 - virtual_point.0).normalize();
-                println!(
-                    "distance: {:?} direction: {:?}",
-                    distance, direction
-                );
+                println!("distance: {:?} direction: {:?}", distance, direction);
                 println!("change: {:?}", direction * bond.length * step_progress);
                 virtual_point.0 += direction * bond.length * step_progress;
                 println!("virtual_point<: {:?}", virtual_point.0);
             }
 
-            for bond in &arch_bonds {
+            for (_, bond) in &arch_bonds {
                 let (pa_id, pb_id) = bond.get_from_to(&next_ring);
                 let Some([pa, pb]) = virtual_points.get_many_mut([&pa_id, &pb_id]) else {
                     continue;

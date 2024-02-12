@@ -39,3 +39,22 @@ impl Deref for Rec {
         &self.0
     }
 }
+
+#[derive(Resource, Debug, Default)]
+pub struct RecTime(pub f64);
+impl Deref for RecTime {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl RecTime {
+    pub fn set(&mut self, time: f64) {
+        self.0 = time;
+    }
+    pub fn step(&mut self) -> f64 {
+        self.0 += 0.1;
+        self.0
+    }
+}
