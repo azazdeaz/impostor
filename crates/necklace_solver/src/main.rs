@@ -3,7 +3,7 @@ use std::{f32::consts::PI, ops::Deref};
 use bevy::prelude::*;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use necklace_solver::{
-    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, Rec, RecTime, StemStructure
+    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, Rec, RecTime, StemStructure, TetPillar
 };
 use rerun::{demo_util::grid, external::glam};
 
@@ -64,15 +64,24 @@ fn setup(
         ..default()
     });
 
-    let mut stem = StemStructure {
+    // let mut stem = StemStructure {
+    //     sections: 10,
+    //     sides: 6,
+    //     radius: 0.1,
+    //     section_height: 0.5,
+    //     start_translation: Vec3::new(0., 0.5, 0.),
+    //     ..default()
+    // };
+    // stem.build();
+    // commands.add(stem);
+
+    let stem = TetPillar {
         sections: 10,
-        sides: 6,
         radius: 0.1,
         section_height: 0.5,
         start_translation: Vec3::new(0., 0.5, 0.),
         ..default()
     };
-    stem.build();
     commands.add(stem);
 }
 
