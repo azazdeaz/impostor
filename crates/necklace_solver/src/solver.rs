@@ -95,9 +95,9 @@ pub fn graph_relax_bonds(
         }
         info!("next_tets: {:?}", next_tets.len());
 
-        let reacher = |bond: Bond, flip: bool| {
+        let reacher = |bond_id: Entity, bond: Bond, flip: bool| {
             move |points: &Query<&mut Point>,
-                  virtual_points: &mut HashMap<Entity, Point>,
+                  virtual_points: &mut HashMap<(Entity, Entity), Point>,
                   progress: f32| {
                 let (target_id, start_id) = if !flip {
                     (bond.b, bond.a)
@@ -106,7 +106,7 @@ pub fn graph_relax_bonds(
                 };
                 let target = points.get(target_id).unwrap();
                 let start = points.get(start_id).unwrap();
-                let mut virtual_point = virtual_points.get_mut(&target_id);
+                let mut virtual_point = virtual_points.get_mut(&(bond_id, target_id));
                 let Some(virtual_point) = virtual_point.as_mut() else {
                     warn!("virtual_point not found for bond {:?}", bond);
                     return;
@@ -136,10 +136,10 @@ pub fn graph_relax_bonds(
                 }
             }
         };
-        let archer = |bond: Bond| {
-            move |virtual_points: &mut HashMap<Entity, Point>, progress: f32| {
+        let archer = |bond_id: Entity, bond: Bond| {
+            move |virtual_points: &mut HashMap<(Entity, Entity), Point>, progress: f32| {
                 let remaining_distance = bond.length * (1.0 - progress);
-                let Some([pa, pb]) = virtual_points.get_many_mut([&bond.a, &bond.b]) else {
+                let Some([pa, pb]) = virtual_points.get_many_mut([&(bond_id, bond.a), &(bond_id, bond.b)]) else {
                     warn!("virtual_points not found for bond {:?}", bond);
                     return;
                 };
@@ -167,15 +167,15 @@ pub fn graph_relax_bonds(
                     if reached_a && reached_b {
                         continue;
                     } else if reached_a != reached_b {
-                        reachers.push(reacher(bond.1.clone(), reached_b));
+                        reachers.push(reacher(bond.0, bond.1.clone(), reached_b));
                         // set the virtual point (the non-reached point) to the reached point of the Bond
                         if reached_a {
-                            virtual_points.insert(bond.1.b, points.get(bond.1.a).unwrap().clone());
+                            virtual_points.insert((bond.0, bond.1.b), points.get(bond.1.a).unwrap().clone());
                         } else {
-                            virtual_points.insert(bond.1.a, points.get(bond.1.b).unwrap().clone());
+                            virtual_points.insert((bond.0, bond.1.a), points.get(bond.1.b).unwrap().clone());
                         }
                     } else {
-                        archers.push(archer(bond.1.clone()));
+                        archers.push(archer(bond.0, bond.1.clone()));
                     }
 
                     // Update reacheds
@@ -265,14 +265,24 @@ pub fn graph_relax_bonds(
             }
         }
         // Write the virtual points back to the real points
-        for (entity, point) in &virtual_points {
+        let aggregated_virtual_points = virtual_points.iter().into_group_map_by(|((_, point_id), _)| point_id)
+        .iter()
+            .map(|(point_id, virtual_points)| {
+                let mut sum = Vec3::ZERO;
+                for (_, point) in virtual_points {
+                    sum += point.0;
+                }
+                (**point_id, sum / virtual_points.len() as f32)
+            })
+            .collect::<HashMap<_, _>>();
+        for (entity, point) in &aggregated_virtual_points {
             println!("entity: {:?} {:?}", entity, point);
             println!(
                 " updating: {:?} -> {:?}",
                 points.get_mut(*entity).unwrap().0,
-                point.0
+                point
             );
-            points.get_mut(*entity).unwrap().0 = point.0;
+            points.get_mut(*entity).unwrap().0 = *point;
         }
     }
 }
