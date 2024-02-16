@@ -1,6 +1,6 @@
 use bevy::{ecs::system::Command, prelude::*};
 use std::f32::consts::PI;
-use crate::{Bond, DragParticle, Point};
+use crate::{Bond, DragParticle, Point, TetFrame};
 
 #[derive(Default)]
 pub struct TetPillar {
@@ -59,6 +59,22 @@ impl Command for TetPillar {
                         });
                     }
                 }
+            }
+        }
+
+        // Spawn tetras
+        let tetra_ids = [[0, 1, 2, 5], [0, 3, 4, 5], [0, 1, 4, 5]];
+        for i in 0..self.sections {
+            let offset = i * 3;
+            for tetra in tetra_ids.iter() {
+                world.spawn(TetFrame {
+                    a: points[offset + tetra[0]].0,
+                    b: points[offset + tetra[1]].0,
+                    c: points[offset + tetra[2]].0,
+                    d: points[offset + tetra[3]].0,
+                    length: 0.1,
+                    compliance: 0.1,
+                });
             }
         }
 

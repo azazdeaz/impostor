@@ -47,6 +47,25 @@ impl Bond {
         }
     }
 }
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TetFrame {
+    pub a: Entity,
+    pub b: Entity,
+    pub c: Entity,
+    pub d: Entity,
+    pub length: f32,
+    pub compliance: f32,
+}
+
+impl TetFrame {
+    pub fn has_point(&self, point: Entity) -> bool {
+        self.a == point || self.b == point || self.c == point || self.d == point
+    }
+    pub fn has_bond(&self, bond: &Bond) -> bool {
+        (self.a == bond.a || self.b == bond.a || self.c == bond.a || self.d == bond.a)
+            && (self.a == bond.b || self.b == bond.b || self.c == bond.b || self.d == bond.b)
+    }
+}
 
 #[derive(Component)]
 pub struct StressLevel(pub f32);

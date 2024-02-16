@@ -5,7 +5,7 @@ use bevy::{
 use itertools::Itertools;
 use rerun::Vec3D;
 
-use crate::{Bond, Point, Rec, RecTime, StressLevel};
+use crate::{Bond, Point, Rec, RecTime, StressLevel, TetFrame};
 
 pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
     for bond in &bonds {
@@ -23,6 +23,7 @@ pub fn graph_relax_bonds(
     mut commands: Commands,
     mut points: Query<&mut Point>,
     bonds: Query<(Entity, &Bond)>,
+    tets: Query<(Entity, &TetFrame)>,
     rec: ResMut<Rec>,
     mut time: ResMut<RecTime>,
 ) {
@@ -60,118 +61,207 @@ pub fn graph_relax_bonds(
         .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(k, _)| *k)
     else {
+        info!("No points with stress > {}", min_stress);
         return;
     };
 
-    let mut visiteds = HashSet::new();
-    let mut prev_ring = vec![most_stressed];
+    // All the point ids that have been visited by the solver
+    let mut reached = HashSet::new();
+    reached.insert(most_stressed);
     let substeps = 12;
 
-    while prev_ring.len() > 0 {
+    loop {
         rec.set_time_seconds("bevy_time", time.step());
+        info!("reached: {:?}/{:?}", reached.len(), points.iter().len());
+        // All the tetrahedra that contain a point in the prev_ring and have unreached points
+        let next_tets = tets
+            .iter()
+            .filter(|(_, tet)| {
+                // has solved points
+                (reached.contains(&tet.a)
+                    || reached.contains(&tet.b)
+                    || reached.contains(&tet.c)
+                    || reached.contains(&tet.d))
+                // has unreached points
+                && (!reached.contains(&tet.a)
+                    || !reached.contains(&tet.b)
+                    || !reached.contains(&tet.c)
+                    || !reached.contains(&tet.d))
+            })
+            .collect::<Vec<_>>();
 
-        // find the next ring
-        let mut next_ring = Vec::new();
-        for (_, bond) in &bonds {
-            if prev_ring.contains(&bond.a) && !visiteds.contains(&bond.b) {
-                next_ring.push(bond.b);
-                visiteds.insert(bond.b);
-            }
-            if prev_ring.contains(&bond.b) && !visiteds.contains(&bond.a) {
-                next_ring.push(bond.a);
-                visiteds.insert(bond.a);
-            }
+        if next_tets.len() == 0 {
+            break;
         }
+        info!("next_tets: {:?}", next_tets.len());
 
-        // all the bonds connecting prev_ring to next_ring
-        let reach_bonds = bonds
-            .iter()
-            // .map(|(_, bond)| bond)
-            .filter(|(_, bond)| prev_ring.contains(&bond.a) && !prev_ring.contains(&bond.b))
-            .collect::<Vec<_>>();
-        // all the bonds connecting points in the next_ring
-        let arch_bonds = bonds
-            .iter()
-            // .map(|(_, bond)| bond)
-            .filter(|(_, bond)| next_ring.contains(&bond.a) && next_ring.contains(&bond.b))
-            .collect::<Vec<_>>();
+        let reacher = |bond: Bond, flip: bool| {
+            move |points: &Query<&mut Point>,
+                  virtual_points: &mut HashMap<Entity, Point>,
+                  progress: f32| {
+                let (target_id, start_id) = if !flip {
+                    (bond.b, bond.a)
+                } else {
+                    (bond.a, bond.b)
+                };
+                let target = points.get(target_id).unwrap();
+                let start = points.get(start_id).unwrap();
+                let mut virtual_point = virtual_points.get_mut(&target_id);
+                let Some(virtual_point) = virtual_point.as_mut() else {
+                    warn!("virtual_point not found for bond {:?}", bond);
+                    return;
+                };
 
-        // draw the reach bonds
-        let log = reach_bonds
-            .iter()
-            .map(|bond| {
-                vec![
-                    points.get(bond.1.a).unwrap().to_rr(),
-                    points.get(bond.1.b).unwrap().to_rr(),
-                ]
-            })
-            .collect_vec();
-        rec.log(
-            "bonds/reach",
-            &rerun::LineStrips3D::new(log).with_colors([rerun::Color::from_rgb(255, 0, 0)]),
-        )
-        .ok();
+                let new_travel = bond.length * progress;
+                let curr_travel = virtual_point.0.distance(start.0);
+                if curr_travel.is_infinite() {
+                    panic!(
+                        "distance between {:?} and {:?} is inf{:?}",
+                        virtual_point.0,
+                        target.0,
+                        virtual_point.0 - target.0
+                    );
+                }
+                info!(
+                    "new_travel: {:?} curr_travel: {:?}",
+                    new_travel, curr_travel
+                );
+                let step = new_travel - curr_travel;
+                // pointing from the virtual point to the target
+                let direction = (target.0 - virtual_point.0).normalize();
+                info!("step: {:?} direction: {:?}", step, direction);
+                virtual_point.0 += direction * step;
+                if virtual_point.0.is_nan() {
+                    panic!("virtual_point is NaN");
+                }
+            }
+        };
+        let archer = |bond: Bond| {
+            move |virtual_points: &mut HashMap<Entity, Point>, progress: f32| {
+                let remaining_distance = bond.length * (1.0 - progress);
+                let Some([pa, pb]) = virtual_points.get_many_mut([&bond.a, &bond.b]) else {
+                    warn!("virtual_points not found for bond {:?}", bond);
+                    return;
+                };
+                let distance = pa.distance(pb.0);
+                let displacement = distance - remaining_distance;
+                let direction = (pb.0 - pa.0).normalize();
+                pa.0 += direction * displacement * 0.5;
+                pb.0 -= direction * displacement * 0.5;
+            }
+        };
 
-        // draw the arch bonds
-        let log = arch_bonds
-            .iter()
-            .map(|bond| {
-                vec![
-                    points.get(bond.1.a).unwrap().to_rr(),
-                    points.get(bond.1.b).unwrap().to_rr(),
-                ]
-            })
-            .collect_vec();
-        rec.log(
-            "bonds/arch",
-            &rerun::LineStrips3D::new(log).with_colors([rerun::Color::from_rgb(0, 255, 0)]),
-        )
-        .ok();
+        let mut reachers = Vec::new();
+        let mut archers = Vec::new();
 
         // Create virtual points. For each point in next_ring, create a point on the prev ring
         //  by cloning the other side of the forward bond
         let mut virtual_points = HashMap::new();
-        for (_, bond) in &reach_bonds {
-            let (prev, next) = bond.get_from_to(&prev_ring);
-            let point = points.get(prev).unwrap();
-            virtual_points.insert(next, point.clone());
+
+        for tet in &next_tets {
+            for bond in &bonds {
+                if tet.1.has_bond(bond.1) {
+                    let reached_a = reached.contains(&bond.1.a);
+                    let reached_b = reached.contains(&bond.1.b);
+                    // Skip bonds that are already solved
+                    if reached_a && reached_b {
+                        continue;
+                    } else if reached_a != reached_b {
+                        reachers.push(reacher(bond.1.clone(), reached_b));
+                        // set the virtual point (the non-reached point) to the reached point of the Bond
+                        if reached_a {
+                            virtual_points.insert(bond.1.b, points.get(bond.1.a).unwrap().clone());
+                        } else {
+                            virtual_points.insert(bond.1.a, points.get(bond.1.b).unwrap().clone());
+                        }
+                    } else {
+                        archers.push(archer(bond.1.clone()));
+                    }
+
+                    // Update reacheds
+                    if !reached_a {
+                        reached.insert(bond.1.a);
+                    }
+                    if !reached_b {
+                        reached.insert(bond.1.b);
+                    }
+                }
+            }
         }
+
+        // // find the next ring
+        // let mut next_ring = Vec::new();
+        // for (_, bond) in &bonds {
+        //     if prev_ring.contains(&bond.a) && !reached.contains(&bond.b) {
+        //         next_ring.push(bond.b);
+        //         reached.insert(bond.b);
+        //     }
+        //     if prev_ring.contains(&bond.b) && !reached.contains(&bond.a) {
+        //         next_ring.push(bond.a);
+        //         reached.insert(bond.a);
+        //     }
+        // }
+
+        // // all the bonds connecting prev_ring to next_ring
+        // let reach_bonds = bonds
+        //     .iter()
+        //     // .map(|(_, bond)| bond)
+        //     .filter(|(_, bond)| prev_ring.contains(&bond.a) && !prev_ring.contains(&bond.b))
+        //     .collect::<Vec<_>>();
+        // // all the bonds connecting points in the next_ring
+        // let arch_bonds = bonds
+        //     .iter()
+        //     // .map(|(_, bond)| bond)
+        //     .filter(|(_, bond)| next_ring.contains(&bond.a) && next_ring.contains(&bond.b))
+        //     .collect::<Vec<_>>();
+
+        // // draw the reach bonds
+        // let log = reach_bonds
+        //     .iter()
+        //     .map(|bond| {
+        //         vec![
+        //             points.get(bond.1.a).unwrap().to_rr(),
+        //             points.get(bond.1.b).unwrap().to_rr(),
+        //         ]
+        //     })
+        //     .collect_vec();
+        // rec.log(
+        //     "bonds/reach",
+        //     &rerun::LineStrips3D::new(log).with_colors([rerun::Color::from_rgb(255, 0, 0)]),
+        // )
+        // .ok();
+
+        // // draw the arch bonds
+        // let log = arch_bonds
+        //     .iter()
+        //     .map(|bond| {
+        //         vec![
+        //             points.get(bond.1.a).unwrap().to_rr(),
+        //             points.get(bond.1.b).unwrap().to_rr(),
+        //         ]
+        //     })
+        //     .collect_vec();
+        // rec.log(
+        //     "bonds/arch",
+        //     &rerun::LineStrips3D::new(log).with_colors([rerun::Color::from_rgb(0, 255, 0)]),
+        // )
+        // .ok();
+
+        // for (_, bond) in &reach_bonds {
+        //     let (prev, next) = bond.get_from_to(&prev_ring);
+        //     let point = points.get(prev).unwrap();
+        //     virtual_points.insert(next, point.clone());
+        // }
 
         // relax bonds between prev_ring and next_ring
         for substep in 0..substeps {
             let step_progress = (substep + 1) as f32 / substeps as f32;
             println!("\n\nstep_progress: {:?}", step_progress);
-            for (_, bond) in &reach_bonds {
-                println!("\nbond: {:?}", bond);
-                let (_, next) = bond.get_from_to(&prev_ring);
-                let virtual_point = virtual_points.get_mut(&next).unwrap();
-                let target_point = points.get(next).unwrap();
-                println!(
-                    "virtual_point>: {:?} target_point: {:?}",
-                    virtual_point.0, target_point.0
-                );
-
-                let distance = virtual_point.distance(target_point.0);
-                if distance < 0.0001 {
-                    continue;
-                }
-                let direction = (target_point.0 - virtual_point.0).normalize();
-                println!("distance: {:?} direction: {:?}", distance, direction);
-                println!("change: {:?}", direction * bond.length * step_progress);
-                virtual_point.0 += direction * bond.length * step_progress;
-                println!("virtual_point<: {:?}", virtual_point.0);
+            for reacher in &mut reachers {
+                reacher(&points, &mut virtual_points, step_progress);
             }
-
-            for (_, bond) in &arch_bonds {
-                let (pa_id, pb_id) = bond.get_from_to(&next_ring);
-                let Some([pa, pb]) = virtual_points.get_many_mut([&pa_id, &pb_id]) else {
-                    continue;
-                };
-                let distance = pa.distance(pb.0);
-                let displacement = distance - bond.length;
-                let direction = (pb.0 - pa.0).normalize();
-                pa.0 += direction * displacement * 0.5 * step_progress;
-                pb.0 -= direction * displacement * 0.5 * step_progress;
+            for archer in &mut archers {
+                archer(&mut virtual_points, step_progress);
             }
         }
         // Write the virtual points back to the real points
@@ -184,7 +274,6 @@ pub fn graph_relax_bonds(
             );
             points.get_mut(*entity).unwrap().0 = point.0;
         }
-        prev_ring = next_ring;
     }
 }
 
