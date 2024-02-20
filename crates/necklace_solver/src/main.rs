@@ -1,15 +1,17 @@
-use std::{f32::consts::PI, ops::Deref};
-
 use bevy::prelude::*;
 use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
 use necklace_solver::{
-    draw_bonds, draw_points, graph_relax_bonds, relax_bonds, DragParticlePlugin, Rec, RecTime, StemStructure, TetPillar
+    draw_bonds, draw_points, graph_relax_bonds, DragParticlePlugin, Rec, RecTime,
+    TetPillar,
 };
-use rerun::{demo_util::grid, external::glam};
-
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rec = rerun::RecordingStreamBuilder::new("rerun_example_minimal").spawn()?;
+
+    rerun::Logger::new(rec.clone()) // recording streams are ref-counted
+        .with_path_prefix("logs")
+        .with_filter(rerun::default_log_filter())
+        .init()?;
 
     App::new()
         .add_plugins(DefaultPlugins)
@@ -24,14 +26,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 draw_points,
                 draw_bonds,
                 update_config,
-                // relax_bonds,
                 graph_relax_bonds,
             ),
         )
         .run();
 
-        Ok(())
-    
+    Ok(())
 }
 
 fn setup(
