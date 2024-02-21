@@ -21,7 +21,7 @@ impl Point {
     }
 }
 
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct Bond {
     pub a: Entity,
     pub b: Entity,
@@ -45,6 +45,10 @@ impl Bond {
             assert!(from_points.contains(&self.b)); // the bond should be between the two points
             (self.b, self.a)
         }
+    }
+
+    pub fn has_point(&self, point: Entity) -> bool {
+        self.a == point || self.b == point
     }
 }
 #[derive(Component, Clone, Copy, Debug)]

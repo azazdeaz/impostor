@@ -3,7 +3,7 @@ use bevy::{
     utils::hashbrown::{HashMap, HashSet},
 };
 use itertools::Itertools;
-use rerun::Vec3D;
+use rerun::{RecordingStream, Vec3D};
 
 use crate::{Bond, Point, Rec, RecTime, StressLevel, TetFrame};
 
@@ -106,6 +106,141 @@ impl UpdateAggregator {
     }
 }
 
+struct Reacher {
+    origin: Entity,
+    target: Entity,
+    target_length: f32,
+    rec: RecordingStream,
+}
+impl Reacher {
+    pub fn new(bond: Bond, flip: bool, rec: RecordingStream) -> Self {
+        Self {
+            origin: if flip { bond.b } else { bond.a },
+            target: if flip { bond.a } else { bond.b },
+            target_length: bond.length,
+            rec,
+        }
+    }
+    pub fn step(
+        &self,
+        points: &Query<&mut Point>,
+        virtual_points: &HashMap<VirtualPointKey, Point>,
+        progress: f32,
+    ) -> Option<PointUpdate> {
+        let target = points.get(self.target).unwrap();
+        let start = points.get(self.origin).unwrap();
+        let virtual_point_key = (self.origin, self.target).into();
+        let virtual_point = virtual_points.get(&virtual_point_key);
+        let Some(virtual_point) = virtual_point.as_ref() else {
+            warn!("virtual_point not found for {:?}", virtual_point_key);
+            return None;
+        };
+
+        let new_travel = self.target_length * progress;
+        let curr_travel = virtual_point.0.distance(start.0);
+        if curr_travel.is_infinite() {
+            panic!(
+                "distance between {:?} and {:?} is inf{:?}",
+                virtual_point.0,
+                target.0,
+                virtual_point.0 - target.0
+            );
+        }
+        info!(
+            "new_travel: {:?} curr_travel: {:?}",
+            new_travel, curr_travel
+        );
+        let step = new_travel - curr_travel;
+        // pointing from the virtual point to the target
+        info!(
+            "virtual_point: {:?} target: {:?}",
+            virtual_point.0, target.0
+        );
+        let direction = (target.0 - virtual_point.0).normalize();
+        if direction.is_nan() {
+            warn!("direction is NaN");
+            return None;
+        }
+        info!("step: {:?} direction: {:?}", step, direction);
+        let update = direction * step;
+        if update.is_nan() {
+            panic!("update is NaN");
+        }
+
+        let origin = start.to_rr();
+        let vector = Point(virtual_point.0 + update - start.0).to_rr();
+        self.rec
+            .log(
+                format!("solver/reacher/{}", self.target.index()),
+                &rerun::Arrows3D::from_vectors(vec![vector])
+                    .with_origins(vec![origin])
+                    .with_colors(vec![rerun::Color::from_rgb(255, 128, 128)])
+                    .with_radii([0.008]),
+            )
+            .ok();
+        info!("self.target: {:?} update: {:?}", self.target, update);
+        Some((virtual_point_key, update))
+    }
+}
+
+struct Archer {
+    pa: VirtualPointKey,
+    pb: VirtualPointKey,
+    target_length: f32,
+    rec: RecordingStream,
+}
+impl Archer {
+    pub fn new(
+        pa: VirtualPointKey,
+        pb: VirtualPointKey,
+        target_length: f32,
+        rec: RecordingStream,
+    ) -> Self {
+        Self {
+            pa,
+            pb,
+            target_length,
+            rec,
+        }
+    }
+    pub fn step(
+        &self,
+        virtual_points: &HashMap<VirtualPointKey, Point>,
+        progress: f32,
+    ) -> Option<(PointUpdate, PointUpdate)> {
+        let remaining_distance = self.target_length * (1.0 - progress);
+        let (Some(pa), Some(pb)) = (virtual_points.get(&self.pa), virtual_points.get(&self.pb))
+        else {
+            panic!(
+                "virtual_points not found pa:{:?}, pb:{:?}",
+                self.pa, self.pb
+            );
+        };
+        let distance = pa.distance(pb.0);
+        let displacement = distance - remaining_distance;
+        let direction = (pb.0 - pa.0).normalize();
+        if direction.is_nan() {
+            return None;
+        }
+        let update = direction * displacement * 0.5;
+
+        self.rec
+            .log(
+                format!("solver/archer/{:?}-{:?}", pa, pb),
+                &rerun::Arrows3D::from_vectors(vec![
+                    rerun::Vec3D::from(update.to_array()),
+                    rerun::Vec3D::from((-update).to_array()),
+                ])
+                .with_origins(vec![pa.to_rr(), pb.to_rr()])
+                .with_colors(vec![rerun::Color::from_rgb(128, 128, 255)])
+                .with_radii([0.012]),
+            )
+            .ok();
+
+        Some(((self.pa, update), (self.pb, -update)))
+    }
+}
+
 pub fn graph_relax_bonds(
     mut commands: Commands,
     mut points: Query<&mut Point>,
@@ -150,105 +285,7 @@ pub fn graph_relax_bonds(
     // All the point ids that have been visited by the solver
     let mut reached = HashSet::new();
     reached.insert(most_stressed);
-    let substeps = 1;
-
-    let reacher = |bond: Bond, flip: bool| {
-        {
-            let rec = rec.clone();
-            move |points: &Query<&mut Point>,
-                  virtual_points: &HashMap<VirtualPointKey, Point>,
-                  progress: f32|
-                  -> Option<PointUpdate> {
-                let (target_id, start_id) = if !flip {
-                    (bond.b, bond.a)
-                } else {
-                    (bond.a, bond.b)
-                };
-                let target = points.get(target_id).unwrap();
-                let start = points.get(start_id).unwrap();
-                let virtual_point_key = (start_id, target_id).into();
-                let virtual_point = virtual_points.get(&virtual_point_key);
-                let Some(virtual_point) = virtual_point.as_ref() else {
-                    warn!("virtual_point not found for bond {:?}", bond);
-                    return None;
-                };
-
-                let new_travel = bond.length * progress;
-                let curr_travel = virtual_point.0.distance(start.0);
-                if curr_travel.is_infinite() {
-                    panic!(
-                        "distance between {:?} and {:?} is inf{:?}",
-                        virtual_point.0,
-                        target.0,
-                        virtual_point.0 - target.0
-                    );
-                }
-                info!(
-                    "new_travel: {:?} curr_travel: {:?}",
-                    new_travel, curr_travel
-                );
-                let step = new_travel - curr_travel;
-                // pointing from the virtual point to the target
-                info!(
-                    "virtual_point: {:?} target: {:?}",
-                    virtual_point.0, target.0
-                );
-                let direction = (target.0 - virtual_point.0).normalize();
-                if direction.is_nan() {
-                    warn!("direction is NaN");
-                    return None;
-                }
-                info!("step: {:?} direction: {:?}", step, direction);
-                let update = direction * step;
-                if update.is_nan() {
-                    panic!("update is NaN");
-                }
-
-                let origin = start.to_rr();
-                let vector = Point(virtual_point.0 + update - start.0).to_rr();
-                rec.log(
-                    format!("solver/reacher/{}", target_id.index()),
-                    &rerun::Arrows3D::from_vectors(vec![vector])
-                        .with_origins(vec![origin])
-                        .with_colors(vec![rerun::Color::from_rgb(255, 128, 128)])
-                        .with_radii([0.008]),
-                )
-                .ok();
-                info!("target_id: {:?} update: {:?}", target_id, update);
-                Some((virtual_point_key, update))
-            }
-        }
-    };
-    let archer = |pa_key: VirtualPointKey, pb_key: VirtualPointKey, target_length: f32| {
-        let rec = rec.clone();
-        move |virtual_points: &HashMap<VirtualPointKey, Point>,
-              progress: f32|
-              -> Option<(PointUpdate, PointUpdate)> {
-            let remaining_distance = target_length * (1.0 - progress);
-            let (Some(pa), Some(pb)) = (virtual_points.get(&pa_key), virtual_points.get(&pb_key))
-            else {
-                panic!("virtual_points not found pa:{:?}, pb:{:?}", pa_key, pb_key);
-            };
-            let distance = pa.distance(pb.0);
-            let displacement = distance - remaining_distance;
-            let direction = (pb.0 - pa.0).normalize();
-            let update = direction * displacement * 0.5;
-
-            rec.log(
-                format!("solver/archer/{:?}-{:?}", pa, pb),
-                &rerun::Arrows3D::from_vectors(vec![
-                    rerun::Vec3D::from(update.to_array()),
-                    rerun::Vec3D::from((-update).to_array()),
-                ])
-                .with_origins(vec![pa.to_rr(), pb.to_rr()])
-                .with_colors(vec![rerun::Color::from_rgb(128, 128, 255)])
-                .with_radii([0.012]),
-            )
-            .ok();
-
-            Some(((pa_key, update), (pb_key, -update)))
-        }
-    };
+    let substeps = 2;
 
     loop {
         rec.set_time_seconds("bevy_time", time.step());
@@ -303,7 +340,7 @@ pub fn graph_relax_bonds(
         }
 
         let mut reachers = Vec::new();
-        // let mut archers = Vec::new();
+        let mut archers = Vec::new();
 
         // Create virtual points. For each point in next_ring, create a point on the prev ring
         //  by cloning the other side of the forward bond
@@ -319,7 +356,7 @@ pub fn graph_relax_bonds(
                     if reached_a && reached_b {
                         continue;
                     } else if reached_a != reached_b {
-                        reachers.push(reacher(bond.1.clone(), reached_b));
+                        reachers.push(Reacher::new(bond.1.clone(), reached_b, rec.clone()));
                         // set the virtual point (the non-reached point) to the reached point of the Bond
                         if reached_a {
                             virtual_points.insert(
@@ -332,8 +369,6 @@ pub fn graph_relax_bonds(
                                 points.get(bond.1.b).unwrap().clone(),
                             );
                         }
-                    } else {
-                        // archers.push(archer(bond.1.clone()));
                     }
 
                     // Update reacheds
@@ -348,6 +383,27 @@ pub fn graph_relax_bonds(
         }
         reached.extend(newly_reached);
 
+        // If two reachers are targeting the opposite ends of the same bond and starting
+        //  from the same point, create an archer
+        for bond in &bonds {
+            for reacher_a in &reachers {
+                for reacher_b in &reachers {
+                    if reacher_a.origin == reacher_b.origin
+                        && reacher_a.target != reacher_b.target
+                        && bond.1.has_point(reacher_a.target)
+                        && bond.1.has_point(reacher_b.target)
+                    {
+                        archers.push(Archer::new(
+                            (reacher_a.origin, reacher_a.target).into(),
+                            (reacher_b.origin, reacher_b.target).into(),
+                            bond.1.length,
+                            rec.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+
         // relax bonds between prev_ring and next_ring
         for substep in 0..substeps {
             rec.set_time_seconds("bevy_time", time.step());
@@ -355,7 +411,7 @@ pub fn graph_relax_bonds(
             println!("\n\nstep_progress: {:?}", step_progress);
             let mut updates = UpdateAggregator::new();
             for reacher in &mut reachers {
-                if let Some(update) = reacher(&points, &virtual_points, step_progress) {
+                if let Some(update) = reacher.step(&points, &virtual_points, step_progress) {
                     rec.log(
                         format!("solver/add_update/{:?}", update.0),
                         &rerun::Scalar::new(update.1.length() as f64),
@@ -364,12 +420,12 @@ pub fn graph_relax_bonds(
                     updates.add(update);
                 }
             }
-            // for archer in &mut archers {
-            //     if let Some((update1, update2)) = archer(&virtual_points, step_progress) {
-            //         updates.add(update1);
-            //         updates.add(update2);
-            //     }
-            // }
+            for archer in &mut archers {
+                if let Some((update1, update2)) = archer.step(&virtual_points, step_progress) {
+                    updates.add(update1);
+                    updates.add(update2);
+                }
+            }
 
             updates.apply(&mut virtual_points);
 
