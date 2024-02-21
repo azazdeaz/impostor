@@ -19,10 +19,60 @@ pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
     }
 }
 
-type PointUpdate = (Entity, Vec3);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct VirtualPointKey(Entity, Entity);
+impl VirtualPointKey {
+    /// This point marks the initial position of the moving point
+    fn start_point(&self) -> Entity {
+        self.0
+    }
+    /// This point gets updated by the solver
+    fn moving_point(&self) -> Entity {
+        self.1
+    }
+}
+impl From<(Entity, Entity)> for VirtualPointKey {
+    fn from((a, b): (Entity, Entity)) -> Self {
+        Self(a, b)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct VirtualPoints(HashMap<VirtualPointKey, Point>);
+impl VirtualPoints {
+    fn new() -> Self {
+        Self(HashMap::new())
+    }
+    fn add(&mut self, key: VirtualPointKey, point: Point) {
+        self.0.insert(key, point);
+    }
+    fn get(&self, key: VirtualPointKey) -> Option<&Point> {
+        self.0.get(&key)
+    }
+    fn get_mut(&mut self, key: VirtualPointKey) -> Option<&mut Point> {
+        self.0.get_mut(&key)
+    }
+    /// Return a list of the moving points. This will merge all the instances of the same points by taking their average.
+    fn merged_points(&self) -> HashMap<Entity, Vec3> {
+        self.0
+            .iter()
+            .into_group_map_by(|(VirtualPointKey(_, point_id), _)| point_id)
+            .iter()
+            .map(|(point_id, virtual_points)| {
+                let mut sum = Vec3::ZERO;
+                for (_, point) in virtual_points {
+                    sum += point.0;
+                }
+                (**point_id, sum / virtual_points.len() as f32)
+            })
+            .collect::<HashMap<_, _>>()
+    }
+}
+
+type PointUpdate = (VirtualPointKey, Vec3);
 struct UpdateAggregator {
-    updates: HashMap<Entity, Vec3>,
-    count: HashMap<Entity, usize>,
+    updates: HashMap<VirtualPointKey, Vec3>,
+    count: HashMap<VirtualPointKey, usize>,
 }
 impl UpdateAggregator {
     fn new() -> Self {
@@ -38,16 +88,16 @@ impl UpdateAggregator {
         let entry = self.count.entry(update.0).or_insert(0);
         *entry += 1;
     }
-    fn aggregate(&self) -> HashMap<Entity, Vec3> {
+    fn aggregate(&self) -> HashMap<VirtualPointKey, Vec3> {
         self.updates
             .iter()
-            .map(|(entity, update)| {
-                let count = *self.count.get(entity).unwrap();
-                (*entity, *update / (count as f32))
+            .map(|(key, update)| {
+                let count = *self.count.get(key).unwrap();
+                (*key, *update / (count as f32))
             })
             .collect()
     }
-    fn apply(&self, virtual_points: &mut HashMap<Entity, Point>) {
+    fn apply(&self, virtual_points: &mut HashMap<VirtualPointKey, Point>) {
         for (entity, update) in self.aggregate() {
             let vp = virtual_points.get_mut(&entity).unwrap();
             log::info!("update {:?}/ {:?} -> {:?}", entity, vp.0, update);
@@ -106,7 +156,7 @@ pub fn graph_relax_bonds(
         {
             let rec = rec.clone();
             move |points: &Query<&mut Point>,
-                  virtual_points: &HashMap<Entity, Point>,
+                  virtual_points: &HashMap<VirtualPointKey, Point>,
                   progress: f32|
                   -> Option<PointUpdate> {
                 let (target_id, start_id) = if !flip {
@@ -116,7 +166,8 @@ pub fn graph_relax_bonds(
                 };
                 let target = points.get(target_id).unwrap();
                 let start = points.get(start_id).unwrap();
-                let virtual_point = virtual_points.get(&target_id);
+                let virtual_point_key = (start_id, target_id).into();
+                let virtual_point = virtual_points.get(&virtual_point_key);
                 let Some(virtual_point) = virtual_point.as_ref() else {
                     warn!("virtual_point not found for bond {:?}", bond);
                     return None;
@@ -164,19 +215,19 @@ pub fn graph_relax_bonds(
                 )
                 .ok();
                 info!("target_id: {:?} update: {:?}", target_id, update);
-                Some((target_id, update))
+                Some((virtual_point_key, update))
             }
         }
     };
-    let archer = |bond: Bond| {
+    let archer = |pa_key: VirtualPointKey, pb_key: VirtualPointKey, target_length: f32| {
         let rec = rec.clone();
-        move |virtual_points: &HashMap<Entity, Point>,
+        move |virtual_points: &HashMap<VirtualPointKey, Point>,
               progress: f32|
               -> Option<(PointUpdate, PointUpdate)> {
-            let remaining_distance = bond.length * (1.0 - progress);
-            let (Some(pa), Some(pb)) = (virtual_points.get(&bond.a), virtual_points.get(&bond.b))
+            let remaining_distance = target_length * (1.0 - progress);
+            let (Some(pa), Some(pb)) = (virtual_points.get(&pa_key), virtual_points.get(&pb_key))
             else {
-                panic!("virtual_points not found for bond {:?}", bond);
+                panic!("virtual_points not found pa:{:?}, pb:{:?}", pa_key, pb_key);
             };
             let distance = pa.distance(pb.0);
             let displacement = distance - remaining_distance;
@@ -184,7 +235,7 @@ pub fn graph_relax_bonds(
             let update = direction * displacement * 0.5;
 
             rec.log(
-                format!("solver/archer/{}-{}", bond.a.index(), bond.b.index()),
+                format!("solver/archer/{:?}-{:?}", pa, pb),
                 &rerun::Arrows3D::from_vectors(vec![
                     rerun::Vec3D::from(update.to_array()),
                     rerun::Vec3D::from((-update).to_array()),
@@ -195,7 +246,7 @@ pub fn graph_relax_bonds(
             )
             .ok();
 
-            Some(((bond.a, update), (bond.b, -update)))
+            Some(((pa_key, update), (pb_key, -update)))
         }
     };
 
@@ -252,11 +303,11 @@ pub fn graph_relax_bonds(
         }
 
         let mut reachers = Vec::new();
-        let mut archers = Vec::new();
+        // let mut archers = Vec::new();
 
         // Create virtual points. For each point in next_ring, create a point on the prev ring
         //  by cloning the other side of the forward bond
-        let mut virtual_points = HashMap::new();
+        let mut virtual_points = HashMap::<VirtualPointKey, Point>::new();
         let mut newly_reached = HashSet::new();
 
         for tet in &next_tets {
@@ -271,12 +322,18 @@ pub fn graph_relax_bonds(
                         reachers.push(reacher(bond.1.clone(), reached_b));
                         // set the virtual point (the non-reached point) to the reached point of the Bond
                         if reached_a {
-                            virtual_points.insert(bond.1.b, points.get(bond.1.a).unwrap().clone());
+                            virtual_points.insert(
+                                (bond.1.a, bond.1.b).into(),
+                                points.get(bond.1.a).unwrap().clone(),
+                            );
                         } else {
-                            virtual_points.insert(bond.1.a, points.get(bond.1.b).unwrap().clone());
+                            virtual_points.insert(
+                                (bond.1.b, bond.1.a).into(),
+                                points.get(bond.1.b).unwrap().clone(),
+                            );
                         }
                     } else {
-                        archers.push(archer(bond.1.clone()));
+                        // archers.push(archer(bond.1.clone()));
                     }
 
                     // Update reacheds
@@ -300,7 +357,7 @@ pub fn graph_relax_bonds(
             for reacher in &mut reachers {
                 if let Some(update) = reacher(&points, &virtual_points, step_progress) {
                     rec.log(
-                        format!("solver/add_update/{:?}", update.0.index()),
+                        format!("solver/add_update/{:?}", update.0),
                         &rerun::Scalar::new(update.1.length() as f64),
                     )
                     .ok();
@@ -333,8 +390,8 @@ pub fn graph_relax_bonds(
         }
 
         // Write updates back to the points
-        for (entity, point) in &virtual_points {
-            points.get_mut(*entity).unwrap().0 = point.0;
+        for (entity, point) in VirtualPoints(virtual_points).merged_points() {
+            points.get_mut(entity).unwrap().0 = point;
         }
     }
 }
