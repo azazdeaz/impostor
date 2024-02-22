@@ -76,7 +76,7 @@ fn setup(
     // commands.add(stem);
 
     let stem = TetPillar {
-        sections: 10,
+        sections: 2,
         radius: 0.1,
         section_height: 0.5,
         start_translation: Vec3::new(0., 0.5, 0.),

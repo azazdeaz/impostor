@@ -21,16 +21,16 @@ pub fn relax_bonds(mut points: Query<&mut Point>, bonds: Query<&Bond>) {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct VirtualPointKey(Entity, Entity);
+
 impl VirtualPointKey {
     /// This point marks the initial position of the moving point
-    fn start_point(&self) -> Entity {
-        self.0
-    }
+    fn start_point(&self) -> Entity { self.0 }
     /// This point gets updated by the solver
     fn moving_point(&self) -> Entity {
         self.1
     }
 }
+
 impl From<(Entity, Entity)> for VirtualPointKey {
     fn from((a, b): (Entity, Entity)) -> Self {
         Self(a, b)
@@ -39,6 +39,7 @@ impl From<(Entity, Entity)> for VirtualPointKey {
 
 #[derive(Debug, Clone, PartialEq)]
 struct VirtualPoints(HashMap<VirtualPointKey, Point>);
+
 impl VirtualPoints {
     fn new() -> Self {
         Self(HashMap::new())
@@ -70,10 +71,12 @@ impl VirtualPoints {
 }
 
 type PointUpdate = (VirtualPointKey, Vec3);
+
 struct UpdateAggregator {
     updates: HashMap<VirtualPointKey, Vec3>,
     count: HashMap<VirtualPointKey, usize>,
 }
+
 impl UpdateAggregator {
     fn new() -> Self {
         Self {
@@ -112,6 +115,7 @@ struct Reacher {
     target_length: f32,
     rec: RecordingStream,
 }
+
 impl Reacher {
     pub fn new(bond: Bond, flip: bool, rec: RecordingStream) -> Self {
         Self {
@@ -189,6 +193,7 @@ struct Archer {
     target_length: f32,
     rec: RecordingStream,
 }
+
 impl Archer {
     pub fn new(
         pa: VirtualPointKey,
@@ -203,6 +208,13 @@ impl Archer {
             rec,
         }
     }
+
+    pub fn log_key(&self, sub: &str) -> String {
+        // Sort the indices so that the key is the same for both directions
+        let mut indices = [self.pa.moving_point().index(), self.pb.moving_point().index()];
+        indices.sort();
+        format!("solver/archer/{:?}-{:?}/{}", indices[0], indices[1], sub)
+    }
     pub fn step(
         &self,
         virtual_points: &HashMap<VirtualPointKey, Point>,
@@ -210,14 +222,18 @@ impl Archer {
     ) -> Option<(PointUpdate, PointUpdate)> {
         let remaining_distance = self.target_length * (1.0 - progress);
         let (Some(pa), Some(pb)) = (virtual_points.get(&self.pa), virtual_points.get(&self.pb))
-        else {
-            panic!(
-                "virtual_points not found pa:{:?}, pb:{:?}",
-                self.pa, self.pb
-            );
-        };
+            else {
+                panic!(
+                    "virtual_points not found pa:{:?}, pb:{:?}",
+                    self.pa, self.pb
+                );
+            };
         let distance = pa.distance(pb.0);
-        let displacement = distance - remaining_distance;
+        let target_distance = distance - remaining_distance;
+        let displacement = target_distance - distance;
+        log::info!("{}: {:?}", self.log_key("distance"), distance);
+        log::info!("{}: {:?}", self.log_key("target_distance"), target_distance);
+        log::info!("{}: {:?}", self.log_key("displacement"), displacement);
         let direction = (pb.0 - pa.0).normalize();
         if direction.is_nan() {
             return None;
@@ -226,14 +242,14 @@ impl Archer {
 
         self.rec
             .log(
-                format!("solver/archer/{:?}-{:?}", pa, pb),
+                self.log_key("update"),
                 &rerun::Arrows3D::from_vectors(vec![
                     rerun::Vec3D::from(update.to_array()),
                     rerun::Vec3D::from((-update).to_array()),
                 ])
-                .with_origins(vec![pa.to_rr(), pb.to_rr()])
-                .with_colors(vec![rerun::Color::from_rgb(128, 128, 255)])
-                .with_radii([0.012]),
+                    .with_origins(vec![pa.to_rr(), pb.to_rr()])
+                    .with_colors(vec![rerun::Color::from_rgb(128, 128, 255)])
+                    .with_radii([0.006]),
             )
             .ok();
 
@@ -277,10 +293,10 @@ pub fn graph_relax_bonds(
         .filter(|(_, stress)| **stress > min_stress)
         .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(k, _)| *k)
-    else {
-        info!("No points with stress > {}", min_stress);
-        return;
-    };
+        else {
+            info!("No points with stress > {}", min_stress);
+            return;
+        };
 
     // All the point ids that have been visited by the solver
     let mut reached = HashSet::new();
@@ -300,7 +316,7 @@ pub fn graph_relax_bonds(
                     &rerun::LineStrips3D::new(vec![vec![pa.to_rr(), pb.to_rr()]])
                         .with_colors([rerun::Color::from([128, 128, 128, 128])]),
                 )
-                .ok();
+                    .ok();
             }
         }
         // All the tetrahedra that contain a point in the prev_ring and have unreached points
@@ -312,8 +328,8 @@ pub fn graph_relax_bonds(
                     || reached.contains(&tet.b)
                     || reached.contains(&tet.c)
                     || reached.contains(&tet.d))
-                // has unreached points
-                && (!reached.contains(&tet.a)
+                    // has unreached points
+                    && (!reached.contains(&tet.a)
                     || !reached.contains(&tet.b)
                     || !reached.contains(&tet.c)
                     || !reached.contains(&tet.d))
@@ -334,7 +350,7 @@ pub fn graph_relax_bonds(
                         &rerun::LineStrips3D::new(vec![vec![pa.to_rr(), pb.to_rr()]])
                             .with_colors([rerun::Color::from([64, 64, 255, 255])]),
                     )
-                    .ok();
+                        .ok();
                 }
             }
         }
@@ -407,6 +423,7 @@ pub fn graph_relax_bonds(
         // relax bonds between prev_ring and next_ring
         for substep in 0..substeps {
             rec.set_time_seconds("bevy_time", time.step());
+            rec.log("solver/substep", &rerun::Scalar::new(substep as f64)).ok();
             let step_progress = (substep + 1) as f32 / substeps as f32;
             println!("\n\nstep_progress: {:?}", step_progress);
             let mut updates = UpdateAggregator::new();
@@ -416,17 +433,19 @@ pub fn graph_relax_bonds(
                         format!("solver/add_update/{:?}", update.0),
                         &rerun::Scalar::new(update.1.length() as f64),
                     )
-                    .ok();
+                        .ok();
                     updates.add(update);
                 }
             }
+            updates.apply(&mut virtual_points);
+
+            let mut updates = UpdateAggregator::new();
             for archer in &mut archers {
                 if let Some((update1, update2)) = archer.step(&virtual_points, step_progress) {
                     updates.add(update1);
                     updates.add(update2);
                 }
             }
-
             updates.apply(&mut virtual_points);
 
             let mut points = Vec::new();
@@ -442,7 +461,7 @@ pub fn graph_relax_bonds(
                     .with_colors(colors)
                     .with_radii([0.008]),
             )
-            .ok();
+                .ok();
         }
 
         // Write updates back to the points
