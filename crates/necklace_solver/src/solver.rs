@@ -2,6 +2,7 @@ use bevy::{
     prelude::*,
     utils::hashbrown::{HashMap, HashSet},
 };
+use bevy::utils::petgraph::matrix_graph::Zero;
 use itertools::Itertools;
 use rerun::{RecordingStream, Vec3D};
 
@@ -85,7 +86,6 @@ impl UpdateAggregator {
         }
     }
     fn add(&mut self, update: PointUpdate) {
-        log::info!("update: {:?}", update);
         let entry = self.updates.entry(update.0).or_insert(Vec3::ZERO);
         *entry += update.1;
         let entry = self.count.entry(update.0).or_insert(0);
@@ -103,7 +103,7 @@ impl UpdateAggregator {
     fn apply(&self, virtual_points: &mut HashMap<VirtualPointKey, Point>) {
         for (entity, update) in self.aggregate() {
             let vp = virtual_points.get_mut(&entity).unwrap();
-            log::info!("update {:?}/ {:?} -> {:?}", entity, vp.0, update);
+            // log::info!("update {:?}/ {:?} -> {:?}", entity, vp.0, update);
             vp.0 += update;
         }
     }
@@ -154,12 +154,33 @@ impl Reacher {
             "new_travel: {:?} curr_travel: {:?}",
             new_travel, curr_travel
         );
-        let step = new_travel - curr_travel;
+
+        // Vector from the virtual point to the target
+        let to_start = start.0 - virtual_point.0;
+        // Distance from the target
+        let curr_distance = to_start.length();
+
+        let step = if curr_distance.is_zero() {
+            new_travel
+        } else {
+            // Angle between start->virtual_point and virtual_point->target
+            let angle = (virtual_point.0 - start.0).angle_between(to_start);
+            // How much do we have to move the virtual point in the direction of the target
+            //  so the distance between the start and the virtual point is new_travel
+            log::info!("> reacher: {:?}", self.target.index());
+            log::info!("angle: {:?}", angle);
+            log::info!("curr_distance: {:?}", curr_distance);
+            log::info!("curr_travel: {:?}", curr_travel);
+            log::info!("new_travel: {:?}", new_travel);
+            curr_travel.powi(2) + curr_distance.powi(2)
+                - 2.0 * curr_travel * curr_distance * angle.cos()
+        };
         // pointing from the virtual point to the target
         info!(
             "virtual_point: {:?} target: {:?}",
             virtual_point.0, target.0
         );
+
         let direction = (target.0 - virtual_point.0).normalize();
         if direction.is_nan() {
             warn!("direction is NaN");
@@ -171,8 +192,13 @@ impl Reacher {
             panic!("update is NaN");
         }
 
-        let origin = start.to_rr();
-        let vector = Point(virtual_point.0 + update - start.0).to_rr();
+        let origin = virtual_point.to_rr();
+        let vector = Point(update).to_rr();
+        self.rec.log(
+            format!("solver/reacher/{}", self.target.index()),
+            &rerun::TextLog::new(format!("curr_travel: {:?} new_travel: {:?}", curr_travel, new_travel)),
+        )
+            .ok();
         self.rec
             .log(
                 format!("solver/reacher/{}", self.target.index()),
