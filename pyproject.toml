@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "impostor"
+version = "0.1.0"
+description = "Plant generator for robotic simulations"
+authors = ["Polgár András <azazdeaz@gmail.com>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.11.*"
+bpy = "^4.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pyright = "^1.1.362"
+pytest = "^8.2.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
