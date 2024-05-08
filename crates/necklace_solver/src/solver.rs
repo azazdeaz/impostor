@@ -1,8 +1,9 @@
+use std::f32::consts::PI;
+use bevy::utils::petgraph::matrix_graph::Zero;
 use bevy::{
     prelude::*,
     utils::hashbrown::{HashMap, HashSet},
 };
-use bevy::utils::petgraph::matrix_graph::Zero;
 use itertools::Itertools;
 use rerun::{RecordingStream, Vec3D};
 
@@ -25,7 +26,9 @@ struct VirtualPointKey(Entity, Entity);
 
 impl VirtualPointKey {
     /// This point marks the initial position of the moving point
-    fn start_point(&self) -> Entity { self.0 }
+    fn start_point(&self) -> Entity {
+        self.0
+    }
     /// This point gets updated by the solver
     fn moving_point(&self) -> Entity {
         self.1
@@ -160,21 +163,45 @@ impl Reacher {
         // Distance from the target
         let curr_distance = to_start.length();
 
-        let step = if curr_distance.is_zero() {
-            new_travel
-        } else {
-            // Angle between start->virtual_point and virtual_point->target
-            let angle = (virtual_point.0 - start.0).angle_between(to_start);
-            // How much do we have to move the virtual point in the direction of the target
-            //  so the distance between the start and the virtual point is new_travel
-            log::info!("> reacher: {:?}", self.target.index());
-            log::info!("angle: {:?}", angle);
-            log::info!("curr_distance: {:?}", curr_distance);
-            log::info!("curr_travel: {:?}", curr_travel);
-            log::info!("new_travel: {:?}", new_travel);
-            curr_travel.powi(2) + curr_distance.powi(2)
-                - 2.0 * curr_travel * curr_distance * angle.cos()
-        };
+        self.rec
+            .log(
+                format!("solver/reacher/{}", self.target.index()),
+                &rerun::TextLog::new(format!(
+                    "curr_distance: {:?}, curr_travel: {:?}, new_travel: {:?}",
+                    curr_distance, curr_travel, new_travel
+                )),
+            )
+            .ok();
+        let step = new_travel - curr_travel;
+        // let step = if curr_distance.is_zero() {
+        //     new_travel - curr_travel
+        // } else {
+        //     // Angle between start->virtual_point and virtual_point->target
+        //     let angle = (virtual_point.0 - start.0).angle_between(to_start);
+        //     // If moving directly to the target
+        //     if (angle.abs() - PI).abs() < 0.01 {
+        //         new_travel - curr_travel
+        //     } else {
+        //         // How much do we have to move the virtual point in the direction of the target
+        //         //  so the distance between the start and the virtual point is new_travel
+        //         log::info!("> reacher: {:?}", self.target.index());
+        //         log::info!("angle: {:?}", angle);
+        //         log::info!("curr_distance: {:?}", curr_distance);
+        //         log::info!("curr_travel: {:?}", curr_travel);
+        //         log::info!("new_travel: {:?}", new_travel);
+        //         self.rec
+        //             .log(
+        //                 format!("solver/reacher/{}", self.target.index()),
+        //                 &rerun::TextLog::new(format!(
+        //                     "angle: {:?}, curr_distance: {:?}, curr_travel: {:?}, new_travel: {:?}",
+        //                     angle, curr_distance, curr_travel, new_travel
+        //                 )),
+        //             )
+        //             .ok();
+        //         curr_travel.powi(2) + curr_distance.powi(2)
+        //             - 2.0 * curr_travel * curr_distance * angle.cos()
+        //     }
+        // };
         // pointing from the virtual point to the target
         info!(
             "virtual_point: {:?} target: {:?}",
@@ -194,11 +221,7 @@ impl Reacher {
 
         let origin = virtual_point.to_rr();
         let vector = Point(update).to_rr();
-        self.rec.log(
-            format!("solver/reacher/{}", self.target.index()),
-            &rerun::TextLog::new(format!("curr_travel: {:?} new_travel: {:?}", curr_travel, new_travel)),
-        )
-            .ok();
+
         self.rec
             .log(
                 format!("solver/reacher/{}", self.target.index()),
@@ -237,7 +260,10 @@ impl Archer {
 
     pub fn log_key(&self, sub: &str) -> String {
         // Sort the indices so that the key is the same for both directions
-        let mut indices = [self.pa.moving_point().index(), self.pb.moving_point().index()];
+        let mut indices = [
+            self.pa.moving_point().index(),
+            self.pb.moving_point().index(),
+        ];
         indices.sort();
         format!("solver/archer/{:?}-{:?}/{}", indices[0], indices[1], sub)
     }
@@ -246,7 +272,6 @@ impl Archer {
         virtual_points: &HashMap<VirtualPointKey, Point>,
         progress: f32,
     ) -> Option<(PointUpdate, PointUpdate)> {
-        let remaining_distance = self.target_length * (1.0 - progress);
         let (Some(pa), Some(pb)) = (virtual_points.get(&self.pa), virtual_points.get(&self.pb))
             else {
                 panic!(
@@ -255,7 +280,7 @@ impl Archer {
                 );
             };
         let distance = pa.distance(pb.0);
-        let target_distance = distance - remaining_distance;
+        let target_distance = self.target_length * progress;
         let displacement = target_distance - distance;
         log::info!("{}: {:?}", self.log_key("distance"), distance);
         log::info!("{}: {:?}", self.log_key("target_distance"), target_distance);
@@ -327,7 +352,7 @@ pub fn graph_relax_bonds(
     // All the point ids that have been visited by the solver
     let mut reached = HashSet::new();
     reached.insert(most_stressed);
-    let substeps = 2;
+    let substeps = 12;
 
     loop {
         rec.set_time_seconds("bevy_time", time.step());
@@ -449,7 +474,8 @@ pub fn graph_relax_bonds(
         // relax bonds between prev_ring and next_ring
         for substep in 0..substeps {
             rec.set_time_seconds("bevy_time", time.step());
-            rec.log("solver/substep", &rerun::Scalar::new(substep as f64)).ok();
+            rec.log("solver/substep", &rerun::Scalar::new(substep as f64))
+                .ok();
             let step_progress = (substep + 1) as f32 / substeps as f32;
             println!("\n\nstep_progress: {:?}", step_progress);
             let mut updates = UpdateAggregator::new();
