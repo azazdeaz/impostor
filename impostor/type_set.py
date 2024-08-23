@@ -1,3 +1,7 @@
+from typing import Type, TypeVar
+
+T = TypeVar('T')
+
 class TypeSet:
     def __init__(self):
         self._type_map = {}
@@ -10,7 +14,7 @@ class TypeSet:
         # Remove the item by type
         self._type_map.pop(type(item), None)
 
-    def get_by_type(self, type_key):
+    def get_by_type(self, type_key: Type[T]) -> T:
         # Return the instance of this type if exists
         return self._type_map.get(type_key)
 

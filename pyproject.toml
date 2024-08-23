@@ -1,20 +1,29 @@
-[tool.poetry]
+[project]
+authors = [{name = "Polgar Andras", email = "azazdeaz@gmail.com"}]
+dependencies = ["isaacsim>=4.1.0.0,<5", "isaacsim-extscache-physics==4.1.0.0", "isaacsim-extscache-kit==4.1.0.0", "isaacsim-extscache-kit-sdk==4.1.0.0"]
+description = "Add a short description here"
 name = "impostor"
+requires-python = ">=3.10,<3.11"
 version = "0.1.0"
-description = "Plant generator for robotic simulations"
-authors = ["Polgár András <azazdeaz@gmail.com>"]
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "3.11.*"
-bpy = "^4.1.0"
-pyelastica = {extras = ["docs", "examples"], version = "^0.3.2"}
-
-[tool.poetry.group.dev.dependencies]
-pyright = "^1.1.362"
-pytest = "^8.2.0"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+impostor = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+start = "python impostor/run_issac.py"
+setup_vscode = "run python scripts/setup_vscode.py"
+
+[tool.pixi.dependencies]
+ruff = ">=0.6.1,<0.7"
+pixi-pycharm = ">=0.0.6,<0.0.7"
+
+[pypi-options]
+extra-index-urls = ["https://pypi.nvidia.com"]

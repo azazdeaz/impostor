@@ -1,5 +1,7 @@
-/target
-/assets/models
-venv
+# pixi environments
+.pixi
+*.egg-info
 .idea
+.vscode
+.vscode/settings.json
 *.pyc
