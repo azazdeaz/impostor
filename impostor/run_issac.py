@@ -73,7 +73,7 @@ def add_prims_system(plant, entity: Entity):
     else:
         raise ValueError("Entity does not have a stem component")
     
-def add_joints_system(plant: Plant, entity: Entity):
+def add_2d_joints_system(plant: Plant, entity: Entity):
     comps = plant.get_components(entity)
     if AxeNext in comps:
         next_axe = comps.get_by_type(AxeNext)
@@ -102,14 +102,53 @@ def add_joints_system(plant: Plant, entity: Entity):
         angularDriveAPI = UsdPhysics.DriveAPI.Apply(world.stage.GetPrimAtPath(joint_prim_path), "angular")
         angularDriveAPI.CreateTypeAttr("force")
         angularDriveAPI.CreateTargetPositionAttr(0.0)
-        angularDriveAPI.CreateDampingAttr(10.0)
-        angularDriveAPI.CreateStiffnessAttr(100.0)
+        angularDriveAPI.CreateDampingAttr(1e10)
+        angularDriveAPI.CreateStiffnessAttr(1e10)
+
+        add_joints_system(plant, next_axe.next)
+
+def add_joints_system(plant: Plant, entity: Entity):
+    comps = plant.get_components(entity)
+    if AxeNext in comps:
+        next_axe = comps.get_by_type(AxeNext)
+        next_comps = plant.get_components(next_axe.next)
+
+        stem = comps.get_by_type(Stem)
+        next_stem = next_comps.get_by_type(Stem)
+        
+        joint_prim_path = f"{comps.get_by_type(PrimPath).path}_joint"
+        joint = UsdPhysics.SphericalJoint.Define(world.stage, joint_prim_path)
+
+        joint.CreateAxisAttr("Z")
+        joint.CreateConeAngle0LimitAttr(30.0)
+        joint.CreateConeAngle1LimitAttr(30.0)
+
+        joint.CreateBody0Rel().SetTargets([comps.get_by_type(PrimPath).path])
+        joint.CreateBody1Rel().SetTargets([next_comps.get_by_type(PrimPath).path])
+
+        joint.CreateLocalPos0Attr().Set(Gf.Vec3f(0.0, 0.0, stem.length / 2.0))
+        joint.CreateLocalRot0Attr().Set(Gf.Quatf(1.0))
+
+        joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, -next_stem.length / 2.0))
+        joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0))
+
+        # /plant/stem_0_joint.physxLimit:cone:damping
+
+
+        def add_drive(axis):
+            angularDriveAPI = UsdPhysics.DriveAPI.Apply(world.stage.GetPrimAtPath(joint_prim_path), axis)
+            angularDriveAPI.CreateTypeAttr("acceleration")
+            angularDriveAPI.CreateTargetPositionAttr(0.0)
+            angularDriveAPI.CreateDampingAttr(10000000.0)
+            angularDriveAPI.CreateStiffnessAttr(100000000.0)
+        add_drive("rotX")
+        add_drive("rotY")
 
         add_joints_system(plant, next_axe.next)
 
 
 add_prims_system(plant, root)
-add_joints_system(plant, root)
+add_2d_joints_system(plant, root)
 
 # result, path = omni.kit.commands.execute("CreateMeshPrimCommand", prim_type="Cylinder")
 # prim = world.stage.GetPrimAtPath(path)
