@@ -1,0 +1,14 @@
+[package]
+name = "impostor-core"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "impostor_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+curvo = "0.1.30"
+nalgebra = "0.33.0"
+pyo3 = "0.22.0"
