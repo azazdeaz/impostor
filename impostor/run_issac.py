@@ -3,7 +3,7 @@ from impostor.components.core import AxeNext, AxePrev, Stem
 from impostor.components.rigid_transformation import RigidTransformation
 from impostor.plant import Entity, Plant
 from impostor.run_plant import test_grow
-from impostor.systems import add_transforms_system
+from impostor.systems.core import add_transforms_system
 import numpy as np
 import random
 from dataclasses import dataclass

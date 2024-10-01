@@ -1,5 +1,5 @@
 from impostor.plant import Plant
-from impostor.systems import grow_system, start_root
+from impostor.systems.core import grow_system, start_root
 
 
 def test_grow(iterations=10):
