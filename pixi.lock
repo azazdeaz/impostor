@@ -41,7 +41,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.3.2-hb9d3cd8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pip-24.2-pyh8b19718_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pixi-pycharm-0.0.6-unix_1234567_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.10.15-h4a871b0_0_cpython.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.10.15-h4a871b0_1_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python_abi-3.10-5_cp310.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.2-h8228510_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.6.8-py310h624018c_0.conda
@@ -100,6 +100,7 @@ packages:
   - ld_impl_linux-64 2.43 h712a8e2_1
   - sysroot_linux-64
   license: GPL-3.0-only
+  license_family: GPL
   purls: []
   size: 6233238
   timestamp: 1727304698672
@@ -158,7 +159,7 @@ packages:
   name: impostor
   version: 0.1.0
   path: .
-  sha256: b34e1cba9aefc98c9684190250c2eeb326f5aec50db50c6bb6b46b3865e8f6db
+  sha256: f1b38765ee9e996b6d3c325a5fc303e0d8223b907f8bae93732170fff1aa67ba
   requires_python: '>=3.10,<3.11'
   editable: true
 - kind: conda
@@ -192,6 +193,7 @@ packages:
   constrains:
   - binutils_impl_linux-64 2.43
   license: GPL-3.0-only
+  license_family: GPL
   purls: []
   size: 669616
   timestamp: 1727304687962
@@ -544,7 +546,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/maturin?source=hash-mapping
+  - pkg:pypi/maturin?source=conda-forge-mapping
   size: 6258004
   timestamp: 1727350288645
 - kind: conda
@@ -585,7 +587,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/numpy?source=hash-mapping
+  - pkg:pypi/numpy?source=conda-forge-mapping
   size: 7809373
   timestamp: 1725412286628
 - kind: conda
@@ -622,7 +624,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/pip?source=hash-mapping
+  - pkg:pypi/pip?source=conda-forge-mapping
   size: 1237976
   timestamp: 1724954490262
 - kind: conda
@@ -645,11 +647,12 @@ packages:
 - kind: conda
   name: python
   version: 3.10.15
-  build: h4a871b0_0_cpython
+  build: h4a871b0_1_cpython
+  build_number: 1
   subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/python-3.10.15-h4a871b0_0_cpython.conda
-  sha256: 186b4cc1000afb84b8c5a5f4ccdccaf178f940eaf885634cbbe51abba43b5e73
-  md5: f5c36ac89c928702bcfd2e2d567048d9
+  url: https://conda.anaconda.org/conda-forge/linux-64/python-3.10.15-h4a871b0_1_cpython.conda
+  sha256: 7611846de94e1b7c41b308dc6788e65227e8c65bd2f1575e1753acc9a3129fd9
+  md5: 9e1b028075ff7348a194d524b6910f12
   depends:
   - __glibc >=2.17,<3.0.a0
   - bzip2 >=1.0.8,<2.0a0
@@ -671,8 +674,8 @@ packages:
   - python_abi 3.10.* *_cp310
   license: Python-2.0
   purls: []
-  size: 25288946
-  timestamp: 1726851437185
+  size: 25198492
+  timestamp: 1727719762520
 - kind: conda
   name: python_abi
   version: '3.10'
@@ -723,7 +726,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/ruff?source=hash-mapping
+  - pkg:pypi/ruff?source=conda-forge-mapping
   size: 6949617
   timestamp: 1727404750107
 - kind: conda
@@ -778,7 +781,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/setuptools?source=hash-mapping
+  - pkg:pypi/setuptools?source=conda-forge-mapping
   size: 777462
   timestamp: 1727249510532
 - kind: conda
@@ -830,7 +833,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/tomli?source=hash-mapping
+  - pkg:pypi/tomli?source=conda-forge-mapping
   size: 15940
   timestamp: 1644342331069
 - kind: conda
@@ -861,7 +864,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/wheel?source=hash-mapping
+  - pkg:pypi/wheel?source=conda-forge-mapping
   size: 58585
   timestamp: 1722797131787
 - kind: conda

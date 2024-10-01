@@ -1,5 +1,6 @@
 use pyo3::prelude::*;
 use std::f64::consts::FRAC_PI_2;
+use rerun::{demo_util::grid, external::glam};
 
 // use materials::*;
 use nalgebra::{Point3, Rotation3, Translation3, Vector3};
@@ -50,6 +51,19 @@ fn test_mesh() -> PyResult<String> {
     let back = interpolated.transformed(&m.into());
 
     let lofted = NurbsSurface::try_loft(&[c1, c2, c3], Some(3)).unwrap();
+
+    let rec = rerun::RecordingStreamBuilder::new("rerun_example_minimal").spawn().unwrap();
+
+    let points = grid(glam::Vec3::splat(-10.0), glam::Vec3::splat(10.0), 10);
+    let colors = grid(glam::Vec3::ZERO, glam::Vec3::splat(255.0), 10)
+        .map(|v| rerun::Color::from_rgb(v.x as u8, v.y as u8, v.z as u8));
+
+    rec.log(
+        "my_points",
+        &rerun::Points3D::new(points)
+            .with_colors(colors)
+            .with_radii([0.5]),
+    ).unwrap();
 
     // TODO visualize with rerun on the python side
     return Ok("ok".to_string());

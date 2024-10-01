@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 curvo = "0.1.30"
 nalgebra = "0.33.0"
 pyo3 = "0.22.0"
+rerun = { version = "0.18.2", features = ["native_viewer"] }

@@ -12,6 +12,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+manifest-path = "impostor-core/Cargo.toml"
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -21,8 +22,8 @@ platforms = ["linux-64"]
 impostor = { path = ".", editable = true }
 
 [tool.pixi.tasks]
-start = "python impostor/run_issac.py"
-setup_vscode = "run python scripts/setup_vscode.py"
+start = "python impostor/run_nurbs.py"
+setup-vscode = "run python scripts/setup_vscode.py"
 # Build and install a development version of the rerun-sdk Python package.
 #
 # This only needs to be called when you have made changes that would impact the rust bindings of
@@ -31,7 +32,7 @@ setup_vscode = "run python scripts/setup_vscode.py"
 # Note:
 # - pip (which is called by maturin develop) doesn't recognize conda/pixi envs as venv, and thus complains if
 #   configured to not install outside venv (which is a good practice). PIP_REQUIRE_VIRTUALENV=0 disables this check.
-py-build-common = { cmd = "PIP_REQUIRE_VIRTUALENV=0 maturin develop --manifest-path impostor-core/Cargo.toml", depends_on = [
+py-build-common = { cmd = "PIP_REQUIRE_VIRTUALENV=0 maturin develop", depends_on = [
 #   "rerun-build", # We need to build rerun-cli since it is bundled in the python package.
 ] }
 # py-build-common-release = { cmd = "PIP_REQUIRE_VIRTUALENV=0 RERUN_ALLOW_MISSING_BIN=1 maturin develop --release --manifest-path rerun_py/Cargo.toml --extras=tests", depends_on = [
