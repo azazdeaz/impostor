@@ -21,3 +21,7 @@ def add_transforms_system(plant: Plant, entity: Entity, transform: RigidTransfor
             add_transforms_system(plant, comps.get_by_type(AxeNext).next, next_transform)
     else:
         raise ValueError("Entity does not have a stem component")
+    
+
+def add_mesh_rings_system(plant: Plant, entity: Entity):
+    

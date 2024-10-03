@@ -878,7 +878,7 @@ packages:
   name: impostor
   version: 0.1.0
   path: .
-  sha256: 0da3778db318c86875fba7ca7d52c378cc1a25ca4a2b427f774ed082ad901a56
+  sha256: dc28b3d19f62845846083f6d275dbbe6a85fb6b5668e4dbe232bd7792c64c37d
   requires_python: '>=3.10,<3.11'
   editable: true
 - kind: conda

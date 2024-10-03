@@ -1,5 +1,5 @@
 from impostor.plant import Plant
-from impostor.systems.core import grow_system, start_root
+from impostor.systems import add_transforms_system, grow_system, start_root
 
 
 def test_grow(iterations=10):
@@ -14,4 +14,5 @@ def test_grow(iterations=10):
 
 
 if __name__ == "__main__":
-    test_grow()
+    plant, root = test_grow()
+    add_transforms_system(plant, root)

@@ -35,6 +35,7 @@ setup-vscode = "run python scripts/setup_vscode.py"
 py-build-common = { cmd = "PIP_REQUIRE_VIRTUALENV=0 maturin develop", depends_on = [
 #   "rerun-build", # We need to build rerun-cli since it is bundled in the python package.
 ] }
+gen-msgs = "cargo run --bin gen-msgs --manifest-path impostor-msgs/Cargo.toml"
 # py-build-common-release = { cmd = "PIP_REQUIRE_VIRTUALENV=0 RERUN_ALLOW_MISSING_BIN=1 maturin develop --release --manifest-path rerun_py/Cargo.toml --extras=tests", depends_on = [
 #   "rerun-build-release", # We need to build rerun-cli since it is bundled in the python package.
 # ] }
