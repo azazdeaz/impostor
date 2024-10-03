@@ -1,7 +1,8 @@
 
 
+use impostor_msgs::Plant;
 use pyo3::prelude::*;
-use std::f64::consts::FRAC_PI_2;
+use std::{f64::consts::FRAC_PI_2, fmt::Binary};
 use rerun::{demo_util::grid, external::glam::{self, UVec3}};
 
 
@@ -18,7 +19,7 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 }
 
 #[pyfunction]
-fn test_mesh() -> PyResult<String> {
+fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
     let interpolation_target = vec![
         Point3::new(-1.0, -1.0, 0.),
         Point3::new(1.0, -1.0, 0.),

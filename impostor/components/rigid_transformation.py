@@ -2,6 +2,7 @@ from typing import Tuple
 import numpy as np
 from scipy.spatial.transform._rotation import Rotation
 from dataclasses import dataclass, field
+import impostor.messages as messages
 
 @dataclass
 class RigidTransformation:
@@ -21,6 +22,15 @@ class RigidTransformation:
         Create a RigidTransformation that represents a translation along the x-axis.
         """
         return cls(translation=np.array([x, 0, 0]))
+    
+    def to_pose_message(self) -> messages.Pose:
+        """
+        Convert the rigid transformation to a Pose message.
+        """
+        return messages.Pose(
+            position=tuple(self.translation),
+            orientation=tuple(self.rotation.as_quat())
+        )
     
 
     def apply(self, point: np.ndarray) -> np.ndarray:

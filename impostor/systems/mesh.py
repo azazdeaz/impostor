@@ -1,6 +1,8 @@
+from typing import List, Optional
 from impostor.components.core import AxeNext, AxePrev, Root, Stem
 from impostor.components.rigid_transformation import RigidTransformation
 from impostor.plant import Entity, Plant, Query
+import impostor.messages as messages
 
 import numpy as np
 
@@ -23,5 +25,17 @@ def add_transforms_system(plant: Plant, entity: Entity, transform: RigidTransfor
         raise ValueError("Entity does not have a stem component")
     
 
-def add_mesh_rings_system(plant: Plant, entity: Entity):
+def create_stem_mesh_data(plant: Plant, entity: Entity, rings: Optional[List[messages.StemRing]] = None) -> List[messages.StemRing]:
+    if rings is None:
+        rings = []
+    comps = plant.get_components(entity)
+    if Stem in comps and RigidTransformation in comps:
+        stem = comps.get_by_type(Stem)
+        transform = comps.get_by_type(RigidTransformation)
+        ring = messages.StemRing(pose=transform.to_pose_message(), radius=stem.radius)
+        rings.append(ring)
+        if AxeNext in comps:
+            return create_stem_mesh_data(plant, comps.get_by_type(AxeNext).next, rings)
+        
+    return rings
     
