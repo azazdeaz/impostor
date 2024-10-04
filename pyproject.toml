@@ -22,7 +22,7 @@ platforms = ["linux-64"]
 impostor = { path = ".", editable = true }
 
 [tool.pixi.tasks]
-start = "python impostor/run_nurbs.py"
+start = "python -m impostor.run_nurbs"
 setup-vscode = "run python scripts/setup_vscode.py"
 # Build and install a development version of the rerun-sdk Python package.
 #

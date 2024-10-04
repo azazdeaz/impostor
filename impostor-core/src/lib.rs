@@ -20,15 +20,19 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 
 #[pyfunction]
 fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
-    let interpolation_target = vec![
-        Point3::new(-1.0, -1.0, 0.),
-        Point3::new(1.0, -1.0, 0.),
-        Point3::new(1.0, 1.0, 0.),
-        Point3::new(-1.0, 1.0, 0.),
-        Point3::new(-1.0, 2.0, 0.),
-        Point3::new(1.0, 2.5, 0.),
-    ];
-    let interpolated = NurbsCurve3D::<f64>::try_interpolate(&interpolation_target, 3).unwrap();
+
+    let plant: Plant = bincode::deserialize(plant_data)
+        .expect("Failed to deserialize Plant");
+    println!("In Rust: {:?}", plant);
+    // let interpolation_target = vec![
+    //     Point3::new(-1.0, -1.0, 0.),
+    //     Point3::new(1.0, -1.0, 0.),
+    //     Point3::new(1.0, 1.0, 0.),
+    //     Point3::new(-1.0, 1.0, 0.),
+    //     Point3::new(-1.0, 2.0, 0.),
+    //     Point3::new(1.0, 2.5, 0.),
+    // ];
+    // let interpolated = NurbsCurve3D::<f64>::try_interpolate(&interpolation_target, 3).unwrap();
     
     let c1 = NurbsCurve3D::try_circle(
         &Point3::origin(),
@@ -50,9 +54,9 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
     ).unwrap();
     let rotation = Rotation3::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2);
     let translation = Translation3::new(0., 0., 1.5);
-    let m = translation * rotation;
-    let front = interpolated.transformed(&(translation.inverse()).into());
-    let back = interpolated.transformed(&m.into());
+    // let m = translation * rotation;
+    // let front = interpolated.transformed(&(translation.inverse()).into());
+    // let back = interpolated.transformed(&m.into());
 
     let surf = NurbsSurface::try_loft(&[c1, c2, c3], Some(3)).unwrap();
 
