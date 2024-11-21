@@ -1,7 +1,10 @@
 # pixi environments
 .pixi
+
 *.egg-info
 .idea
 .vscode
 .vscode/settings.json
 *.pyc
+target
+__pycache__

@@ -6,13 +6,13 @@ from impostor.systems import add_transforms_system, grow_system, start_root
 import impostor.messages
 
 
-def test_grow(iterations=10):
+def test_grow(iterations=17):
     plant = Plant()
     root_entity = start_root(plant)
     for _ in range(iterations):
         grow_system(plant, root_entity)
-    for entity, components in plant.entities.items():
-        print(entity, components.print())
+    # for entity, components in plant.entities".items():
+    #     print(entity, components.print())"
 
     return plant, root_entity
 

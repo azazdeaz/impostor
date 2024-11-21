@@ -7,7 +7,7 @@ requires-python = ">=3.10,<3.11"
 version = "0.1.0"
 
 [build-system]
-requires = ["maturin>=1.7,<2.0"]
+requires = ["maturin[patchelf]>=1.7,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
@@ -49,6 +49,7 @@ rust = ">=1.81.0,<2"
 pip = ">=24.2,<25"
 rerun-sdk = ">=0.18.2,<0.19"
 scipy = ">=1.14.1,<2"
+patchelf = ">=0.17.2,<0.18"
 
 [tool.pixi.pypi-options]
 extra-index-urls = ["https://pypi.nvidia.com"]
