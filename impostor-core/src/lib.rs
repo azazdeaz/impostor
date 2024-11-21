@@ -7,7 +7,7 @@ use rerun::{demo_util::grid, external::glam::{self, UVec3}};
 
 
 // use materials::*;
-use nalgebra::{Point3, Rotation3, Translation3, Vector3};
+use nalgebra::{Point3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
 
 use curvo::prelude::*;
 // mod materials;
@@ -23,7 +23,7 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
 
     let plant: Plant = bincode::deserialize(plant_data)
         .expect("Failed to deserialize Plant");
-    println!("In Rust: {:?}", plant);
+    println!("In Rust>: {:?}", plant);
     // let interpolation_target = vec![
     //     Point3::new(-1.0, -1.0, 0.),
     //     Point3::new(1.0, -1.0, 0.),
@@ -33,32 +33,51 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
     //     Point3::new(1.0, 2.5, 0.),
     // ];
     // let interpolated = NurbsCurve3D::<f64>::try_interpolate(&interpolation_target, 3).unwrap();
+
+    let mut rings = Vec::new();
+
+    for ring in plant.stem.rings.iter() {
+        let radius = ring.radius;
+        let rotation = UnitQuaternion::from_quaternion(Quaternion::new(
+            ring.pose.orientation.0,
+            ring.pose.orientation.1,
+            ring.pose.orientation.2,    
+            ring.pose.orientation.3
+        ));
+        let c = NurbsCurve3D::try_circle(
+            &Point3::new(ring.pose.position.0, ring.pose.position.1, ring.pose.position.2),
+            &rotation.transform_vector(&Vector3::x()),
+            &rotation.transform_vector(&Vector3::y()),
+            radius
+        ).unwrap();
+        rings.push(c);
+    }
     
-    let c1 = NurbsCurve3D::try_circle(
-        &Point3::origin(),
-        &Vector3::x(),
-        &Vector3::z(),
-        1.4
-    ).unwrap();
-    let c2 = NurbsCurve3D::try_circle(
-        &Point3::new(0., 1.5, 0.),
-        &Vector3::x(),
-        &Vector3::z(),
-        1.
-    ).unwrap();
-    let c3 = NurbsCurve3D::try_circle(
-        &Point3::new(0., 2.5, 0.),
-        &Vector3::x(),
-        &Vector3::z(),
-        0.1
-    ).unwrap();
+    // let c1 = NurbsCurve3D::try_circle(
+    //     &Point3::origin(),
+    //     &Vector3::x(),
+    //     &Vector3::z(),
+    //     1.4
+    // ).unwrap();
+    // let c2 = NurbsCurve3D::try_circle(
+    //     &Point3::new(0., 1.5, 0.),
+    //     &Vector3::x(),
+    //     &Vector3::z(),
+    //     1.
+    // ).unwrap();
+    // let c3 = NurbsCurve3D::try_circle(
+    //     &Point3::new(0., 2.5, 0.),
+    //     &Vector3::x(),
+    //     &Vector3::z(),
+    //     0.1
+    // ).unwrap();
     let rotation = Rotation3::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2);
     let translation = Translation3::new(0., 0., 1.5);
     // let m = translation * rotation;
     // let front = interpolated.transformed(&(translation.inverse()).into());
     // let back = interpolated.transformed(&m.into());
 
-    let surf = NurbsSurface::try_loft(&[c1, c2, c3], Some(3)).unwrap();
+    let surf = NurbsSurface::try_loft(rings.as_slice(), Some(3)).unwrap();
 
     let option = AdaptiveTessellationOptions {
         norm_tolerance: 1e-2,
@@ -114,7 +133,7 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
     ).unwrap();
 
     // TODO visualize with rerun on the python side
-    return Ok("ok".to_string());
+    return Ok("oki".to_string());
 }
 
 /// A Python module implemented in Rust.

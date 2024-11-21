@@ -23,6 +23,18 @@ class RigidTransformation:
         """
         return cls(translation=np.array([x, 0, 0]))
     
+    def with_rotation(self, rotation: Rotation) -> 'RigidTransformation':
+        """
+        Create a new RigidTransformation with a different rotation.
+        
+        Parameters:
+        rotation (Rotation): A new rotation object.
+        
+        Returns:
+        RigidTransformation: A new RigidTransformation object.
+        """
+        return RigidTransformation(rotation, self.translation)
+    
     def to_pose_message(self) -> messages.Pose:
         """
         Convert the rigid transformation to a Pose message.

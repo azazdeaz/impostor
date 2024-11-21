@@ -20,7 +20,6 @@ class TypeSet:
 
     def __contains__(self, item_cls):
         # Check if an instance of the item's type is in the set
-        print("T", item_cls, [cls.__name__ for cls in self._type_map.keys() ])
         return item_cls in self._type_map.keys()
 
     def __iter__(self):
