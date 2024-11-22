@@ -16,3 +16,5 @@ nalgebra = "0.33.0"
 pyo3 = "0.22.0"
 rerun = { version = "0.18.2", features = ["native_viewer"] }
 bincode = "1.3.3"
+pyo3-log = "0.11.0"
+log = "0.4.22"

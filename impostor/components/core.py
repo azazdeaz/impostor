@@ -18,6 +18,17 @@ class AxeNext:
 class AxePrev:
     prev: Entity
 
+@dataclass
+class Branches:
+    branches: list[Entity] = field(default_factory=list)
+
+@dataclass
+class Branch:
+    """Rotation around the growth direction of the parent stem."""
+    azimuth: float = 0.0
+    """0 means the branch grows the same direction as the parent stem, pi/2 means it grows perpendicular to the parent stem."""
+    inclination: float = 0.0,
+
 
 @dataclass
 class Root:

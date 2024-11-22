@@ -17,6 +17,6 @@ pub struct Stem {
 
 #[derive(serde::Deserialize, Debug)]
 pub struct Plant {
-    pub stem: Stem,
+    pub stems: Vec<Stem>,
 }
 

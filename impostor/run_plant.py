@@ -1,5 +1,6 @@
 from impostor.plant import Plant
-from impostor.systems import add_transforms_system, grow_system, start_root
+from impostor.systems import add_transforms_system, grow_system, start_root, branch_system
+from impostor.utils import NormalDistribution
 
 
 def test_grow(iterations=10):

@@ -1,18 +1,20 @@
-from impostor.systems.mesh import create_stem_mesh_data
+from impostor.systems.mesh import create_axes_mesh_data
 import impostor_core
 
 from impostor.plant import Plant
-from impostor.systems import add_transforms_system, grow_system, start_root
+from impostor.systems import add_transforms_system, grow_system, start_root, branch_system
 import impostor.messages
+from impostor.utils import NormalDistribution
 
 
-def test_grow(iterations=17):
+def test_grow(iterations=27):
     plant = Plant()
     root_entity = start_root(plant)
     for _ in range(iterations):
         grow_system(plant, root_entity)
-    # for entity, components in plant.entities".items():
-    #     print(entity, components.print())"
+        branch_system(plant, root_entity, NormalDistribution(1.6, 0.1))    
+    for entity, components in plant.entities.items():
+        print(entity, components.print())
 
     return plant, root_entity
 
@@ -20,11 +22,13 @@ def test_grow(iterations=17):
 if __name__ == "__main__":
     plant, root = test_grow()
     add_transforms_system(plant, root)
-    rings = create_stem_mesh_data(plant, root)
-    stem = impostor.messages.Stem(rings=rings)
-    plant = impostor.messages.Plant(stem=stem)
+    axes = create_axes_mesh_data(plant, root)
+    stems = [impostor.messages.Stem(rings=rings) for rings in axes]
+    plant = impostor.messages.Plant(stems=stems)
 
+    print("\n\nAXES")
+    for index, axis in enumerate(axes):
+        print(f"Index: {index}, Axis: {axis}")
 
-    print(rings)
-
-    print(impostor_core.test_mesh(plant.bincode_serialize()))
+    plant_msg = plant.bincode_serialize()
+    print(impostor_core.test_mesh(plant_msg))

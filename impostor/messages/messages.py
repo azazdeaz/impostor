@@ -6,7 +6,7 @@ import bincode
 
 @dataclass(frozen=True)
 class Plant:
-    stem: "Stem"
+    stems: typing.Sequence["Stem"]
 
     def bincode_serialize(self) -> bytes:
         return bincode.serialize(self, Plant)
