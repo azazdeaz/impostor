@@ -11,7 +11,6 @@ from impostor.components.rigid_transformation import (
     RigidTransformation,
 )
 from impostor.plant import Entity, Plant
-import rerun as rr
 
 
 def add_transforms_system(

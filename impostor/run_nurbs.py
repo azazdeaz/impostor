@@ -2,7 +2,7 @@ from impostor.systems.mesh import create_axes_mesh_data
 import impostor_core
 
 from impostor.plant import Plant
-from impostor.systems import add_transforms_system, grow_system, start_root, branch_system
+from impostor.systems import add_transforms_system, grow_system, start_root, BranchingSystem
 import impostor.messages
 from impostor.utils import NormalDistribution
 
@@ -10,12 +10,14 @@ import rerun as rr
 import time
 
 
-def test_grow(iterations=100):
+def test_grow(iterations=120):
     plant = Plant()
     root_entity = start_root(plant)
+    branch_system = BranchingSystem(internode_spacing=NormalDistribution(1.6, 0.1))
+
     for _ in range(iterations):
         grow_system(plant, root_entity)
-        branch_system(plant, root_entity, NormalDistribution(1.6, 0.1))    
+        branch_system.execute(plant)    
 
     return plant, root_entity
 

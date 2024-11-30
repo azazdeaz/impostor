@@ -1,5 +1,5 @@
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 @dataclass
 class NormalDistribution:
@@ -18,4 +18,11 @@ class NormalDistribution:
         return np.random.normal(self.mean, self.std)
     
 
-
+def fluent_methods(cls):
+    for field in cls.__dataclass_fields__:
+        setattr(
+            cls,
+            f"with_{field}",
+            lambda self, val, field=field: replace(self, **{field: val}),
+        )
+    return cls

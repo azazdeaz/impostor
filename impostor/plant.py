@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Dict, NewType
 
 from enum import Enum
@@ -12,7 +13,7 @@ class Plant:
     entities: Dict[Entity, TypeSet] = {}
 
     def query(self):
-        return Query(self.entities)
+        return Query(deepcopy(self.entities))
 
     def create_entity(self, *components):
         entity = Entity(len(self.entities))
@@ -30,15 +31,23 @@ class Query:
         self.entities = entities
 
     def with_component(self, component_cls):
-        for entity, components in self.entities.items():
-            if component_cls not in components:
-                del self.entities[entity]
+        remove = [
+            entity
+            for entity, components in self.entities.items()
+            if component_cls not in components
+        ]
+        for entity in remove:
+            del self.entities[entity]
         return self
 
     def without_component(self, component_cls):
-        for entity, components in self.entities.items():
-            if component_cls in components:
-                del self.entities[entity]
+        remove = [
+            entity
+            for entity, components in self.entities.items()
+            if component_cls in components
+        ]
+        for entity in remove:
+            del self.entities[entity]
         return self
 
     def single(self):
@@ -46,4 +55,3 @@ class Query:
             return list(self.entities.keys())[0]
         except IndexError:
             None
-
