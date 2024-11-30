@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
 from scipy.spatial.transform._rotation import Rotation
 from impostor.plant import Entity
+import rerun as rr
 
 @dataclass
 class Stem:
     length: float = 0.0
-    radius: float = 0.1
+    radius: float = 0.04
     rotation: Rotation = Rotation.identity()
 
 
@@ -17,6 +18,7 @@ class AxeNext:
 @dataclass
 class AxePrev:
     prev: Entity
+
 
 @dataclass
 class Branches:

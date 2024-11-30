@@ -4,6 +4,7 @@ use rerun::{
     demo_util::grid,
     external::glam::{self, UVec3},
 };
+
 use std::{f64::consts::FRAC_PI_2, fmt::Binary};
 
 // use materials::*;
@@ -19,7 +20,10 @@ fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
 }
 
 #[pyfunction]
-fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
+fn test_mesh(plant_data: &[u8], rerun_rec_id: String) -> anyhow::Result<String> {
+    let rec = rerun::RecordingStreamBuilder::new("impostor")
+        .recording_id(rerun_rec_id).connect_tcp()?;
+
     let plant: Plant = bincode::deserialize(plant_data).expect("Failed to deserialize Plant");
     log::error!("In Rust>: {:?}", plant);
     // let interpolation_target = vec![
@@ -34,9 +38,9 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
 
     let mut axes = Vec::new();
 
-    for stem in plant.stems.iter() {
+    for (stem_id, stem) in plant.stems.iter().enumerate() {
         let mut rings = Vec::new();
-        for ring in stem.rings.iter() {
+        for (ring_id, ring) in stem.rings.iter().enumerate() {
             let radius = ring.radius;
             let rotation = UnitQuaternion::from_quaternion(Quaternion::new(
                 ring.pose.orientation.0,
@@ -53,8 +57,7 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
                 &rotation.transform_vector(&Vector3::x()),
                 &rotation.transform_vector(&Vector3::y()),
                 radius,
-            )
-            .unwrap();
+            )?;
             rings.push(c);
         }
         axes.push(rings);
@@ -89,14 +92,21 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
         // remove all the stems that have less than 2 rings
         .filter(|rings| rings.len() > 1)
         .map(|rings| {
-            let surf = NurbsSurface::try_loft(rings.as_slice(), Some(3)).unwrap();
+            let surf = NurbsSurface::try_loft(rings.as_slice(), Some(3))?;
             let option = AdaptiveTessellationOptions {
                 norm_tolerance: 1e-2,
                 ..Default::default()
             };
             let tess = surf.tessellate(Some(option));
             let tess = tess.cast::<f32>();
-            return tess;
+            anyhow::Ok(tess)
+        })
+        .filter_map(|result| match result {
+            Ok(tess) => Some(tess),
+            Err(e) => {
+                log::warn!("Tessellation error: {:?}", e);
+                None
+            }
         })
         .collect::<Vec<_>>();
 
@@ -123,10 +133,6 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
     //     Mesh::ATTRIBUTE_POSITION,
     //     VertexAttributeValues::Float32x3(vertices),
     // );
-
-    let rec = rerun::RecordingStreamBuilder::new("rerun_example_minimal")
-        .spawn()
-        .unwrap();
 
     // let points = grid(glam::Vec3::splat(-10.0), glam::Vec3::splat(10.0), 10);
     // let colors = grid(glam::Vec3::ZERO, glam::Vec3::splat(255.0), 10)
@@ -175,13 +181,12 @@ fn test_mesh(plant_data: &[u8]) -> PyResult<String> {
     }
 
     rec.log(
-        "my_points",
+        "plant_mesh",
         &rerun::Mesh3D::new(vertices)
             .with_vertex_normals(normals)
             .with_vertex_texcoords(uvs)
             .with_triangle_indices(faces),
-    )
-    .unwrap();
+    )?;
 
     // TODO visualize with rerun on the python side
     return Ok("oki".to_string());

@@ -18,7 +18,6 @@ class Plant:
         entity = Entity(len(self.entities))
         self.entities[entity] = TypeSet()
         for component in components:
-            print("add", component)
             self.entities[entity].add(component)
         return entity
 

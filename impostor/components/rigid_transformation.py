@@ -131,3 +131,11 @@ class RigidTransformation:
         combined_rotation = self.rotation * other.rotation
         combined_translation = self.rotation.apply(other.translation) + self.translation
         return RigidTransformation(combined_rotation, combined_translation)
+    
+    
+    
+
+@dataclass
+class ApexTransformation():
+    transfrom: RigidTransformation
+

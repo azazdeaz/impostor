@@ -16,3 +16,6 @@ class NormalDistribution:
     def sample(self):
         # TODO: Add option to seed the random number generator.
         return np.random.normal(self.mean, self.std)
+    
+
+

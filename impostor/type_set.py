@@ -1,4 +1,8 @@
 from typing import Type, TypeVar
+import yaml
+from dataclasses import dataclass, asdict
+from pprint import pformat
+import json
 
 T = TypeVar('T')
 
@@ -32,6 +36,10 @@ class TypeSet:
 
     def print(self):
         return str(self._type_map.values())
+    
+    def pprint(self):
+        """Log all components as yaml"""
+        return "\n\n".join([pformat(item) for item in self._type_map.values()])
 
 if __name__ == "__main__":
     # Example usage

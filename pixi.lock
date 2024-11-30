@@ -133,9 +133,10 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pygments-2.18.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.10.15-h4a871b0_1_cpython.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python_abi-3.10-5_cp310.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.2-py310ha75aee5_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/re2-2023.09.01-h77b4e00_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.2-h8228510_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.18.2-py310hf284f7f_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.20.1-py310h0281cc7_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.6.8-py310h624018c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rust-1.81.0-h1a8d7c4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rust-std-x86_64-unknown-linux-gnu-1.81.0-h2c6d0dc_0.conda
@@ -160,6 +161,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xorg-libxau-1.0.11-hb9d3cd8_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xorg-libxdmcp-1.1.3-hb9d3cd8_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/xz-5.2.6-h166bdaf_0.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.5-h7f98852_2.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.6-ha6fb4c9_0.conda
       - pypi: .
 packages:
@@ -880,7 +882,7 @@ packages:
   name: impostor
   version: 0.1.0
   path: .
-  sha256: 3e0c53e3377d08d1b371e63209072c36eabdf10b8898bf3086310f5752229c41
+  sha256: 88814261bc5a7b29f1b039de10184b457980bd6bae349c1886e6fdd08bffc506
   requires_python: '>=3.10,<3.11'
   editable: true
 - kind: conda
@@ -2561,6 +2563,27 @@ packages:
   size: 6227
   timestamp: 1723823165457
 - kind: conda
+  name: pyyaml
+  version: 6.0.2
+  build: py310ha75aee5_1
+  build_number: 1
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.2-py310ha75aee5_1.conda
+  sha256: bf6002aef0fd9753fa6de54e82307b2d7e67a1d701dba018869471426078d5d1
+  md5: 0d4c5c76ae5f5aac6f0be419963a19dd
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=13
+  - python >=3.10,<3.11.0a0
+  - python_abi 3.10.* *_cp310
+  - yaml >=0.2.5,<0.3.0a0
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/pyyaml?source=hash-mapping
+  size: 182609
+  timestamp: 1725456280173
+- kind: conda
   name: re2
   version: 2023.09.01
   build: h77b4e00_3
@@ -2595,12 +2618,13 @@ packages:
   timestamp: 1679532220005
 - kind: conda
   name: rerun-sdk
-  version: 0.18.2
-  build: py310hf284f7f_0
+  version: 0.20.1
+  build: py310h0281cc7_1
+  build_number: 1
   subdir: linux-64
-  url: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.18.2-py310hf284f7f_0.conda
-  sha256: 6703f9f7c1096aa726f8c300b0493af9ace74e9a8c61eecffab8e15aedaf8161
-  md5: bfb0a7f7074688525b08be949356dd04
+  url: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.20.1-py310h0281cc7_1.conda
+  sha256: a8e04797b59ddd473ba02c0421007cc219864a8bf18334b2b4491886dc5973f4
+  md5: 8248a6460719975fd84bc6cbaaa85a7c
   depends:
   - __glibc >=2.17,<3.0.a0
   - anywidget
@@ -2614,12 +2638,14 @@ packages:
   - python >=3.10,<3.11.0a0
   - python_abi 3.10.* *_cp310
   - typing_extensions >=4.5
+  constrains:
+  - __glibc >=2.17
   license: MIT OR Apache-2.0
   purls:
   - pkg:pypi/rerun-notebook?source=hash-mapping
   - pkg:pypi/rerun-sdk?source=hash-mapping
-  size: 28567713
-  timestamp: 1724967531766
+  size: 38049486
+  timestamp: 1732553678741
 - kind: conda
   name: ruff
   version: 0.6.8
@@ -3052,6 +3078,22 @@ packages:
   purls: []
   size: 418368
   timestamp: 1660346797927
+- kind: conda
+  name: yaml
+  version: 0.2.5
+  build: h7f98852_2
+  build_number: 2
+  subdir: linux-64
+  url: https://conda.anaconda.org/conda-forge/linux-64/yaml-0.2.5-h7f98852_2.tar.bz2
+  sha256: a4e34c710eeb26945bdbdaba82d3d74f60a78f54a874ec10d373811a5d217535
+  md5: 4cb3ad778ec2d5a7acbdf254eb1c42ae
+  depends:
+  - libgcc-ng >=9.4.0
+  license: MIT
+  license_family: MIT
+  purls: []
+  size: 89141
+  timestamp: 1641346969816
 - kind: conda
   name: zstd
   version: 1.5.6

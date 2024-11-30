@@ -1,46 +1,60 @@
+from dataclasses import asdict
 from typing import List, Optional
 
-import impostor.messages as messages
-from impostor.components.core import AxeNext, Stem, AxePrev, Branches, Branch
-from impostor.components.rigid_transformation import RigidTransformation
-from impostor.plant import Entity, Plant
+import rerun as rr
 from scipy.spatial.transform._rotation import Rotation
+
+import impostor.messages as messages
+from impostor.components.core import AxeNext, AxePrev, Branch, Branches, Stem
+from impostor.components.rigid_transformation import (
+    ApexTransformation,
+    RigidTransformation,
+)
+from impostor.plant import Entity, Plant
+import rerun as rr
 
 
 def add_transforms_system(
-    plant: Plant, entity: Entity, transform: RigidTransformation | None = None
+    plant: Plant, entity: Entity, base_transform: RigidTransformation | None = None
 ):
     comps = plant.get_components(entity)
-    if transform is None:
-        transform = RigidTransformation.from_x_translation(0.2)
+    if base_transform is None:
+        base_transform = RigidTransformation.from_x_translation(0.2)
+
+    comps.add(base_transform)
+
+    rr.log(f"nodes/{entity}", rr.Transform3D(
+        translation=base_transform.translation, #rotation=base_transform.rotation.as_quat()
+        quaternion=base_transform.rotation.as_quat()
+    ))
 
     if Stem in comps:
         stem = comps.get_by_type(Stem)
-        transform = transform.combine(
-            RigidTransformation.from_z_translation(stem.length / 2.0).with_rotation(
-                stem.rotation
-            )
-        )
-        comps.add(transform)
+
+        if stem.length <= 0:
+            return
 
         if Branches in comps:
             for branch_entity in comps.get_by_type(Branches).branches:
                 branch = plant.get_components(branch_entity).get_by_type(Branch)
                 rotation = Rotation.from_euler("zyx", [branch.azimuth, branch.inclination, 0])
-                branch_transform = transform.combine(RigidTransformation.from_rotation(rotation))
-                plant.get_components(branch_entity).add(branch_transform)
+                branch_transform = base_transform.combine(RigidTransformation.from_rotation(rotation))
                 add_transforms_system(plant, branch_entity, branch_transform)
 
-        if AxeNext in comps:
-            next_transform = RigidTransformation()
-            next_transform = transform.combine(
-                RigidTransformation.from_z_translation(stem.length / 2.0)
+        next_transform = base_transform.combine(
+            RigidTransformation.from_z_translation(stem.length).rotate(
+                stem.rotation
             )
+        )
+        if AxeNext in comps:
             add_transforms_system(
                 plant, comps.get_by_type(AxeNext).next, next_transform
             )
-        
-            transform = next_transform
+            # Remove apex transform if it has one
+            if ApexTransformation in comps:
+                comps.remove(ApexTransformation)
+        else:
+            comps.add(ApexTransformation(next_transform))
     else:
         raise ValueError("Entity does not have a stem component")
 
@@ -51,6 +65,19 @@ def create_stem_mesh_data(
     if rings is None:
         rings = []
     comps = plant.get_components(entity)
+    for comp in comps:
+        values = {}
+        for key, value in asdict(comp).items():
+            try:
+                rr.any_value.AnyBatchValue(key, value)
+                values[f"comp.{comp.__class__.__name__}.{key}"] = value
+            except Exception as _:
+                pass
+
+        rr.log(f"nodes/{entity}", rr.AnyValues(**values))
+        
+    
+
     if Stem in comps and RigidTransformation in comps:
         stem = comps.get_by_type(Stem)
         transform = comps.get_by_type(RigidTransformation)
@@ -58,6 +85,11 @@ def create_stem_mesh_data(
         rings.append(ring)
         if AxeNext in comps:
             return create_stem_mesh_data(plant, comps.get_by_type(AxeNext).next, rings)
+    
+    if ApexTransformation in comps:
+        apex_transform = comps.get_by_type(ApexTransformation)
+        ring = messages.StemRing(pose=apex_transform.transfrom.to_pose_message(), radius=0.001)
+        rings.append(ring)
 
     return rings
 

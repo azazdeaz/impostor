@@ -1,35 +1,23 @@
 import os
+import random
+from dataclasses import dataclass
+
+import numpy as np
+
 from impostor.components.core import AxeNext, AxePrev, Stem
 from impostor.components.rigid_transformation import RigidTransformation
 from impostor.plant import Entity, Plant
 from impostor.run_plant import test_grow
 from impostor.systems.core import add_transforms_system
-import numpy as np
-import random
-from dataclasses import dataclass
 
 os.environ["OMNI_KIT_ACCEPT_EULA"] = "YES"
 from isaacsim import SimulationApp
 
 simulation_app = SimulationApp({"headless": False})
 
-import omni.kit.commands
 from omni.isaac.core import World
-from omni.isaac.core.utils.prims import is_prim_path_valid, set_prim_attribute_value
-from omni.isaac.core.utils.rotations import euler_angles_to_quat, rot_matrix_to_quat
-from omni.isaac.core.utils.stage import get_stage_units
-from omni.isaac.core.utils.string import find_unique_string_name
 from omni.isaac.core.objects import DynamicCylinder, FixedCylinder
-from omni.physx.scripts import utils
-import carb
-from pxr import Usd, UsdLux, UsdGeom, Sdf, Gf, Tf, UsdPhysics
-
-from omni.isaac.motion_generation import RmpFlow, ArticulationMotionPolicy
-
-import omni.isaac.core.objects
-
-print(omni.isaac.core.objects.__file__)
-
+from pxr import Gf, UsdPhysics
 
 world = World(stage_units_in_meters=1.0)
 world.scene.add_default_ground_plane()
@@ -65,7 +53,6 @@ def add_prims_system(plant, entity: Entity):
             # prim.GetAttribute("xformOp:translate").Set((0,0,rigid_transform.translation[2]))
             # prim.GetAttribute("xformOp:scale").Set((stem.radius, stem.radius, stem.length))
             
-            print(rigid_transform.translation, rigid_transform.rotation)
             if AxeNext in comps:
                 add_prims_system(plant, comps.get_by_type(AxeNext).next)
         else:

@@ -7,4 +7,5 @@
 .vscode/settings.json
 *.pyc
 target
+target_maturin
 __pycache__
