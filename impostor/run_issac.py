@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from impostor.components.core import AxeNext, AxePrev, Stem
+from impostor.components.core import AxeNext, AxePrev, Vascular
 from impostor.components.rigid_transformation import RigidTransformation
 from impostor.plant import Entity, Plant
 from impostor.run_plant import test_grow
@@ -32,8 +32,8 @@ class PrimPath:
 
 def add_prims_system(plant, entity: Entity):
     comps = plant.get_components(entity)
-    if Stem in comps:
-        stem = comps.get_by_type(Stem)
+    if Vascular in comps:
+        stem = comps.get_by_type(Vascular)
         rigid_transform = comps.get_by_type(RigidTransformation)
         if rigid_transform is not None:
             Cls = FixedCylinder if AxePrev not in comps else DynamicCylinder
@@ -66,8 +66,8 @@ def add_2d_joints_system(plant: Plant, entity: Entity):
         next_axe = comps.get_by_type(AxeNext)
         next_comps = plant.get_components(next_axe.next)
 
-        stem = comps.get_by_type(Stem)
-        next_stem = next_comps.get_by_type(Stem)
+        stem = comps.get_by_type(Vascular)
+        next_stem = next_comps.get_by_type(Vascular)
         
         joint_prim_path = f"{comps.get_by_type(PrimPath).path}_joint"
         revoluteJoint = UsdPhysics.RevoluteJoint.Define(world.stage, joint_prim_path)
@@ -100,8 +100,8 @@ def add_joints_system(plant: Plant, entity: Entity):
         next_axe = comps.get_by_type(AxeNext)
         next_comps = plant.get_components(next_axe.next)
 
-        stem = comps.get_by_type(Stem)
-        next_stem = next_comps.get_by_type(Stem)
+        stem = comps.get_by_type(Vascular)
+        next_stem = next_comps.get_by_type(Vascular)
         
         joint_prim_path = f"{comps.get_by_type(PrimPath).path}_joint"
         joint = UsdPhysics.SphericalJoint.Define(world.stage, joint_prim_path)

@@ -5,7 +5,7 @@ import rerun as rr
 from scipy.spatial.transform._rotation import Rotation
 
 import impostor.messages as messages
-from impostor.components.core import AxeNext, AxePrev, Branch, Branches, Stem
+from impostor.components.core import AxeNext, AxePrev, Branch, Branches, Vascular
 from impostor.components.rigid_transformation import (
     ApexTransformation,
     RigidTransformation,
@@ -27,8 +27,8 @@ def add_transforms_system(
         quaternion=base_transform.rotation.as_quat()
     ))
 
-    if Stem in comps:
-        stem = comps.get_by_type(Stem)
+    if Vascular in comps:
+        stem = comps.get_by_type(Vascular)
 
         if stem.length <= 0:
             return
@@ -77,8 +77,8 @@ def create_stem_mesh_data(
         
     
 
-    if Stem in comps and RigidTransformation in comps:
-        stem = comps.get_by_type(Stem)
+    if Vascular in comps and RigidTransformation in comps:
+        stem = comps.get_by_type(Vascular)
         transform = comps.get_by_type(RigidTransformation)
         ring = messages.StemRing(pose=transform.to_pose_message(), radius=stem.radius)
         rings.append(ring)

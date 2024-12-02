@@ -1,13 +1,19 @@
 from dataclasses import dataclass, field
 from scipy.spatial.transform._rotation import Rotation
 from impostor.plant import Entity
-import rerun as rr
+import enum
+
+class VascularType(enum.Enum):
+    STEM = "stem"
+    MERISTEM = "meristem"
+    VEIN = "vein"
 
 @dataclass
-class Stem:
+class Vascular:
     length: float = 0.0
     radius: float = 0.04
     rotation: Rotation = Rotation.identity()
+    type: VascularType = VascularType.STEM
 
 
 @dataclass
