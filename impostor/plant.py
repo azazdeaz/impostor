@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, NewType
+from typing import Callable, Dict, NewType
 
 from enum import Enum
 import numpy as np
@@ -28,30 +28,43 @@ class Plant:
 
 class Query:
     def __init__(self, entities: Dict[Entity, TypeSet]):
-        self.entities = entities
+        self._entities = entities
 
     def with_component(self, component_cls):
         remove = [
             entity
-            for entity, components in self.entities.items()
+            for entity, components in self._entities.items()
             if component_cls not in components
         ]
         for entity in remove:
-            del self.entities[entity]
+            del self._entities[entity]
         return self
 
     def without_component(self, component_cls):
         remove = [
             entity
-            for entity, components in self.entities.items()
+            for entity, components in self._entities.items()
             if component_cls in components
         ]
         for entity in remove:
-            del self.entities[entity]
+            del self._entities[entity]
+        return self
+
+    def filter(self, func: Callable[[TypeSet], bool]):
+        remove = [
+            entity
+            for entity, components in self._entities.items()
+            if not func(components)
+        ]
+        for entity in remove:
+            del self._entities[entity]
         return self
 
     def single(self):
         try:
-            return list(self.entities.keys())[0]
+            return list(self._entities.keys())[0]
         except IndexError:
             None
+    
+    def entities(self):
+        return self._entities.keys()

@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import numpy as np
+import rerun as rr
 from scipy.spatial.transform._rotation import Rotation
 
 from impostor.components.core import AxeNext, AxePrev, Branch, Branches, Root, Vascular
@@ -48,13 +49,12 @@ class BranchingSystem:
     internode_spacing: NormalDistribution
 
     def execute(self, plant: Plant):
-        print("BranchingSystem")
         apices = (
             plant.query()
             .without_component(AxeNext)
             .with_component(Vascular)
             .with_component(AxePrev)
-            .entities
+            ._entities
         )
         for apex in apices:
             spacing = self.internode_spacing.sample()
@@ -79,3 +79,17 @@ class BranchingSystem:
                     plant, comps.get_by_type(AxePrev).prev, sum
                 )
         return sum
+
+def rr_log_components(plant: Plant):
+    for entity in plant.query()._entities:
+        comps = plant.get_components(entity)
+        for comp in comps:
+            values = {}
+            for key, value in asdict(comp).items():
+                try:
+                    rr.any_value.AnyBatchValue(key, value)
+                    values[f"comp.{comp.__class__.__name__}.{key}"] = value
+                except Exception as _:
+                    pass
+
+            rr.log(f"nodes/{entity}", rr.AnyValues(**values))

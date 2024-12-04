@@ -64,7 +64,7 @@ class RigidTransformation:
         )
     
 
-    def apply(self, point: np.ndarray) -> np.ndarray:
+    def transform_point(self, point: np.ndarray) -> np.ndarray:
         """
         Apply the rigid transformation to a 3D point.
         
@@ -131,6 +131,7 @@ class RigidTransformation:
         combined_rotation = self.rotation * other.rotation
         combined_translation = self.rotation.apply(other.translation) + self.translation
         return RigidTransformation(combined_rotation, combined_translation)
+
     
     
     
