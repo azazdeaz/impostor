@@ -51,29 +51,30 @@ class PlantMesh:
         faces = []
         for i in range(len(self.layers) - 1):
             two_start = one_start + len(self.layers[i].vertices)
-            two_end = two_start + len(self.layers[i + 1].vertices)
-            one_id = one_start
-            two_id = two_start
+            one_id = 0
+            two_id = 0
+            one_size = len(self.layers[i].vertices)
+            two_size = len(self.layers[i + 1].vertices)
 
-            print(f"one_start: {one_start}, two_start: {two_start}, two_end: {two_end}")
-            while one_id < two_start - 1 or two_id < two_end - 1:
-                print(f"one_id: {one_id}, two_id: {two_id}")
-                # distance from the current layer one vertex to the next layer two vertex
-                up_distance = np.linalg.norm(
-                    self.vertices[one_id] - self.vertices[two_id + 1]
-                ) if two_id < two_end - 1 else np.inf
-                # distance from the current layer two vertex to the next layer one vertex
-                down_distance = np.linalg.norm(
-                    self.vertices[two_id] - self.vertices[one_id + 1]
-                ) if one_id < two_start - 1 else np.inf
+            id_margin = 0 if self.is_closed else 1 
+            while one_id < one_size - id_margin or two_id < two_size - id_margin:
+                id1 = one_start + one_id % one_size
+                id2 = two_start + two_id % two_size
+                id1_next = one_start + (one_id + 1) % one_size
+                id2_next = two_start + (two_id + 1) % two_size
 
-                if up_distance < down_distance:
-                    faces.append([one_id, two_id, two_id + 1])
+                # the positions of the vertices on the layer from 0 to 1
+                up_progress = one_id / one_size
+                down_progress = two_id / two_size
+
+                
+                
+                if up_progress > down_progress:
+                    faces.append([id1, id2_next, id2])
                     two_id += 1
                 else:
-                    faces.append([one_id, two_id, one_id + 1])
+                    faces.append([id1, id1_next, id2])
                     one_id += 1
-                print(f"Added face: {faces[-1]}")
 
             one_start = two_start
         
@@ -82,15 +83,28 @@ class PlantMesh:
         return self
 
     def merge(self, other: "PlantMesh"):
+        if other.faces.size == 0:
+            return
         vertices_start = len(self.vertices)
         self.vertices = np.concatenate([self.vertices, other.vertices])
         self.normals = np.concatenate([self.normals, other.normals])
         self.uvs = np.concatenate([self.uvs, other.uvs])
+        try:
+            self.faces = np.concatenate([self.faces, other.faces + vertices_start])
+        except Exception as e:
+            print(e)
+            print("other.faces",other.faces)
+            print("vertices_start",vertices_start)
+            print("self.faces",self.faces)
+            print("self.vertices",self.vertices)
+            print("other.vertices",other.vertices)
+            print("other.vertices + vertices_start",other.vertices + vertices_start)
+            print("other.faces + vertices_start",other.faces + vertices_start)
+            raise e
         self.faces = np.concatenate([self.faces, other.faces + vertices_start])
 
     def rr_log(self):
         self.vertices = np.append(self.vertices, np.zeros((1, 3)), axis=0)
-        print(self)
         rr.log(
             "mesh",
             rr.Mesh3D(
@@ -160,7 +174,7 @@ def create_stem_vertex_layers(
 
     comps = plant.get_components(entity)
 
-    resolution = 3
+    resolution = 10
 
     if Vascular in comps and RigidTransformation in comps:
         stem = comps.get_by_type(Vascular)
@@ -192,14 +206,11 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
         .entities()
     )
 
-    print(f"Roots: {roots}")
-
     mesh = PlantMesh()
 
     for root in roots:
-        print(f"Creating mesh for root {root}")
         rings = create_stem_vertex_layers(plant, root)
-        mesh.merge(PlantMesh(layers=rings, is_closed=False).build_mesh())
+        mesh.merge(PlantMesh(layers=rings, is_closed=True).build_mesh())
 
     return mesh
 
