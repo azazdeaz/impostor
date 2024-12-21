@@ -119,21 +119,6 @@ class PlantMesh:
         )
 
 
-def log_transforms_system(
-    plant: Plant
-):
-    entities = plant.query().with_component(RigidTransformation).entities()
-    for entity in entities:
-        transform = plant.get_components(entity).get_by_type(RigidTransformation)
-        rr.log(
-            f"nodes/{entity}",
-            rr.Transform3D(
-                translation=transform.translation,  # rotation=base_transform.rotation.as_quat()
-                quaternion=transform.rotation.as_quat(),
-            ),
-        )
-
-
 def create_stem_vertex_layers(
     plant: Plant, entity: Entity, rings: Optional[List[VertexLayer]] = None
 ) -> PlantMesh:

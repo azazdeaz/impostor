@@ -27,7 +27,7 @@ if __name__ == "__main__":
     for i in range(1):
         rr.set_time_sequence("frame_idx", i)
         plant, root = test_grow(i + 20)
-        syst.log_transforms_system(plant)
+        syst.rr_log_transforms_system(plant)
         mesh = syst.create_plant_mesh(plant)
         mesh.rr_log()
         syst.rr_log_components(plant)
