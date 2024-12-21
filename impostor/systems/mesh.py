@@ -70,8 +70,6 @@ class PlantMesh:
                 up_progress = one_id / one_size
                 down_progress = two_id / two_size
 
-                
-                
                 if up_progress > down_progress:
                     faces.append([id1, id2_next, id2])
                     two_id += 1
@@ -129,20 +127,18 @@ def create_stem_vertex_layers(
 
     resolution = 10
 
-    if Vascular in comps and RigidTransformation in comps:
-        stem = comps.get_by_type(Vascular)
+    if RigidTransformation in comps:
+        radius = 0.01
+        if Vascular in comps:
+            radius = comps.get_by_type(Vascular).radius
         transform = comps.get_by_type(RigidTransformation)
-        ring = VertexLayer.create_ring(transform, stem.radius, resolution)
+        ring = VertexLayer.create_ring(transform, radius, resolution)
         rings.append(ring)
         if AxeNext in comps:
             return create_stem_vertex_layers(
                 plant, comps.get_by_type(AxeNext).next, rings
             )
 
-    if ApexTransformation in comps:
-        apex_transform = comps.get_by_type(ApexTransformation)
-        ring = VertexLayer.create_ring(apex_transform.transfrom, 0.01, resolution)
-        rings.append(ring)
 
     return rings
 
@@ -168,22 +164,3 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
     return mesh
 
 
-def collect_all_axis_roots(
-    plant: Plant, entity: Entity, roots: List[Entity] | None = None
-) -> List[Entity]:
-    if roots is None:
-        roots = []
-
-    if plant.get_components(entity).get_by_type(AxePrev) is None:
-        roots = roots + [entity]
-
-    if AxeNext in plant.get_components(entity):
-        roots = collect_all_axis_roots(
-            plant, plant.get_components(entity).get_by_type(AxeNext).next, roots
-        )
-
-    if Branches in plant.get_components(entity):
-        for branch in plant.get_components(entity).get_by_type(Branches).branches:
-            roots = collect_all_axis_roots(plant, branch, roots)
-
-    return roots

@@ -37,6 +37,9 @@ class Branch:
     """0 means the branch grows the same direction as the parent stem, pi/2 means it grows perpendicular to the parent stem."""
     inclination: float = 0.0,
 
+    def as_rotation(self):
+        return Rotation.from_euler("xyz", [self.inclination, 0, self.azimuth])
+
 @dataclass
 class GrowthTip:
     """Marks the meristem tip of an axis."""

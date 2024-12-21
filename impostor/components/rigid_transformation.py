@@ -129,7 +129,7 @@ class RigidTransformation:
         RigidTransformation: A new RigidTransformation that is the combination of the two transformations.
         """
         combined_rotation = self.rotation * other.rotation
-        combined_translation = self.rotation.apply(other.translation) + self.translation
+        combined_translation = self.translation + self.rotation.apply(other.translation)
         return RigidTransformation(combined_rotation, combined_translation)
 
     

@@ -26,7 +26,7 @@ if __name__ == "__main__":
     rr.init("impostor", spawn=True, recording_id=recording_id)
     for i in range(1):
         rr.set_time_sequence("frame_idx", i)
-        plant, root = test_grow(i + 20)
+        plant, root = test_grow(i + 60)
         syst.rr_log_transforms_system(plant)
         mesh = syst.create_plant_mesh(plant)
         mesh.rr_log()
