@@ -136,8 +136,8 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.2-py310ha75aee5_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/re2-2023.09.01-h77b4e00_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.2-h8228510_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.20.1-py310h0281cc7_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.6.9-py310h624018c_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.21.0-py310h5fcea32_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.8.3-py310h66cce94_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rust-1.81.0-h1a8d7c4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/rust-std-x86_64-unknown-linux-gnu-1.81.0-h2c6d0dc_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/s2n-1.5.3-h7b32b05_0.conda
@@ -667,7 +667,7 @@ packages:
 - pypi: .
   name: impostor
   version: 0.1.0
-  sha256: 88814261bc5a7b29f1b039de10184b457980bd6bae349c1886e6fdd08bffc506
+  sha256: ff0885015c6256bfefa0fe7e3977d1e870603cd0d262f22fb303cbe47daea424
   requires_python: '>=3.10,<3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/ipython-8.27.0-pyh707e725_0.conda
@@ -1892,9 +1892,9 @@ packages:
   purls: []
   size: 281456
   timestamp: 1679532220005
-- conda: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.20.1-py310h0281cc7_1.conda
-  sha256: a8e04797b59ddd473ba02c0421007cc219864a8bf18334b2b4491886dc5973f4
-  md5: 8248a6460719975fd84bc6cbaaa85a7c
+- conda: https://conda.anaconda.org/conda-forge/linux-64/rerun-sdk-0.21.0-py310h5fcea32_0.conda
+  sha256: e5619d8d4985191667dbb83ddb3ed41109a9b7a98a94b57d2636459dea7dda0f
+  md5: 8d51be51b9db49870685cae2d5ce998e
   depends:
   - __glibc >=2.17,<3.0.a0
   - anywidget
@@ -1914,25 +1914,25 @@ packages:
   purls:
   - pkg:pypi/rerun-notebook?source=hash-mapping
   - pkg:pypi/rerun-sdk?source=hash-mapping
-  size: 38049486
-  timestamp: 1732553678741
-- conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.6.9-py310h624018c_0.conda
-  sha256: 5fefd28dd467bc6d84cacc122c7d551db1ca29aebdb7d418447ef0670c66da25
-  md5: 16502945d34d2dae72dd9b1c290b80e2
+  size: 40961250
+  timestamp: 1734634736342
+- conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.8.3-py310h66cce94_0.conda
+  sha256: a2b373e37e7a1cf50bc2e1c70809678fe9576992944392308d364cd6d25df958
+  md5: 1474710226f7b4e9c509bd5af93684a9
   depends:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=13
   - libstdcxx >=13
   - python >=3.10,<3.11.0a0
   - python_abi 3.10.* *_cp310
-  arch: x86_64
-  platform: linux
+  constrains:
+  - __glibc >=2.17
   license: MIT
   license_family: MIT
   purls:
   - pkg:pypi/ruff?source=hash-mapping
-  size: 6970904
-  timestamp: 1728067124093
+  size: 7934878
+  timestamp: 1734066949409
 - conda: https://conda.anaconda.org/conda-forge/linux-64/rust-1.81.0-h1a8d7c4_0.conda
   sha256: 0620c44414d140f63e215b8555770acb94e473787f84cb1ab051bb6ebd3a808f
   md5: 0e4d3f6598c7b770b1ac73ca8689c300

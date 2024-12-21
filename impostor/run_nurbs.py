@@ -31,4 +31,5 @@ if __name__ == "__main__":
         mesh = syst.create_plant_mesh(plant)
         mesh.rr_log()
         syst.rr_log_components(plant)
+        syst.rr_log_graph(plant)
     

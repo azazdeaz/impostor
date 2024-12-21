@@ -1,13 +1,19 @@
-from dataclasses import asdict, dataclass
+import random
+from dataclasses import dataclass
+
 import numpy as np
-import rerun as rr
 from scipy.spatial.transform._rotation import Rotation
 
-from impostor.components import Vascular, AxePrev, AxeNext, Branches, Branch, Root, RigidTransformation
 import impostor.components as comp
+from impostor.components import (
+    AxeNext,
+    AxePrev,
+    Branches,
+    RigidTransformation,
+    Vascular,
+)
 from impostor.plant import Entity, Plant
 from impostor.utils import NormalDistribution
-import random
 
 
 def start_root(plant: Plant):
@@ -148,23 +154,3 @@ class BranchingSystem:
                     plant, comps.get_by_type(AxePrev).prev, sum
                 )
         return sum
-
-def rr_log_components(plant: Plant):
-    for entity in plant.query()._entities:
-        comps = plant.get_components(entity)
-        for comp in comps:
-            values = {}
-            items = asdict(comp).items()
-            if len(items) == 0:
-                values[f"comp.{comp.__class__.__name__}"] = "Empty"
-            else:
-                for key, value in items:
-                    try:
-                        if isinstance(value, Rotation):
-                            value = value.as_euler("xyz")
-                        rr.any_value.AnyBatchValue(key, value)
-                        values[f"comp.{comp.__class__.__name__}.{key}"] = value
-                    except Exception as _:
-                        pass
-
-            rr.log(f"nodes/{entity}", rr.AnyValues(**values))

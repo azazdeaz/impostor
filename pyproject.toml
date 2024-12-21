@@ -41,13 +41,13 @@ gen-msgs = "cargo run --bin gen-msgs --manifest-path impostor-msgs/Cargo.toml"
 # ] }
 
 [tool.pixi.dependencies]
-ruff = ">=0.6.1,<0.7"
+ruff = ">=0.8.3,<0.9"
 pixi-pycharm = ">=0.0.6,<0.0.7"
 numpy = ">=2.1.1,<3"
 maturin = ">=1.7.4,<2"
 rust = ">=1.81.0,<2"
 pip = ">=24.2,<25"
-rerun-sdk = ">=0.20.1,<0.21"
+rerun-sdk = ">=0.21.0,<0.22"
 scipy = ">=1.14.1,<2"
 patchelf = ">=0.17.2,<0.18"
 pyyaml = ">=6.0.2,<7"
