@@ -1,8 +1,7 @@
-from typing import Type, TypeVar
+from typing import Tuple, Type, TypeVar
 import yaml
 from dataclasses import dataclass, asdict
 from pprint import pformat
-import json
 
 T = TypeVar('T')
 
@@ -16,11 +15,20 @@ class TypeSet:
 
     def remove(self, item):
         # Remove the item by type
-        self._type_map.pop(type(item), None)
+        if isinstance(item, type):
+            self._type_map.pop(item, None)
+        else:
+            self._type_map.pop(type(item), None)
 
     def get_by_type(self, type_key: Type[T]) -> T:
         # Return the instance of this type if exists
         return self._type_map.get(type_key)
+    
+    def get_or_create_by_type(self, type_key: Type[T]) -> T:
+        # Return the instance of this type if exists, otherwise create it
+        if type_key not in self._type_map:
+            self._type_map[type_key] = type_key()
+        return self._type_map[type_key]
 
     def __contains__(self, item_cls):
         # Check if an instance of the item's type is in the set

@@ -24,6 +24,14 @@ class Plant:
 
     def get_components(self, entity: Entity):
         return self.entities.get(entity)
+    
+    def add_components(self, entity: Entity, *components):
+        for component in components:
+            self.entities[entity].add(component)
+    
+    def remove_components(self, entity: Entity, *components):
+        for component in components:
+            self.entities[entity].remove(component)
 
 
 class Query:

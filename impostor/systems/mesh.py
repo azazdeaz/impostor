@@ -43,6 +43,9 @@ class PlantMesh:
         self.layers.append(layer)
 
     def build_mesh(self):
+        if len(self.layers) == 0:
+            return self
+
         self.vertices = np.concatenate([layer.vertices for layer in self.layers])
         self.normals = np.zeros((len(self.vertices), 3))
         self.uvs = np.zeros((len(self.vertices), 2))
@@ -116,54 +119,19 @@ class PlantMesh:
         )
 
 
-def add_transforms_system(
-    plant: Plant, entity: Entity, base_transform: RigidTransformation | None = None
+def log_transforms_system(
+    plant: Plant
 ):
-    comps = plant.get_components(entity)
-    if base_transform is None:
-        base_transform = RigidTransformation.from_x_translation(0.2)
-
-    comps.add(base_transform)
-
-    rr.log(
-        f"nodes/{entity}",
-        rr.Transform3D(
-            translation=base_transform.translation,  # rotation=base_transform.rotation.as_quat()
-            quaternion=base_transform.rotation.as_quat(),
-        ),
-    )
-
-    if Vascular in comps:
-        stem = comps.get_by_type(Vascular)
-
-        if stem.length <= 0:
-            return
-
-        if Branches in comps:
-            for branch_entity in comps.get_by_type(Branches).branches:
-                branch = plant.get_components(branch_entity).get_by_type(Branch)
-                rotation = Rotation.from_euler(
-                    "zyx", [branch.azimuth, branch.inclination, 0]
-                )
-                branch_transform = base_transform.combine(
-                    RigidTransformation.from_rotation(rotation)
-                )
-                add_transforms_system(plant, branch_entity, branch_transform)
-
-        next_transform = base_transform.combine(
-            RigidTransformation.from_z_translation(stem.length).rotate(stem.rotation)
+    entities = plant.query().with_component(RigidTransformation).entities()
+    for entity in entities:
+        transform = plant.get_components(entity).get_by_type(RigidTransformation)
+        rr.log(
+            f"nodes/{entity}",
+            rr.Transform3D(
+                translation=transform.translation,  # rotation=base_transform.rotation.as_quat()
+                quaternion=transform.rotation.as_quat(),
+            ),
         )
-        if AxeNext in comps:
-            add_transforms_system(
-                plant, comps.get_by_type(AxeNext).next, next_transform
-            )
-            # Remove apex transform if it has one
-            if ApexTransformation in comps:
-                comps.remove(ApexTransformation)
-        else:
-            comps.add(ApexTransformation(next_transform))
-    else:
-        raise ValueError("Entity does not have a stem component")
 
 
 def create_stem_vertex_layers(
