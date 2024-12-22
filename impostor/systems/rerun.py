@@ -30,22 +30,23 @@ def rr_log_components(plant: Plant):
 
     for entity in plant.query()._entities:
         comps = plant.get_components(entity)
-        for comp in comps:
+        for component in comps:
             values = {}
-            items = asdict(comp).items()
+            items = asdict(component).items()
+            if hasattr(component, "as_component_batches"):
+                rr.log(f"nodes/{entity}", component)
+                continue
+
             if len(items) == 0:
-                values[f"comp.{comp.__class__.__name__}"] = "Empty"
+                values[f"cmp.{component.__class__.__name__}"] = "✓"
             else:
                 for key, value in items:
                     try:
-                        if isinstance(value, Rotation):
-                            value = value.as_euler("xyz")
-
                         # if the value is a list, log the first element
                         if isinstance(value, list):
                             value = value[0]
                         rr.any_value.AnyBatchValue(key, value)
-                        values[f"comp.{comp.__class__.__name__}.{key}"] = value
+                        values[f"cmp.{component.__class__.__name__}.{key}"] = value
                     except Exception as _:
                         pass
 
@@ -127,7 +128,9 @@ def rr_log_transforms_system(plant: Plant):
                         ],
                         [
                             transform.translation,
-                            transform.combine(comp.RigidTransformation.from_z_translation(r)).translation,
+                            transform.combine(
+                                comp.RigidTransformation.from_z_translation(r)
+                            ).translation,
                         ],
                     ],
                     colors=Palette.Yellow,

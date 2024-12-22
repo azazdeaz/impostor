@@ -32,7 +32,6 @@ def grow_system(plant: Plant):
     growth_rate = 0.04
 
     for tip in plant.query().with_component(comp.GrowthTip).entities():
-        print(f"Growing tip: {tip}")
         if not AxePrev in plant.get_components(tip):
             raise ValueError("Growth tip must have an AxePrev component")
 
@@ -90,7 +89,7 @@ class RelaxSpringSystem:
             relaxeds.add(spring_entity)
             spring = plant.get_components(spring_entity).get_by_type(comp.Spring)
             self.relax_spring(plant, spring_entity)
-            
+
             for spring_entity in (
                 connection_map[spring.entity_a] | connection_map[spring.entity_b]
             ):
@@ -124,15 +123,12 @@ class RelaxSpringSystem:
                 if comp.Vascular in comps_a:
                     stem_a = comps_a.get_by_type(comp.Vascular)
                     spring.length = stem_a.length
-                    print(f"Setting spring #{spring_entity} length to stem length: {spring.length}")
                     spring.angle = Rotation.identity()
 
             if comp.Branch in comps_b:
                 branch = comps_b.get_by_type(comp.Branch)
                 spring.length = 0
                 spring.angle = branch.as_rotation()
-                print(f"Setting spring #{spring_entity} length to 0 and angle to branch angle: {spring.angle.as_euler('xyz')}")
-            
 
             plant.add_components(spring_entity, spring)
 
@@ -147,7 +143,7 @@ class RelaxSpringSystem:
         )
 
         comps_b.add(transform_a.combine(transform_a_b))
-        return # TODO fix physics based growing
+        return  # TODO fix physics based growing
 
         if RigidTransformation not in comps_b:
             comps_b.add(transform_a.combine(transform_a_b))
@@ -181,21 +177,26 @@ class BranchingSystem:
         apices = plant.query().with_component(comp.GrowthTip)._entities
         for apex in apices:
             spacing = self.internode_spacing.sample()
-            print(f"Spacing: {spacing} {self.length_without_branches(plant, apex)}")
             if self.length_without_branches(plant, apex) >= spacing:
                 last_stem = plant.get_components(apex).get_by_type(comp.AxePrev).prev
                 comps = plant.get_components(last_stem)
                 stem = comps.get_by_type(comp.Vascular)
                 branches = comp.Branches()
-                branch_comp1 = comp.Branch(inclination=np.pi / 4, azimuth=random.random() * np.pi * 2)
-                branch_comp2 = comp.Branch(inclination=np.pi / 4, azimuth=branch_comp1.azimuth + np.pi)
+                branch_comp1 = comp.Branch(
+                    inclination=np.pi / 4, azimuth=random.random() * np.pi * 2
+                )
+                branch_comp2 = comp.Branch(
+                    inclination=np.pi / 4, azimuth=branch_comp1.azimuth + np.pi
+                )
                 for branch_comp in [branch_comp1, branch_comp2]:
                     branch = plant.create_entity(
                         comp.Vascular(radius=stem.radius * 0.8),
                         branch_comp,
                     )
 
-                    growth_tip = plant.create_entity(comp.GrowthTip(), comp.AxePrev(branch))
+                    growth_tip = plant.create_entity(
+                        comp.GrowthTip(), comp.AxePrev(branch)
+                    )
                     plant.add_components(branch, comp.AxeNext(growth_tip))
                     plant.create_entity(
                         comp.Spring(

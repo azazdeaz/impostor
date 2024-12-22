@@ -19,6 +19,9 @@ def test_grow(iterations=120):
         branch_system.execute(plant)    
         syst.rr_log_components(plant)
         syst.rr_log_graph(plant)
+        syst.rr_log_transforms_system(plant)
+        mesh = syst.create_plant_mesh(plant)
+        mesh.rr_log()
 
     return plant, root_entity
 
@@ -29,7 +32,4 @@ if __name__ == "__main__":
     rr.init("impostor", spawn=True, recording_id=recording_id)
         
     plant, root = test_grow(160)
-    syst.rr_log_transforms_system(plant)
-    mesh = syst.create_plant_mesh(plant)
-    mesh.rr_log()
     

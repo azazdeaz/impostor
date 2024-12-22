@@ -1,11 +1,13 @@
-from typing import Tuple
+from typing import Iterable, Tuple
 import numpy as np
 from scipy.spatial.transform._rotation import Rotation
 from dataclasses import dataclass, field
 import impostor.messages as messages
+import rerun as rr
+from rerun.any_value import AnyBatchValue
 
 @dataclass
-class RigidTransformation:
+class RigidTransformation(rr.AsComponents):
     rotation: Rotation = field(default_factory=lambda: Rotation.identity())
     translation: np.ndarray = field(default_factory=lambda: np.zeros(3))
 
@@ -132,7 +134,11 @@ class RigidTransformation:
         combined_translation = self.translation + self.rotation.apply(other.translation)
         return RigidTransformation(combined_rotation, combined_translation)
 
-    
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [
+            AnyBatchValue("comps.RigidTransformation.translation", self.translation),
+            AnyBatchValue("comps.RigidTransformation.rotation", self.rotation.as_euler("xyz")),
+        ]
     
     
 

@@ -1,11 +1,15 @@
 from dataclasses import dataclass, field
+from typing import Iterable
 
+import rerun as rr
+from rerun.any_value import AnyBatchValue
 from scipy.spatial.transform._rotation import Rotation
 
 from impostor.components import Entity, RigidTransformation
 
+
 @dataclass
-class Spring:
+class Spring(rr.AsComponents):
     entity_a: Entity
     entity_b: Entity
     weight_a: float = 1.0
@@ -17,3 +21,11 @@ class Spring:
 
     def to_transform(self) -> RigidTransformation:
         return RigidTransformation.from_rotation(self.angle).combine(RigidTransformation.from_z_translation(self.length))
+    
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [
+            AnyBatchValue("comps.Spring.entity_a", self.entity_a),
+            AnyBatchValue("comps.Spring.entity_b", self.entity_b),
+            AnyBatchValue("comps.Spring.length", self.length),
+            AnyBatchValue("comps.Spring.angle", self.angle.as_euler("xyz")),
+        ]
