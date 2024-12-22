@@ -1,11 +1,10 @@
-[![PyPI - Version](https://img.shields.io/pypi/v/impostor.svg)](https://pypi.org/project/impostor)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/impostor.svg)](https://pypi.org/project/impostor)
-
 <div align="center">
 
 # `🏵 impostor`
 
-
-
-
 </div>
+
+> #### Growing simulator agonistic procedural plants for training robots.
+
+:construction: Heavily work in progress, but `pixi run start` should always demo something :fingers_crossed:
+

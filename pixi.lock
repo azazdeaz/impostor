@@ -667,7 +667,7 @@ packages:
 - pypi: .
   name: impostor
   version: 0.1.0
-  sha256: ff0885015c6256bfefa0fe7e3977d1e870603cd0d262f22fb303cbe47daea424
+  sha256: d8bd230ef4acbeadf8984dc5b5b60f6ca929462e9b60f0c5410042840e9bf0f4
   requires_python: '>=3.10,<3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/ipython-8.27.0-pyh707e725_0.conda

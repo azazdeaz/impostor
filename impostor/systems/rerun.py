@@ -133,7 +133,7 @@ def rr_log_transforms_system(plant: Plant):
                             ).translation,
                         ],
                     ],
-                    colors=Palette.Yellow,
+                    colors=Palette.Green,
                 ),
             )
 
