@@ -27,6 +27,13 @@ class Vascular(rr.AsComponents):
             AnyBatchValue("comps.VascularType.rotation", self.rotation.as_euler("xyz")),
             AnyBatchValue("comps.VascularType.type", str(self.type)),
         ]
+    
+@dataclass
+class Mass(rr.AsComponents):
+    mass: float = 1.0
+
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [AnyBatchValue("comps.Mass.mass", self.mass)]
 
 
 @dataclass
@@ -59,7 +66,6 @@ class Branch:
 @dataclass
 class GrowthTip:
     """Marks the meristem tip of an axis."""
-
     pass
 
 

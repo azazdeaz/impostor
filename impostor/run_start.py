@@ -11,12 +11,14 @@ def test_grow(iterations=120):
     root_entity = syst.start_root(plant)
     branch_system = syst.BranchingSystem(internode_spacing=NormalDistribution(1.6, 0.1))
     relax_spring_system = syst.RelaxSpringSystem()
+    secondary_growth_system = syst.SecondaryGrowthSystem()
 
     for i in range(iterations):
         rr.set_time_sequence("frame_idx", i)
         syst.grow_system(plant)
         relax_spring_system.execute(plant)
         branch_system.execute(plant)    
+        secondary_growth_system.execute(plant)
         syst.rr_log_components(plant)
         syst.rr_log_graph(plant)
         syst.rr_log_transforms_system(plant)
