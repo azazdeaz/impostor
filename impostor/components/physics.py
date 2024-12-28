@@ -16,6 +16,7 @@ class Spring(rr.AsComponents):
     weight_b: float = 0.0
     length: float = 0.0
     angle: Rotation = field(default_factory=Rotation.identity)
+    angle_rest: Rotation = field(default_factory=Rotation.identity)
     angle_stiffness: float = 0.0
 
 
@@ -28,4 +29,6 @@ class Spring(rr.AsComponents):
             AnyBatchValue("comps.Spring.entity_b", self.entity_b),
             AnyBatchValue("comps.Spring.length", self.length),
             AnyBatchValue("comps.Spring.angle", self.angle.as_euler("xyz")),
+            AnyBatchValue("comps.Spring.angle_rest", self.angle_rest.as_euler("xyz")),
+            AnyBatchValue("comps.Spring.angle_stiffness", self.angle_stiffness),
         ]

@@ -8,7 +8,7 @@ from impostor.components.core import AxeNext, AxePrev, Vascular
 from impostor.components.rigid_transformation import RigidTransformation
 from impostor.plant import Entity, Plant
 from impostor.run_plant import test_grow
-from impostor.systems.core import add_transforms_system
+from impostor.systems.growth import add_transforms_system
 
 os.environ["OMNI_KIT_ACCEPT_EULA"] = "YES"
 from isaacsim import SimulationApp

@@ -23,7 +23,7 @@ def start_root(plant: Plant):
         root = plant.create_entity(comp.Root(), comp.Vascular())
         meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(root))
         plant.add_components(root, comp.AxeNext(meristem), comp.RigidTransformation())
-        plant.create_entity(comp.Spring(root, meristem))
+        plant.create_entity(comp.Spring(root, meristem, angle=Rotation.from_euler("xyz", [0, 3, 0], degrees=True)))
     return root
 
 
@@ -49,7 +49,7 @@ def grow_system(plant: Plant):
                 plant.add_components(
                     tip, comp.AxeNext(new_tip), comp.Vascular(length=0.01, radius=0.02)
                 )
-                plant.create_entity(comp.Spring(tip, new_tip))
+                plant.create_entity(comp.Spring(tip, new_tip, angle=Rotation.from_euler("xyz", [0, 3, 0], degrees=True), angle_stiffness=0.1))
 
 
 @dataclass
@@ -123,7 +123,6 @@ class RelaxSpringSystem:
                 if comp.Vascular in comps_a:
                     stem_a = comps_a.get_by_type(comp.Vascular)
                     spring.length = stem_a.length
-                    spring.angle = Rotation.identity()
 
             if comp.Branch in comps_b:
                 branch = comps_b.get_by_type(comp.Branch)
