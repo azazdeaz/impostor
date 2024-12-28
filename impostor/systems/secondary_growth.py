@@ -1,13 +1,9 @@
-import random
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.spatial.transform._rotation import Rotation
 
 import impostor.components as comp
 from impostor.plant import Entity, Plant
-from impostor.utils import NormalDistribution
-
 
 
 @dataclass
@@ -20,9 +16,9 @@ class SecondaryGrowthSystem:
             if comp.Vascular in comps:
                 vascular = comps.get_by_type(comp.Vascular)
                 vascular.radius += (max_radius - vascular.radius) * 0.01
-            
+
                 mass = comps.get_or_create_by_type(comp.Mass)
-                mass.mass = np.pi * vascular.radius ** 2 * vascular.length * 1000   
+                mass.mass = np.pi * vascular.radius**2 * vascular.length * 1000
 
             # Continue updating the thickness for the next nodes
             if comp.AxeNext in comps:
@@ -34,7 +30,12 @@ class SecondaryGrowthSystem:
         for root in plant.query().with_component(comp.Root).entities():
             update_thickness(root)
 
-    def get_max_radius(self, branch_order: int, base_radius: float = 0.06, reduction_factor: float = 0.02) -> float:
+    def get_max_radius(
+        self,
+        branch_order: int,
+        base_radius: float = 0.06,
+        reduction_factor: float = 0.02,
+    ) -> float:
         """
         Calculate the maximum radius for a branch based on its order.
 

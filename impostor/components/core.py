@@ -34,6 +34,13 @@ class Mass(rr.AsComponents):
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [AnyBatchValue("comps.Mass.mass", self.mass)]
+    
+@dataclass
+class MassAbove(rr.AsComponents):
+    mass: float = 0.0
+
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [AnyBatchValue("comps.MassAbove.mass", self.mass)]
 
 
 @dataclass

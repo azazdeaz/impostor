@@ -12,6 +12,7 @@ def test_grow(iterations=120):
     branch_system = syst.BranchingSystem(internode_spacing=NormalDistribution(1.6, 0.1))
     relax_spring_system = syst.RelaxSpringSystem()
     secondary_growth_system = syst.SecondaryGrowthSystem()
+    update_mass_above_system = syst.UpdateMassAboveSystem()
 
     for i in range(iterations):
         rr.set_time_sequence("frame_idx", i)
@@ -19,6 +20,7 @@ def test_grow(iterations=120):
         relax_spring_system.execute(plant)
         branch_system.execute(plant)    
         secondary_growth_system.execute(plant)
+        update_mass_above_system.execute(plant)
         syst.rr_log_components(plant)
         syst.rr_log_graph(plant)
         syst.rr_log_transforms_system(plant)
