@@ -17,7 +17,7 @@ class Spring(rr.AsComponents):
     length: float = 0.0
     angle: Rotation = field(default_factory=Rotation.identity)
     angle_rest: Rotation = field(default_factory=Rotation.identity)
-    angle_stiffness: float = 0.0
+    angle_stiffness: float = 0.0 # 0.0 is no stiffness, 1.0 is full stiffness
 
 
     def to_transform(self) -> RigidTransformation:

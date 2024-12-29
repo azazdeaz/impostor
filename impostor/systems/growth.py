@@ -23,7 +23,13 @@ def start_root(plant: Plant):
         root = plant.create_entity(comp.Root(), comp.Vascular())
         meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(root))
         plant.add_components(root, comp.AxeNext(meristem), comp.RigidTransformation())
-        plant.create_entity(comp.Spring(root, meristem, angle=Rotation.from_euler("xyz", [0, 3, 0], degrees=True)))
+        plant.create_entity(
+            comp.Spring(
+                root,
+                meristem,
+                angle=Rotation.from_euler("xyz", [0, 3, 0], degrees=True),
+            )
+        )
     return root
 
 
@@ -49,7 +55,14 @@ def grow_system(plant: Plant):
                 plant.add_components(
                     tip, comp.AxeNext(new_tip), comp.Vascular(length=0.01, radius=0.02)
                 )
-                plant.create_entity(comp.Spring(tip, new_tip, angle=Rotation.from_euler("xyz", [0, 3, 0], degrees=True), angle_stiffness=0.1))
+                plant.create_entity(
+                    comp.Spring(
+                        tip,
+                        new_tip,
+                        angle=Rotation.from_euler("xyz", [0, 3, 0], degrees=True),
+                        angle_stiffness=0.1,
+                    )
+                )
 
 
 @dataclass
@@ -127,7 +140,13 @@ class RelaxSpringSystem:
             if comp.Branch in comps_b:
                 branch = comps_b.get_by_type(comp.Branch)
                 spring.length = 0
-                spring.angle = branch.as_rotation()
+                spring.angle_rest = branch.as_rotation()
+                spring.angle = spring.angle_rest
+
+            if comp.Mass in comps_a:
+                mass_a = comps_a.get_by_type(comp.Mass)
+                # For now, the mass determines how bendable the spring is
+                spring.angle_stiffness = (mass_a.mass / 1.1) ** 2
 
             plant.add_components(spring_entity, spring)
 
@@ -137,6 +156,22 @@ class RelaxSpringSystem:
         comps_b = plant.get_components(spring.entity_b)
 
         transform_a = comps_a.get_by_type(RigidTransformation)
+
+        if spring.length > 0 and comp.MassAbove in comps_a:
+            # Get the direction where this node is pointing
+            pointing = (transform_a.rotation * spring.angle_rest).apply([0, 0, 1])
+            # Make it flat on the horizontal plane
+            pointing[2] = 0
+            # Check if the magnitude of the pointing direction is not zero
+            magnitude = np.linalg.norm(pointing)
+            if magnitude != 0:
+                pointing = pointing / magnitude
+                # The rotation axis is perpendicular to the pointing direction on the horizontal plane
+                rotation_axis = np.array([-pointing[1], pointing[0], 0])
+                bend = 5.0 * (1 - np.clip(spring.angle_stiffness, 0.01, 1))
+                rotation = Rotation.from_rotvec(rotation_axis * np.deg2rad(bend))
+                spring.angle = rotation * spring.angle_rest
+
         transform_a_b = RigidTransformation.from_rotation(spring.angle).combine(
             RigidTransformation.from_z_translation(spring.length)
         )
