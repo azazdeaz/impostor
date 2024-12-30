@@ -1,15 +1,12 @@
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 import numpy as np
 import rerun as rr
-from scipy.spatial.transform._rotation import Rotation
 
-import impostor.messages as messages
-from impostor.components.core import AxeNext, AxePrev, Branch, Branches, Vascular
 import impostor.components as comp
+from impostor.components.core import AxeNext, Vascular
 from impostor.components.rigid_transformation import (
-    ApexTransformation,
     RigidTransformation,
 )
 from impostor.plant import Entity, Plant
@@ -59,7 +56,7 @@ class PlantMesh:
             one_size = len(self.layers[i].vertices)
             two_size = len(self.layers[i + 1].vertices)
 
-            id_margin = 0 if self.is_closed else 1 
+            id_margin = 0 if self.is_closed else 1
             while one_id < one_size - id_margin or two_id < two_size - id_margin:
                 id1 = one_start + one_id % one_size
                 id2 = two_start + two_id % two_size
@@ -78,7 +75,7 @@ class PlantMesh:
                     one_id += 1
 
             one_start = two_start
-        
+
         self.faces = np.array(faces)
 
         return self
@@ -94,13 +91,13 @@ class PlantMesh:
             self.faces = np.concatenate([self.faces, other.faces + vertices_start])
         except Exception as e:
             print(e)
-            print("other.faces",other.faces)
-            print("vertices_start",vertices_start)
-            print("self.faces",self.faces)
-            print("self.vertices",self.vertices)
-            print("other.vertices",other.vertices)
-            print("other.vertices + vertices_start",other.vertices + vertices_start)
-            print("other.faces + vertices_start",other.faces + vertices_start)
+            print("other.faces", other.faces)
+            print("vertices_start", vertices_start)
+            print("self.faces", self.faces)
+            print("self.vertices", self.vertices)
+            print("other.vertices", other.vertices)
+            print("other.vertices + vertices_start", other.vertices + vertices_start)
+            print("other.faces + vertices_start", other.faces + vertices_start)
             raise e
         self.faces = np.concatenate([self.faces, other.faces + vertices_start])
 
@@ -139,7 +136,6 @@ def create_stem_vertex_layers(
                 plant, comps.get_by_type(AxeNext).next, rings
             )
 
-
     return rings
 
 
@@ -162,5 +158,3 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
         mesh.merge(PlantMesh(layers=rings, is_closed=True).build_mesh())
 
     return mesh
-
-

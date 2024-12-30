@@ -13,6 +13,11 @@ class VascularType(enum.Enum):
     VEIN = "vein"
 
 
+class MarkerComponent(rr.AsComponents):
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [AnyBatchValue(f"cmp.{self.__class__.__name__}", "✓")]
+
+
 @dataclass
 class Vascular(rr.AsComponents):
     length: float = 0.0
@@ -59,21 +64,29 @@ class Branches:
 
 
 @dataclass
-class Branch:
+class AttachmentOrientation:
     """Rotation around the growth direction of the parent stem."""
 
     azimuth: float = 0.0
     """0 means the branch grows the same direction as the parent stem, pi/2 means it grows perpendicular to the parent stem."""
-    inclination: float = (0.0,)
+    inclination: float = 0.0
 
     def as_rotation(self):
         return Rotation.from_euler("xyz", [self.inclination, 0, self.azimuth])
 
+@dataclass
+class BranchAttachment(MarkerComponent):
+    """Marks the attachment of a branch to a stem."""
 
 @dataclass
-class GrowthTip:
+class LeafAttachment(MarkerComponent):
+    """Marks the attachment of a leaf to a stem."""
+
+
+@dataclass
+class GrowthTip():
     """Marks the meristem tip of an axis."""
-    pass
+    branch_order: int = 0
 
 
 @dataclass

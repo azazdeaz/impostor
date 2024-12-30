@@ -73,7 +73,7 @@ def rr_log_graph(plant: Plant):
                 label += "V"
             if comp.Branches in plant.get_components(entity):
                 label += "B[]"
-            if comp.Branch in plant.get_components(entity):
+            if comp.AttachmentOrientation in plant.get_components(entity):
                 label += "B"
             if comp.GrowthTip in plant.get_components(entity):
                 label += "T"

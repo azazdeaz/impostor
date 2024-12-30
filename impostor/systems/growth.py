@@ -1,4 +1,3 @@
-import random
 from dataclasses import dataclass
 
 import numpy as np
@@ -6,14 +5,11 @@ from scipy.spatial.transform._rotation import Rotation
 
 import impostor.components as comp
 from impostor.components import (
-    AxeNext,
     AxePrev,
-    Branches,
     RigidTransformation,
     Vascular,
 )
 from impostor.plant import Entity, Plant
-from impostor.utils import NormalDistribution
 
 
 def start_root(plant: Plant):
@@ -50,8 +46,9 @@ def grow_system(plant: Plant):
                 stem.length += growth_rate
             else:
                 # If the stem is at max length, convert the tip into a new stem and create a new tip
-                new_tip = plant.create_entity(comp.GrowthTip(), comp.AxePrev(tip))
-                plant.remove_components(tip, comp.GrowthTip)
+                tip_comp = plant.get_components(tip).get_by_type(comp.GrowthTip)
+                plant.remove_components(tip, tip_comp)
+                new_tip = plant.create_entity(tip_comp, comp.AxePrev(tip))
                 plant.add_components(
                     tip, comp.AxeNext(new_tip), comp.Vascular(length=0.01, radius=0.02)
                 )
@@ -137,8 +134,8 @@ class RelaxSpringSystem:
                     stem_a = comps_a.get_by_type(comp.Vascular)
                     spring.length = stem_a.length
 
-            if comp.Branch in comps_b:
-                branch = comps_b.get_by_type(comp.Branch)
+            if comp.AttachmentOrientation in comps_b:
+                branch = comps_b.get_by_type(comp.AttachmentOrientation)
                 spring.length = 0
                 spring.angle_rest = branch.as_rotation()
                 spring.angle = spring.angle_rest
@@ -202,58 +199,3 @@ class RelaxSpringSystem:
         transform_a.translation -= step * spring.weight_b / full_weight
         transform_b.translation += step * spring.weight_a / full_weight
 
-
-@dataclass
-class BranchingSystem:
-    internode_spacing: NormalDistribution
-
-    def execute(self, plant: Plant):
-        apices = plant.query().with_component(comp.GrowthTip)._entities
-        for apex in apices:
-            spacing = self.internode_spacing.sample()
-            if self.length_without_branches(plant, apex) >= spacing:
-                last_stem = plant.get_components(apex).get_by_type(comp.AxePrev).prev
-                comps = plant.get_components(last_stem)
-                stem = comps.get_by_type(comp.Vascular)
-                branches = comp.Branches()
-                branch_comp1 = comp.Branch(
-                    inclination=np.pi / 4, azimuth=random.random() * np.pi * 2
-                )
-                branch_comp2 = comp.Branch(
-                    inclination=np.pi / 4, azimuth=branch_comp1.azimuth + np.pi
-                )
-                for branch_comp in [branch_comp1, branch_comp2]:
-                    branch = plant.create_entity(
-                        comp.Vascular(radius=stem.radius * 0.8),
-                        branch_comp,
-                    )
-
-                    growth_tip = plant.create_entity(
-                        comp.GrowthTip(), comp.AxePrev(branch)
-                    )
-                    plant.add_components(branch, comp.AxeNext(growth_tip))
-                    plant.create_entity(
-                        comp.Spring(
-                            last_stem,
-                            branch,
-                            angle=branch_comp.as_rotation(),
-                        )
-                    )
-                    plant.create_entity(comp.Spring(branch, growth_tip))
-                    branches.branches.append(branch)
-                comps.add(branches)
-
-    def length_without_branches(self, plant: Plant, entity: Entity, sum=0.0):
-        comps = plant.get_components(entity)
-        if Branches in comps:
-            return sum
-
-        if Vascular in comps:
-            stem = comps.get_by_type(comp.Vascular)
-            sum += stem.length
-
-        if AxePrev in comps:
-            return self.length_without_branches(
-                plant, comps.get_by_type(AxePrev).prev, sum
-            )
-        return sum
