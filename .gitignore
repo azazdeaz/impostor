@@ -6,6 +6,7 @@
 .vscode
 .vscode/settings.json
 *.pyc
+.ipynb_checkpoints
 target
 target_maturin
 __pycache__

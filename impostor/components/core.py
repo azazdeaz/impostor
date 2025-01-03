@@ -9,7 +9,7 @@ from rerun.any_value import AnyBatchValue
 
 class VascularType(enum.Enum):
     STEM = "stem"
-    MERISTEM = "meristem"
+    MIDRIB = "midrib"
     VEIN = "vein"
 
 
@@ -32,14 +32,16 @@ class Vascular(rr.AsComponents):
             AnyBatchValue("comps.VascularType.rotation", self.rotation.as_euler("xyz")),
             AnyBatchValue("comps.VascularType.type", str(self.type)),
         ]
-    
+
+
 @dataclass
 class Mass(rr.AsComponents):
     mass: float = 1.0
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [AnyBatchValue("comps.Mass.mass", self.mass)]
-    
+
+
 @dataclass
 class MassAbove(rr.AsComponents):
     mass: float = 0.0
@@ -59,8 +61,8 @@ class AxePrev:
 
 
 @dataclass
-class Branches:
-    branches: list[Entity] = field(default_factory=list)
+class Attachments:
+    attachments: list[Entity] = field(default_factory=list)
 
 
 @dataclass
@@ -74,9 +76,11 @@ class AttachmentOrientation:
     def as_rotation(self):
         return Rotation.from_euler("xyz", [self.inclination, 0, self.azimuth])
 
+
 @dataclass
 class BranchAttachment(MarkerComponent):
     """Marks the attachment of a branch to a stem."""
+
 
 @dataclass
 class LeafAttachment(MarkerComponent):
@@ -84,8 +88,14 @@ class LeafAttachment(MarkerComponent):
 
 
 @dataclass
-class GrowthTip():
+class VeinAttachment(MarkerComponent):
+    """Marks the attachment of a vein to a midrib."""
+
+
+@dataclass
+class GrowthTip:
     """Marks the meristem tip of an axis."""
+
     branch_order: int = 0
 
 

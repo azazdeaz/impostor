@@ -17,10 +17,14 @@ def test_grow(iterations=120):
     for i in range(iterations):
         rr.set_time_sequence("frame_idx", i)
         syst.grow_system(plant)
-        relax_spring_system.execute(plant)
         branch_system.execute(plant)    
         secondary_growth_system.execute(plant)
+
+        if i == iterations - 1:
+            syst.LeafingSystem().execute(plant)
+
         update_mass_above_system.execute(plant)
+        relax_spring_system.execute(plant)
         syst.rr_log_components(plant)
         syst.rr_log_graph(plant)
         syst.rr_log_transforms_system(plant)
@@ -35,5 +39,5 @@ if __name__ == "__main__":
     recording_id = str(int(time.time()))
     rr.init("impostor", spawn=True, recording_id=recording_id)
         
-    plant, root = test_grow(160)
+    plant, root = test_grow(80)
     

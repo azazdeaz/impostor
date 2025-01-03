@@ -18,7 +18,7 @@ def start_root(plant: Plant):
     if root is None:
         root = plant.create_entity(comp.Root(), comp.Vascular())
         meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(root))
-        plant.add_components(root, comp.AxeNext(meristem), comp.RigidTransformation())
+        plant.add_components(root, comp.AxeNext(meristem), comp.RigidTransformation.from_rotation(Rotation.from_euler("xyz", [20, 0, 0], degrees=True)))
         plant.create_entity(
             comp.Spring(
                 root,
@@ -174,28 +174,4 @@ class RelaxSpringSystem:
         )
 
         comps_b.add(transform_a.combine(transform_a_b))
-        return  # TODO fix physics based growing
-
-        if RigidTransformation not in comps_b:
-            comps_b.add(transform_a.combine(transform_a_b))
-
-        transform_b = comps_b.get_by_type(RigidTransformation)
-
-        distance = np.linalg.norm(transform_a.translation - transform_b.translation)
-        distance_stress = spring.length - distance
-
-        if distance == 0:
-            distance = 0.0001
-            direction = transform_a.rotation.apply([0, 0, 1])
-        else:
-            direction = transform_a_b.translation / distance
-
-        step = distance_stress
-        if step > self.max_distance_step:
-            step = self.max_distance_step
-        step = step * direction
-
-        full_weight = spring.weight_a + spring.weight_b
-        transform_a.translation -= step * spring.weight_b / full_weight
-        transform_b.translation += step * spring.weight_a / full_weight
 

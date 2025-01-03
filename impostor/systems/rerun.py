@@ -71,10 +71,10 @@ def rr_log_graph(plant: Plant):
                 label += "R"
             if comp.Vascular in plant.get_components(entity):
                 label += "V"
-            if comp.Branches in plant.get_components(entity):
-                label += "B[]"
+            if comp.Attachments in plant.get_components(entity):
+                label += "A"
             if comp.AttachmentOrientation in plant.get_components(entity):
-                label += "B"
+                label += "O"
             if comp.GrowthTip in plant.get_components(entity):
                 label += "T"
 
@@ -108,8 +108,8 @@ def rr_log_graph(plant: Plant):
 
 def rr_log_transforms_system(plant: Plant):
     # Log all entities with a RigidTransformation component
-    entities = plant.query().with_component(comp.RigidTransformation).entities()
-    for entity in entities:
+    transforms = plant.query().with_component(comp.RigidTransformation).entities()
+    for entity in transforms:
         comps = plant.get_components(entity)
         transform = comps.get_by_type(comp.RigidTransformation)
 
@@ -136,6 +136,11 @@ def rr_log_transforms_system(plant: Plant):
                     colors=Palette.Green,
                 ),
             )
+        else:
+            rr.log(
+                log_path(entity),
+                rr.Points3D(transform.translation, colors=Palette.Green),
+            )
 
     # Log all springs as lines between their entities
     springs = plant.query().with_component(comp.Spring).entities()
@@ -149,7 +154,10 @@ def rr_log_transforms_system(plant: Plant):
         )
 
         if transform_a is None or transform_b is None:
-            continue
+            rr.log(
+                log_path(entity),
+                rr.Points3D([0.0, 0.0, 0.0], colors=Palette.Yellow),
+            )
 
         rr.log(
             f"nodes/{entity}",
@@ -158,3 +166,11 @@ def rr_log_transforms_system(plant: Plant):
                 colors=Palette.Blue,
             ),
         )
+
+    # Log everithing else as a point so they will be visible in the 3D view
+    for entity in plant.entities.keys():
+        if entity not in transforms and entity not in springs:
+            rr.log(
+                log_path(entity),
+                rr.Points3D([0.0, 0.0, 0.0], colors=Palette.Yellow),
+            )

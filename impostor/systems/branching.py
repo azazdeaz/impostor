@@ -26,7 +26,7 @@ class BranchingSystem:
                 last_stem = apex_comps.get_by_type(comp.AxePrev).prev
                 comps = plant.get_components(last_stem)
                 stem = comps.get_by_type(comp.Vascular)
-                branches = comp.Branches()
+                branches = comp.Attachments()
                 orientation1 = comp.AttachmentOrientation(
                     inclination=np.pi / 4, azimuth=random.random() * np.pi * 2
                 )
@@ -53,12 +53,12 @@ class BranchingSystem:
                         )
                     )
                     plant.create_entity(comp.Spring(branch, growth_tip))
-                    branches.branches.append(branch)
+                    branches.attachments.append(branch)
                 comps.add(branches)
 
     def length_without_branches(self, plant: Plant, entity: Entity, sum=0.0):
         comps = plant.get_components(entity)
-        if comp.Branches in comps:
+        if comp.Attachments in comps:
             return sum
 
         if comp.Vascular in comps:

@@ -18,8 +18,8 @@ class UpdateMassAboveSystem:
 
             if comp.AxeNext in comps:
                 dependency_map[entity] = [comps.get_by_type(comp.AxeNext).next]
-            if comp.Branches in comps:
-                dependency_map[entity] += comps.get_by_type(comp.Branches).branches
+            if comp.Attachments in comps:
+                dependency_map[entity] += comps.get_by_type(comp.Attachments).attachments
             if comp.Mass in comps:
                 self_mass_map[entity] = comps.get_by_type(comp.Mass).mass
 

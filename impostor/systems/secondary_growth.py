@@ -23,8 +23,8 @@ class SecondaryGrowthSystem:
             # Continue updating the thickness for the next nodes
             if comp.AxeNext in comps:
                 update_thickness(comps.get_by_type(comp.AxeNext).next, branch_order)
-            if comp.Branches in comps:
-                for branch in comps.get_by_type(comp.Branches).branches:
+            if comp.Attachments in comps:
+                for branch in comps.get_by_type(comp.Attachments).attachments:
                     update_thickness(branch, branch_order + 1)
 
         for root in plant.query().with_component(comp.Root).entities():
