@@ -18,7 +18,7 @@ def start_root(plant: Plant):
     if root is None:
         root = plant.create_entity(comp.Root(), comp.Vascular())
         meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(root))
-        plant.add_components(root, comp.AxeNext(meristem), comp.RigidTransformation.from_rotation(Rotation.from_euler("xyz", [20, 0, 0], degrees=True)))
+        plant.add_components(root, comp.AxeNext(meristem), comp.RigidTransformation.from_rotation(Rotation.from_euler("xyz", [0, 0, 0], degrees=True)))
         plant.create_entity(
             comp.Spring(
                 root,
@@ -140,7 +140,7 @@ class RelaxSpringSystem:
                 spring.angle_rest = branch.as_rotation()
                 spring.angle = spring.angle_rest
 
-            if comp.Mass in comps_a:
+            if not spring.fixed_angle_stiffness and comp.Mass in comps_a:
                 mass_a = comps_a.get_by_type(comp.Mass)
                 # For now, the mass determines how bendable the spring is
                 spring.angle_stiffness = (mass_a.mass / 1.1) ** 2
@@ -161,11 +161,11 @@ class RelaxSpringSystem:
             pointing[2] = 0
             # Check if the magnitude of the pointing direction is not zero
             magnitude = np.linalg.norm(pointing)
-            if magnitude != 0:
+            if magnitude != 0 and spring.angle_stiffness > 0:
                 pointing = pointing / magnitude
                 # The rotation axis is perpendicular to the pointing direction on the horizontal plane
                 rotation_axis = np.array([-pointing[1], pointing[0], 0])
-                bend = 5.0 * (1 - np.clip(spring.angle_stiffness, 0.01, 1))
+                bend = 5.0 * (1 - np.clip(spring.angle_stiffness, 0.0, 1))
                 rotation = Rotation.from_rotvec(rotation_axis * np.deg2rad(bend))
                 spring.angle = rotation * spring.angle_rest
 

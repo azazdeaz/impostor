@@ -25,14 +25,28 @@ class LeafMeta:
             attachment_parent_entity
         ).get_or_create_by_type(comp.Attachments)
         base_entity_attachments.attachments.append(self.base_entity)
-        plant.create_entity(comp.Spring(attachment_parent_entity, self.base_entity))
+        plant.create_entity(
+            comp.Spring(
+                attachment_parent_entity,
+                self.base_entity,
+                fixed_angle_stiffness=True,
+                angle_stiffness=1.0,
+            )
+        )
 
         print(
             f"LeafMeta created with attachment_parent_entity: {attachment_parent_entity}"
         )
 
         base_entity_attachments.attachments.append(self.base_entity)
-        plant.create_entity(comp.Spring(attachment_parent_entity, self.base_entity))
+        plant.create_entity(
+            comp.Spring(
+                attachment_parent_entity,
+                self.base_entity,
+                fixed_angle_stiffness=True,
+                angle_stiffness=1.0,
+            )
+        )
 
         print(
             f"LeafMeta created with attachment_parent_entity: {attachment_parent_entity}"
@@ -56,7 +70,9 @@ class LeafMeta:
             )
             self.midrib_entities.append(new_entity)
             plant.add_components(prev_entity, comp.AxeNext(new_entity))
-            plant.create_entity(comp.Spring(prev_entity, new_entity))
+            plant.create_entity(
+                comp.Spring(prev_entity, new_entity, fixed_angle_stiffness=True)
+            )
 
         for i in range(lateral_vein_count):
             for is_left in [True, False]:
@@ -67,20 +83,29 @@ class LeafMeta:
                     midrib_attachment_entity
                 ).get_or_create_by_type(comp.Attachments)
 
-                azimuth = -np.pi/4 if is_left else np.pi/4
+                azimuth = -np.pi / 4 if is_left else np.pi / 4
                 base_entity = plant.create_entity(
                     comp.Vascular(
                         radius=0.005,
                         type=comp.VascularType.VEIN,
-                        length=lateral_vein_length/lateral_vein_count,
+                        length=lateral_vein_length / lateral_vein_count,
                     ),
                     comp.VeinAttachment(),
-                    comp.AttachmentOrientation(inclination=-np.pi/40, azimuth=azimuth),
+                    comp.AttachmentOrientation(
+                        inclination=-np.pi / 40, azimuth=azimuth
+                    ),
                 )
 
                 attachments.attachments.append(base_entity)
 
-                plant.create_entity(comp.Spring(midrib_attachment_entity, base_entity))
+                plant.create_entity(
+                    comp.Spring(
+                        midrib_attachment_entity,
+                        base_entity,
+                        fixed_angle_stiffness=True,
+                        angle_stiffness=1.0,
+                    )
+                )
 
                 if is_left:
                     self.lateral_vein_bases_left.append(base_entity)
@@ -98,7 +123,14 @@ class LeafMeta:
                         comp.AxePrev(prev_entity),
                     )
                     plant.add_components(prev_entity, comp.AxeNext(new_entity))
-                    plant.create_entity(comp.Spring(prev_entity, new_entity))
+                    plant.create_entity(
+                        comp.Spring(
+                            prev_entity,
+                            new_entity,
+                            fixed_angle_stiffness=True,
+                            angle_stiffness=1.0,
+                        )
+                    )
                     prev_entity = new_entity
 
         print("LeafMeta created")
