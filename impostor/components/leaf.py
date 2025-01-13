@@ -1,137 +1,47 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Iterable
+
+import rerun as rr
+from rerun.any_value import AnyBatchValue
+from scipy.spatial.transform import Rotation, Slerp
+
 from impostor.components import Entity
-from impostor.plant import Plant
-import impostor.components as comp
-import numpy as np
+from impostor.utils import Curve
 
 
 @dataclass
-class LeafMeta:
-    base_entity: Entity
-    midrib_entities: list[Entity]
-    lateral_vein_bases_left: list[Entity]
-    lateral_vein_bases_right: list[Entity]
+class LeafMeta(rr.AsComponents):
+    attachment_parent_entity: Entity
 
-    def __init__(self, plant: Plant, attachment_parent_entity: Entity):
-        self.base_entity = plant.create_entity(
-            comp.LeafAttachment(),
-            comp.Vascular(radius=0.005, type=comp.VascularType.MIDRIB),
-        )
-        self.midrib_entities = []
-        self.lateral_vein_bases_left = []
-        self.lateral_vein_bases_right = []
+    midrib_entitiy_count: int = 12
+    midrib_length: float = 0.7
+    lateral_vein_count: int = 5
+    lateral_vein_length: float = 0.42
+    lateral_vein_entitiy_count: int = 5
+    vein_length_multiplier: Curve | None = None
 
-        base_entity_attachments = plant.get_components(
-            attachment_parent_entity
-        ).get_or_create_by_type(comp.Attachments)
-        base_entity_attachments.attachments.append(self.base_entity)
-        plant.create_entity(
-            comp.Spring(
-                attachment_parent_entity,
-                self.base_entity,
-                fixed_angle_stiffness=True,
-                angle_stiffness=1.0,
-            )
-        )
+    base_entity: Entity | None = None
+    midrib_entities: list[Entity] = field(default_factory=list)
+    lateral_vein_entities: list[Entity] = field(default_factory=list)
+    lateral_vein_bases_left: list[Entity] = field(default_factory=list)
+    lateral_vein_bases_right: list[Entity] = field(default_factory=list)
 
-        print(
-            f"LeafMeta created with attachment_parent_entity: {attachment_parent_entity}"
-        )
+    growth_stage: float = 0.0
 
-        base_entity_attachments.attachments.append(self.base_entity)
-        plant.create_entity(
-            comp.Spring(
-                attachment_parent_entity,
-                self.base_entity,
-                fixed_angle_stiffness=True,
-                angle_stiffness=1.0,
-            )
-        )
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [AnyBatchValue("comps.LeafMera.growth_stage", self.growth_stage)]
 
-        print(
-            f"LeafMeta created with attachment_parent_entity: {attachment_parent_entity}"
-        )
+@dataclass
+class GrowthPlan(rr.AsComponents):
+    length_start: float = 0.0
+    length_end: float = 0.0
+    rotation_start: Rotation = field(default_factory=Rotation.identity)
+    rotation_end: Rotation = field(default_factory=Rotation.identity)
 
-        midrib_entitiy_count = 12
-        midrib_length = 0.12
-        lateral_vein_count = 5
-        lateral_vein_length = 0.05
-        lateral_vein_entitiy_count = 5
+    def get_length_at(self, t: float) -> float:
+        return self.length_start + (self.length_end - self.length_start) * t
 
-        for i in range(midrib_entitiy_count):
-            prev_entity = self.base_entity if i == 0 else self.midrib_entities[i - 1]
-            new_entity = plant.create_entity(
-                comp.Vascular(
-                    radius=0.005,
-                    type=comp.VascularType.MIDRIB,
-                    length=midrib_length / midrib_entitiy_count,
-                ),
-                comp.AxePrev(prev_entity),
-            )
-            self.midrib_entities.append(new_entity)
-            plant.add_components(prev_entity, comp.AxeNext(new_entity))
-            plant.create_entity(
-                comp.Spring(prev_entity, new_entity, fixed_angle_stiffness=True)
-            )
-
-        for i in range(lateral_vein_count):
-            for is_left in [True, False]:
-                pos_on_midrib = (i - 1) / lateral_vein_count
-                index_on_midrib = int(pos_on_midrib * midrib_entitiy_count)
-                midrib_attachment_entity = self.midrib_entities[index_on_midrib]
-                attachments = plant.get_components(
-                    midrib_attachment_entity
-                ).get_or_create_by_type(comp.Attachments)
-
-                azimuth = -np.pi / 4 if is_left else np.pi / 4
-                base_entity = plant.create_entity(
-                    comp.Vascular(
-                        radius=0.005,
-                        type=comp.VascularType.VEIN,
-                        length=lateral_vein_length / lateral_vein_count,
-                    ),
-                    comp.VeinAttachment(),
-                    comp.AttachmentOrientation(
-                        inclination=-np.pi / 40, azimuth=azimuth
-                    ),
-                )
-
-                attachments.attachments.append(base_entity)
-
-                plant.create_entity(
-                    comp.Spring(
-                        midrib_attachment_entity,
-                        base_entity,
-                        fixed_angle_stiffness=True,
-                        angle_stiffness=1.0,
-                    )
-                )
-
-                if is_left:
-                    self.lateral_vein_bases_left.append(base_entity)
-                else:
-                    self.lateral_vein_bases_right.append(base_entity)
-
-                prev_entity = base_entity
-                for _ in range(lateral_vein_entitiy_count):
-                    new_entity = plant.create_entity(
-                        comp.Vascular(
-                            radius=0.005,
-                            type=comp.VascularType.VEIN,
-                            length=lateral_vein_length / lateral_vein_entitiy_count,
-                        ),
-                        comp.AxePrev(prev_entity),
-                    )
-                    plant.add_components(prev_entity, comp.AxeNext(new_entity))
-                    plant.create_entity(
-                        comp.Spring(
-                            prev_entity,
-                            new_entity,
-                            fixed_angle_stiffness=True,
-                            angle_stiffness=1.0,
-                        )
-                    )
-                    prev_entity = new_entity
-
-        print("LeafMeta created")
-        print(f"midrib_entities: {self.midrib_entities}")
+    def get_rotation_at(self, t: float) -> Rotation:
+        t = max(0, min(1, t))
+        slerp = Slerp([0, 1], Rotation.concatenate([self.rotation_start, self.rotation_end]))
+        return slerp(t)

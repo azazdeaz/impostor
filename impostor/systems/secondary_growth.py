@@ -15,7 +15,8 @@ class SecondaryGrowthSystem:
             comps = plant.get_components(entity)
             if comp.Vascular in comps:
                 vascular = comps.get_by_type(comp.Vascular)
-                vascular.radius += (max_radius - vascular.radius) * 0.01
+                if vascular.type == comp.VascularType.STEM:
+                    vascular.radius += (max_radius - vascular.radius) * 0.01
 
                 mass = comps.get_or_create_by_type(comp.Mass)
                 mass.mass = np.pi * vascular.radius**2 * vascular.length * 1000

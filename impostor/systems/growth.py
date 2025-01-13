@@ -23,7 +23,7 @@ def start_root(plant: Plant):
             comp.Spring(
                 root,
                 meristem,
-                angle=Rotation.from_euler("xyz", [0, 3, 0], degrees=True),
+                angle=Rotation.from_euler("xyz", [0, 30, 0], degrees=True),
             )
         )
     return root
@@ -133,6 +133,8 @@ class RelaxSpringSystem:
                 if comp.Vascular in comps_a:
                     stem_a = comps_a.get_by_type(comp.Vascular)
                     spring.length = stem_a.length
+                    spring.angle_rest = stem_a.rotation
+                    spring.angle = spring.angle_rest
 
             if comp.AttachmentOrientation in comps_b:
                 branch = comps_b.get_by_type(comp.AttachmentOrientation)

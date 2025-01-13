@@ -1,8 +1,5 @@
-from copy import deepcopy
+from copy import copy
 from typing import Callable, Dict, NewType
-
-from enum import Enum
-import numpy as np
 
 from impostor.type_set import TypeSet
 
@@ -13,7 +10,7 @@ class Plant:
     entities: Dict[Entity, TypeSet] = {}
 
     def query(self):
-        return Query(deepcopy(self.entities))
+        return Query(copy(self.entities))
 
     def create_entity(self, *components):
         entity = Entity(len(self.entities))
@@ -24,7 +21,7 @@ class Plant:
 
     def get_components(self, entity: Entity):
         return self.entities.get(entity)
-    
+     
     def add_components(self, entity: Entity, *components):
         for component in components:
             self.entities[entity].add(component)
@@ -76,3 +73,6 @@ class Query:
     
     def entities(self):
         return self._entities.keys()
+    
+    def items(self):
+        return self._entities.items()

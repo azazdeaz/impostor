@@ -16,9 +16,11 @@ class TypeSet:
     def remove(self, item):
         # Remove the item by type
         if isinstance(item, type):
-            self._type_map.pop(item, None)
+            if self._type_map.pop(item, None) is None:
+                raise ValueError(f"Type {item} not in TypeSet")
         else:
-            self._type_map.pop(type(item), None)
+            if self._type_map.pop(type(item), None) is None:
+                raise ValueError(f"Item {item} not in TypeSet")
 
     def get_by_type(self, type_key: Type[T]) -> T:
         # Return the instance of this type if exists

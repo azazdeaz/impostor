@@ -68,7 +68,6 @@ class Attachments:
 @dataclass
 class AttachmentOrientation:
     """Rotation around the growth direction of the parent stem."""
-
     azimuth: float = 0.0
     """0 means the branch grows the same direction as the parent stem, pi/2 means it grows perpendicular to the parent stem."""
     inclination: float = 0.0
