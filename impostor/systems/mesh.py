@@ -26,6 +26,10 @@ class VertexLayer:
             vertices.append(transform.transform_point(np.array([x, y, 0])))
         return VertexLayer(np.array(vertices))
 
+    @staticmethod
+    def from_vertices(vertices: np.ndarray):
+        return VertexLayer(vertices)
+
 
 @dataclass
 class PlantMesh:
@@ -116,7 +120,7 @@ class PlantMesh:
 
 def create_stem_vertex_layers(
     plant: Plant, entity: Entity, rings: Optional[List[VertexLayer]] = None
-) -> PlantMesh:
+) -> List[VertexLayer]:
     if rings is None:
         rings = []
 
@@ -139,7 +143,39 @@ def create_stem_vertex_layers(
     return rings
 
 
+def create_blade_mesh(plant: Plant, leaf_meta: comp.LeafMeta) -> PlantMesh:
+    def create_half(bases: List[Entity]):
+        layers = []
+        for vein_base in bases:
+            entities = [vein_base]
+            while comp.AxeNext in plant.get_components(entities[-1]):
+                entities.append(
+                    plant.get_components(entities[-1]).get_by_type(comp.AxeNext).next
+                )
+            poses = []
+            for entity in entities:
+                poses.append(
+                    plant.get_components(entity)
+                    .get_by_type(RigidTransformation)
+                    .translation
+                )
+            layers.append(VertexLayer.from_vertices(np.array(poses)))
+        # Add one more layer to close the mesh at the tip of the leaf
+        tip = leaf_meta.midrib_entities[-1]
+        tip_pos = plant.get_components(tip).get_by_type(RigidTransformation).translation
+        layers.append(VertexLayer.from_vertices(np.array([tip_pos])))
+
+        return PlantMesh(layers=layers, is_closed=False).build_mesh()
+
+    blade = create_half(leaf_meta.lateral_vein_bases_left)
+    blade.merge(create_half(leaf_meta.lateral_vein_bases_right))
+
+    return blade
+
+
 def create_plant_mesh(plant: Plant) -> PlantMesh:
+    mesh = PlantMesh()
+
     roots = (
         plant.query()
         .with_component(comp.Vascular)
@@ -151,10 +187,13 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
         .entities()
     )
 
-    mesh = PlantMesh()
-
     for root in roots:
         rings = create_stem_vertex_layers(plant, root)
         mesh.merge(PlantMesh(layers=rings, is_closed=True).build_mesh())
+
+    for leaf in plant.query().with_component(comp.LeafMeta).entities():
+        leaf_meta = plant.get_components(leaf).get_by_type(comp.LeafMeta)
+        leaf_mesh = create_blade_mesh(plant, leaf_meta)
+        mesh.merge(leaf_mesh)
 
     return mesh
