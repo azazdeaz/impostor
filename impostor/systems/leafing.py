@@ -124,11 +124,8 @@ class GrowLeafSystem:
             entity_length = meta.lateral_vein_length / meta.lateral_vein_entitiy_count
 
             if meta.vein_length_multiplier is not None:
-                print(f"Using vein length multiplier at {i}")
-                print(f"Length before: {entity_length}")
                 t = i / meta.lateral_vein_count
                 entity_length *= meta.vein_length_multiplier.evaluate(t)
-                print(f"entity_length after: {entity_length}")
 
             for is_left in [True, False]:
                 pos_on_midrib = (i - 1) / meta.lateral_vein_count

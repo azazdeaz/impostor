@@ -31,6 +31,15 @@ class VertexLayer:
         return VertexLayer(vertices)
 
 
+def compute_face_normal(v1, v2, v3):
+    """Compute the normal of a face given its vertices."""
+    edge1 = v2 - v1
+    edge2 = v3 - v1
+    normal = np.cross(edge1, edge2)
+    normal = normal / np.linalg.norm(normal)  # Normalize the normal
+    return normal
+
+
 @dataclass
 class PlantMesh:
     layers: List[VertexLayer] = field(default_factory=list)
@@ -53,6 +62,9 @@ class PlantMesh:
 
         one_start = 0
         faces = []
+        adjacent_faces = {}
+        face_normals = []
+
         for i in range(len(self.layers) - 1):
             two_start = one_start + len(self.layers[i].vertices)
             one_id = 0
@@ -72,15 +84,42 @@ class PlantMesh:
                 down_progress = two_id / two_size
 
                 if up_progress > down_progress:
-                    faces.append([id1, id2_next, id2])
+                    new_face = [id1, id2_next, id2]
                     two_id += 1
                 else:
-                    faces.append([id1, id1_next, id2])
+                    new_face = [id1, id1_next, id2]
                     one_id += 1
+
+                # Add the face to the list of faces
+                faces.append(new_face)
+                face_idx = len(faces) - 1
+                # Save wich faces are adjacent to each vertex
+                for vertex_id in new_face:
+                    if vertex_id not in adjacent_faces:
+                        adjacent_faces[vertex_id] = []
+                    adjacent_faces[vertex_id].append(face_idx)
+
+                # Compute the normal of the face
+                v1, v2, v3 = self.vertices[new_face]
+                normal = compute_face_normal(v1, v2, v3)
+                face_normals.append(normal)
 
             one_start = two_start
 
         self.faces = np.array(faces)
+
+        # Compute the normal of a vertex given its adjacent faces
+        for vertex_idx in range(len(self.vertices)):
+            normals = []
+            for face_idx in adjacent_faces[vertex_idx]:
+                normals.append(face_normals[face_idx])
+
+            # Average the normals
+            vertex_normal = np.mean(normals, axis=0)
+            vertex_normal = vertex_normal / np.linalg.norm(
+                vertex_normal
+            )  # Normalize the normal
+            self.normals[vertex_idx] = vertex_normal
 
         return self
 
