@@ -1036,7 +1036,7 @@ packages:
 - pypi: .
   name: impostor
   version: 0.1.0
-  sha256: 81c87bfa27bbe66ed5760dad6b5bc6b73db5f21db39b0aa159b1523e7b87698e
+  sha256: 26a931df60e2e25e5112ffee6389789547e6353c7bc84ae688955ab15fb31446
   requires_python: '>=3.10,<3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/ipykernel-6.29.5-pyh3099207_0.conda

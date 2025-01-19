@@ -16,9 +16,20 @@ def start_root(plant: Plant):
     q = plant.query()
     root = q.without_component(AxePrev).single()
     if root is None:
-        root = plant.create_entity(comp.Root(), comp.Vascular())
+        root = plant.create_entity(
+            comp.Root(),
+            comp.Vascular(
+                rotation=Rotation.from_euler("xyz", [0, 30, 0], degrees=True)
+            ),
+        )
         meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(root))
-        plant.add_components(root, comp.AxeNext(meristem), comp.RigidTransformation.from_rotation(Rotation.from_euler("xyz", [0, 0, 0], degrees=True)))
+        plant.add_components(
+            root,
+            comp.AxeNext(meristem),
+            comp.RigidTransformation.from_rotation(
+                Rotation.from_euler("xyz", [0, 0, 0], degrees=True)
+            ),
+        )
         plant.create_entity(
             comp.Spring(
                 root,
@@ -176,4 +187,3 @@ class RelaxSpringSystem:
         )
 
         comps_b.add(transform_a.combine(transform_a_b))
-

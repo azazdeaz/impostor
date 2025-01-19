@@ -30,13 +30,25 @@ class VertexLayer:
     def from_vertices(vertices: np.ndarray):
         return VertexLayer(vertices)
 
+    def merge_close_vertices(self, threshold: float = 0.001):
+        """Merge close vertices in the layer."""
+        new_vertices = [self.vertices[0]]
+        for vertex in self.vertices[1:]:
+            if np.linalg.norm(vertex - new_vertices[-1]) > threshold:
+                new_vertices.append(vertex)
+
 
 def compute_face_normal(v1, v2, v3):
     """Compute the normal of a face given its vertices."""
     edge1 = v2 - v1
     edge2 = v3 - v1
     normal = np.cross(edge1, edge2)
-    normal = normal / np.linalg.norm(normal)  # Normalize the normal
+    magnitude = np.linalg.norm(normal)
+    if magnitude < 1e-6:
+        pass # TODO
+        # print("Warning: Face has a normal of length 0")
+    else:
+        normal = normal / np.linalg.norm(normal)  # Normalize the normal
     return normal
 
 
@@ -44,7 +56,7 @@ def compute_face_normal(v1, v2, v3):
 class PlantMesh:
     layers: List[VertexLayer] = field(default_factory=list)
     vertices: np.ndarray = field(default_factory=lambda: np.ndarray((0, 3)))
-    faces: np.ndarray = field(default_factory=lambda: np.ndarray((0, 3)))
+    faces: np.ndarray = field(default_factory=lambda: np.ndarray((0, 3), dtype=int))
     normals: np.ndarray = field(default_factory=lambda: np.ndarray((0, 3)))
     uvs: np.ndarray = field(default_factory=lambda: np.ndarray((0, 2)))
     is_closed: bool = False
@@ -52,7 +64,7 @@ class PlantMesh:
     def add_layer(self, layer: VertexLayer):
         self.layers.append(layer)
 
-    def build_mesh(self):
+    def build_mesh(self, winding_clockwise: bool = True):
         if len(self.layers) == 0:
             return self
 
@@ -84,10 +96,16 @@ class PlantMesh:
                 down_progress = two_id / two_size
 
                 if up_progress > down_progress:
-                    new_face = [id1, id2_next, id2]
+                    if winding_clockwise:
+                        new_face = [id1, id2_next, id2]
+                    else:
+                        new_face = [id1, id2, id2_next]
                     two_id += 1
                 else:
-                    new_face = [id1, id1_next, id2]
+                    if winding_clockwise:
+                        new_face = [id1, id1_next, id2]
+                    else:
+                        new_face = [id1, id2, id1_next]
                     one_id += 1
 
                 # Add the face to the list of faces
@@ -106,7 +124,7 @@ class PlantMesh:
 
             one_start = two_start
 
-        self.faces = np.array(faces)
+        self.faces = np.array(faces, dtype=int)
 
         # Compute the normal of a vertex given its adjacent faces
         for vertex_idx in range(len(self.vertices)):
@@ -116,10 +134,17 @@ class PlantMesh:
 
             # Average the normals
             vertex_normal = np.mean(normals, axis=0)
-            vertex_normal = vertex_normal / np.linalg.norm(
-                vertex_normal
-            )  # Normalize the normal
-            self.normals[vertex_idx] = vertex_normal
+            # warn if the normal is zero
+            if np.linalg.norm(vertex_normal) < 1e-6:
+                pass # TODO
+                # print(
+                #     f"Warning: Vertex {vertex_idx} has a normal of length {np.linalg.norm(vertex_normal)}"
+                # )
+            else:
+                vertex_normal = vertex_normal / np.linalg.norm(
+                    vertex_normal
+                )  # Normalize the normal
+                self.normals[vertex_idx] = vertex_normal
 
         return self
 
@@ -145,7 +170,7 @@ class PlantMesh:
         self.faces = np.concatenate([self.faces, other.faces + vertices_start])
 
     def rr_log(self):
-        self.vertices = np.append(self.vertices, np.zeros((1, 3)), axis=0)
+        # self.vertices = np.append(self.vertices, np.zeros((1, 3)), axis=0)
         rr.log(
             "mesh",
             rr.Mesh3D(
@@ -153,6 +178,18 @@ class PlantMesh:
                 vertex_positions=self.vertices,
                 vertex_texcoords=self.uvs,
                 vertex_normals=self.normals,
+            ),
+        )
+        rr.log(
+            "wireframe",
+            rr.LineStrips3D(self.vertices[self.faces], radii=0.0005),
+        )
+        rr.log(
+            "normals",
+            rr.LineStrips3D(
+                np.stack((self.vertices, self.vertices + self.normals * 0.05), axis=1),
+                radii=0.0005,
+                colors=[255, 255, 0],
             ),
         )
 
@@ -183,8 +220,9 @@ def create_stem_vertex_layers(
 
 
 def create_blade_mesh(plant: Plant, leaf_meta: comp.LeafMeta) -> PlantMesh:
-    def create_half(bases: List[Entity]):
-        layers = []
+    def create_half(is_left:bool):
+        bases = leaf_meta.lateral_vein_bases_left if is_left else leaf_meta.lateral_vein_bases_right
+        layers: List[VertexLayer] = []
         for vein_base in bases:
             entities = [vein_base]
             while comp.AxeNext in plant.get_components(entities[-1]):
@@ -204,10 +242,13 @@ def create_blade_mesh(plant: Plant, leaf_meta: comp.LeafMeta) -> PlantMesh:
         tip_pos = plant.get_components(tip).get_by_type(RigidTransformation).translation
         layers.append(VertexLayer.from_vertices(np.array([tip_pos])))
 
-        return PlantMesh(layers=layers, is_closed=False).build_mesh()
+        for layer in layers:
+            layer.merge_close_vertices()
 
-    blade = create_half(leaf_meta.lateral_vein_bases_left)
-    blade.merge(create_half(leaf_meta.lateral_vein_bases_right))
+        return PlantMesh(layers=layers, is_closed=False).build_mesh(winding_clockwise=is_left)
+
+    blade = create_half(is_left=True)
+    blade.merge(create_half(is_left=False))
 
     return blade
 

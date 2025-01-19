@@ -13,13 +13,14 @@ from scipy.spatial.transform import Rotation
 class StartLeafSystem:
     branch_order: int = 0
     at_stem_length: float = NormalDistribution
+    is_trifoliate: bool = False
 
     def execute(self, plant: Plant):
         for apex, components in plant.query().with_component(comp.GrowthTip).items():
             # Check if the branch order matches
             if components.get_by_type(comp.GrowthTip).branch_order != self.branch_order:
                 continue
-            
+
             # Check if the stem is long enough
             length = self.stem_length(plant, apex)
             if length < self.at_stem_length.sample():
@@ -29,6 +30,28 @@ class StartLeafSystem:
                 [(0, 0), (0.14, 0.6), (0.7, 0.7), (0.86, 0.4), (0.98, 0.1), (1, 0.0)]
             )
             plant.create_entity(comp.LeafMeta(apex, vein_length_multiplier=curve))
+            if self.is_trifoliate:
+                plant.create_entity(
+                    comp.LeafMeta(
+                        apex,
+                        vein_length_multiplier=curve,
+                        attacment_orientation=comp.AttachmentOrientation(
+                            azimuth=-np.pi / 2,
+                        ),
+                    ),
+                    comp.Label("Trifoilate Right")
+                )
+                plant.create_entity(
+                    comp.LeafMeta(
+                        apex,
+                        vein_length_multiplier=curve,
+                        attacment_orientation=comp.AttachmentOrientation(
+                            azimuth=np.pi / 2, 
+                        ),
+                    ),
+                    comp.Label("Trifoliate Left")
+                )
+
             plant.remove_components(apex, comp.GrowthTip)
 
     def stem_length(self, plant: Plant, entity: Entity, sum=0.0):
@@ -75,12 +98,13 @@ class GrowLeafSystem:
             vascular.rotation = growth_plan.get_rotation_at(meta.growth_stage)
 
     def initialize_leaf(self, plant: Plant, meta: comp.LeafMeta):
-        print("Creating leaf")
         # Create the attachment point for the leaf
         meta.base_entity = plant.create_entity(
             comp.LeafAttachment(),
             comp.Vascular(radius=0.005, type=comp.VascularType.MIDRIB),
+            meta.attacment_orientation,
         )
+        print(f"Creating Leaf {meta.base_entity}, {meta.attacment_orientation}")
 
         # Register the attachment point with the parent entity
         base_entity_attachments = plant.get_components(
@@ -127,14 +151,18 @@ class GrowLeafSystem:
                 t = i / meta.lateral_vein_count
                 entity_length *= meta.vein_length_multiplier.evaluate(t)
 
-            for is_left in [True, False]:
-                pos_on_midrib = (i - 1) / meta.lateral_vein_count
-                index_on_midrib = int(pos_on_midrib * meta.midrib_entitiy_count)
-                midrib_attachment_entity = meta.midrib_entities[index_on_midrib]
-                attachments = plant.get_components(
-                    midrib_attachment_entity
-                ).get_or_create_by_type(comp.Attachments)
+            pos_on_midrib = i / meta.lateral_vein_count
+            index_on_midrib = int(pos_on_midrib * meta.midrib_entitiy_count)
+            midrib_attachment_entity = meta.midrib_entities[index_on_midrib]
+            attachments = plant.get_components(
+                midrib_attachment_entity
+            ).get_or_create_by_type(comp.Attachments)
 
+            print(
+                f"Creating lateral vein {i} with length {entity_length} on midrib #{index_on_midrib} {midrib_attachment_entity}"
+            )
+
+            for is_left in [True, False]:
                 azimuth = -np.pi * 0.4 if is_left else np.pi * 0.4
                 base_entity = plant.create_entity(
                     comp.Vascular(

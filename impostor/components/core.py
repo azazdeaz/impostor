@@ -97,6 +97,10 @@ class GrowthTip:
 
     branch_order: int = 0
 
+@dataclass
+class Label:
+    label: str
+
 
 @dataclass
 class Root:

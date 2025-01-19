@@ -5,25 +5,15 @@ from impostor.utils import NormalDistribution
 import rerun as rr
 import time
 
-class Profile:
-    def __init__(self, label: str):
-        self.label = label
-        self.start_time = time.time()
-    
-    def end(self):
-        print(f"{self.label}: {time.time() - self.start_time}")
 
 def test_grow(iterations=120):
     plant = Plant()
     root_entity = syst.start_root(plant)
-    branch_system = syst.BranchingSystem(
-        internode_spacing=NormalDistribution(0.6, 0.1), max_branch_order=1
-    )
     relax_spring_system = syst.RelaxSpringSystem()
     secondary_growth_system = syst.SecondaryGrowthSystem()
     update_mass_above_system = syst.UpdateMassAboveSystem()
     start_leaf_system = syst.StartLeafSystem(
-        at_stem_length=NormalDistribution(0.5, 0.1), branch_order=1
+        at_stem_length=NormalDistribution(1.8, 0.3), branch_order=0, is_trifoliate=True
     )
     grow_leaf_system = syst.GrowLeafSystem()
 
@@ -31,7 +21,6 @@ def test_grow(iterations=120):
         print(f"Frame {i}")
         rr.set_time_sequence("frame_idx", i)
         syst.grow_system(plant)
-        branch_system.execute(plant)
         secondary_growth_system.execute(plant)
         start_leaf_system.execute(plant)
         grow_leaf_system.execute(plant)
@@ -51,4 +40,4 @@ if __name__ == "__main__":
     recording_id = str(int(time.time()))
     rr.init("impostor", spawn=True, recording_id=recording_id)
 
-    plant, root = test_grow(40)
+    plant, root = test_grow(80)

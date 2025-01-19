@@ -6,6 +6,7 @@ from rerun.any_value import AnyBatchValue
 from scipy.spatial.transform import Rotation, Slerp
 
 from impostor.components import Entity
+import impostor.components as comp
 from impostor.utils import Curve
 
 
@@ -19,6 +20,7 @@ class LeafMeta(rr.AsComponents):
     lateral_vein_length: float = 0.42
     lateral_vein_entitiy_count: int = 5
     vein_length_multiplier: Curve | None = None
+    attacment_orientation: comp.AttachmentOrientation = field(default_factory=comp.AttachmentOrientation)
 
     base_entity: Entity | None = None
     midrib_entities: list[Entity] = field(default_factory=list)
@@ -29,7 +31,11 @@ class LeafMeta(rr.AsComponents):
     growth_stage: float = 0.0
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
-        return [AnyBatchValue("comps.LeafMera.growth_stage", self.growth_stage)]
+        return [
+            AnyBatchValue("comps.LeafMeta.growth_stage", self.growth_stage),
+            AnyBatchValue("comps.LeafMeta.midrib_entitiy_count", self.midrib_entitiy_count),
+            
+        ]
 
 @dataclass
 class GrowthPlan(rr.AsComponents):
@@ -45,3 +51,11 @@ class GrowthPlan(rr.AsComponents):
         t = max(0, min(1, t))
         slerp = Slerp([0, 1], Rotation.concatenate([self.rotation_start, self.rotation_end]))
         return slerp(t)
+    
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [
+            AnyBatchValue("comps.GrowthPlan.length_start", self.length_start),
+            AnyBatchValue("comps.GrowthPlan.length_end", self.length_end),
+            AnyBatchValue("comps.GrowthPlan.rotation_start", self.rotation_start.as_euler("xyz")),
+            AnyBatchValue("comps.GrowthPlan.rotation_end", self.rotation_end.as_euler("xyz")),
+        ]
