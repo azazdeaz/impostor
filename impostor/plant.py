@@ -30,7 +30,6 @@ class Plant:
         for component in components:
             self.entities[entity].remove(component)
 
-
 class Query:
     def __init__(self, entities: Dict[Entity, TypeSet]):
         self._entities = entities

@@ -1,6 +1,7 @@
 from impostor.plant import Plant
 import impostor.systems as syst
 from impostor.utils import NormalDistribution
+from impostor import parts
 
 import rerun as rr
 import time
@@ -8,17 +9,20 @@ import time
 
 def test_grow(iterations=120):
     plant = Plant()
-    root_entity = syst.start_root(plant)
+    plant.create_entity(parts.Crown())
     relax_spring_system = syst.RelaxSpringSystem()
-    secondary_growth_system = syst.SecondaryGrowthSystem()
+    secondary_growth_system = syst.SecondaryGrowthSystem(
+        base_radius=0.012, reduction_factor=0.005
+    )
     update_mass_above_system = syst.UpdateMassAboveSystem()
     start_leaf_system = syst.StartLeafSystem(
-        at_stem_length=NormalDistribution(1.8, 0.3), branch_order=0, is_trifoliate=True
+        at_stem_length=NormalDistribution(0.6, 0.02), branch_order=0, is_trifoliate=True
     )
     grow_leaf_system = syst.GrowLeafSystem()
 
     for i in range(iterations):
         print(f"Frame {i}")
+        parts.step_parts(plant)
         rr.set_time_sequence("frame_idx", i)
         syst.grow_system(plant)
         secondary_growth_system.execute(plant)
@@ -27,12 +31,10 @@ def test_grow(iterations=120):
         update_mass_above_system.execute(plant)
         relax_spring_system.execute(plant)
         syst.rr_log_components(plant)
-        syst.rr_log_graph(plant)
+        # syst.rr_log_graph(plant)
         syst.rr_log_transforms_system(plant)
         mesh = syst.create_plant_mesh(plant)
         mesh.rr_log()
-
-    return plant, root_entity
 
 
 if __name__ == "__main__":
@@ -40,4 +42,4 @@ if __name__ == "__main__":
     recording_id = str(int(time.time()))
     rr.init("impostor", spawn=True, recording_id=recording_id)
 
-    plant, root = test_grow(80)
+    test_grow(180)

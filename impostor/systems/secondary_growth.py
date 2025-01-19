@@ -8,6 +8,9 @@ from impostor.plant import Entity, Plant
 
 @dataclass
 class SecondaryGrowthSystem:
+    base_radius: float = 0.06
+    reduction_factor: float = 0.02
+
     def execute(self, plant: Plant):
         def update_thickness(entity: Entity, branch_order=0):
             # Set the max radius based on the branch order
@@ -34,8 +37,6 @@ class SecondaryGrowthSystem:
     def get_max_radius(
         self,
         branch_order: int,
-        base_radius: float = 0.06,
-        reduction_factor: float = 0.02,
     ) -> float:
         """
         Calculate the maximum radius for a branch based on its order.
@@ -48,4 +49,4 @@ class SecondaryGrowthSystem:
         Returns:
         - float: The maximum radius for the given branch order.
         """
-        return max(base_radius - reduction_factor * branch_order, 0.01)
+        return max(self.base_radius - self.reduction_factor * branch_order, 0.01)

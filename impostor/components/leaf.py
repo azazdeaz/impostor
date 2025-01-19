@@ -15,9 +15,9 @@ class LeafMeta(rr.AsComponents):
     attachment_parent_entity: Entity
 
     midrib_entitiy_count: int = 12
-    midrib_length: float = 0.7
+    midrib_length: float = 0.6
     lateral_vein_count: int = 5
-    lateral_vein_length: float = 0.42
+    lateral_vein_length: float = 0.32
     lateral_vein_entitiy_count: int = 5
     vein_length_multiplier: Curve | None = None
     attacment_orientation: comp.AttachmentOrientation = field(default_factory=comp.AttachmentOrientation)
@@ -34,7 +34,7 @@ class LeafMeta(rr.AsComponents):
         return [
             AnyBatchValue("comps.LeafMeta.growth_stage", self.growth_stage),
             AnyBatchValue("comps.LeafMeta.midrib_entitiy_count", self.midrib_entitiy_count),
-            
+
         ]
 
 @dataclass

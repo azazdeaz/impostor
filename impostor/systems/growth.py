@@ -19,7 +19,8 @@ def start_root(plant: Plant):
         root = plant.create_entity(
             comp.Root(),
             comp.Vascular(
-                rotation=Rotation.from_euler("xyz", [0, 30, 0], degrees=True)
+                rotation=Rotation.from_euler("xyz", [0, 3, 0], degrees=True),
+                radius=0.01
             ),
         )
         meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(root))
@@ -34,7 +35,7 @@ def start_root(plant: Plant):
             comp.Spring(
                 root,
                 meristem,
-                angle=Rotation.from_euler("xyz", [0, 30, 0], degrees=True),
+                # angle=Rotation.from_euler("xyz", [0, 30, 0], degrees=True),
             )
         )
     return root
@@ -61,7 +62,7 @@ def grow_system(plant: Plant):
                 plant.remove_components(tip, tip_comp)
                 new_tip = plant.create_entity(tip_comp, comp.AxePrev(tip))
                 plant.add_components(
-                    tip, comp.AxeNext(new_tip), comp.Vascular(length=0.01, radius=0.02)
+                    tip, comp.AxeNext(new_tip), comp.Vascular(length=0.01, radius=0.003)
                 )
                 plant.create_entity(
                     comp.Spring(

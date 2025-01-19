@@ -116,26 +116,27 @@ def rr_log_transforms_system(plant: Plant):
         # Draw a circle around the stem
         if comp.Vascular in comps:
             r = comps.get_by_type(comp.Vascular).radius
-            rr.log(
-                log_path(entity),
-                rr.LineStrips3D(
-                    [
+            if comps.get_by_type(comp.Vascular).type == comp.VascularType.STEM:
+                rr.log(
+                    log_path(entity),
+                    rr.LineStrips3D(
                         [
-                            transform.transform_point(
-                                np.array([np.cos(theta) * r, np.sin(theta) * r, 0])
-                            )
-                            for theta in np.linspace(0, 2 * np.pi, 10)
+                            [
+                                transform.transform_point(
+                                    np.array([np.cos(theta) * r, np.sin(theta) * r, 0])
+                                )
+                                for theta in np.linspace(0, 2 * np.pi, 10)
+                            ],
+                            [
+                                transform.translation,
+                                transform.combine(
+                                    comp.RigidTransformation.from_z_translation(r)
+                                ).translation,
+                            ],
                         ],
-                        [
-                            transform.translation,
-                            transform.combine(
-                                comp.RigidTransformation.from_z_translation(r)
-                            ).translation,
-                        ],
-                    ],
-                    colors=Palette.Green,
-                ),
-            )
+                        colors=Palette.Green,
+                    ),
+                )
         else:
             rr.log(
                 log_path(entity),
