@@ -5,6 +5,7 @@ from rerun.components.color import Color
 from scipy.spatial.transform._rotation import Rotation
 
 import impostor.components as comp
+import impostor.parts as parts
 from impostor.plant import Entity, Plant
 import numpy as np
 
@@ -69,7 +70,7 @@ def rr_log_graph(plant: Plant):
 
             if comp.Root in plant.get_components(entity):
                 label += "R"
-            if comp.Vascular in plant.get_components(entity):
+            if parts.Vascular in plant.get_components(entity):
                 label += "V"
             if comp.Attachments in plant.get_components(entity):
                 label += "A"
@@ -87,8 +88,8 @@ def rr_log_graph(plant: Plant):
                 )
                 edges.append((log_path(entity), log_path(next_entity)))
 
-        if comp.Spring in plant.get_components(entity):
-            spring = plant.get_components(entity).get_by_type(comp.Spring)
+        if parts.Spring in plant.get_components(entity):
+            spring = plant.get_components(entity).get_by_type(parts.Spring)
             node_ids.append(log_path(entity))
             node_labels.append(f"{entity} S")
             node_colors.append(Palette.Blue)
@@ -114,9 +115,9 @@ def rr_log_transforms_system(plant: Plant):
         transform = comps.get_by_type(comp.RigidTransformation)
 
         # Draw a circle around the stem
-        if comp.Vascular in comps:
-            r = comps.get_by_type(comp.Vascular).radius
-            if comps.get_by_type(comp.Vascular).type == comp.VascularType.STEM:
+        if parts.Vascular in comps:
+            r = comps.get_by_type(parts.Vascular).radius
+            if comps.get_by_type(parts.Vascular).type == parts.VascularType.STEM:
                 rr.log(
                     log_path(entity),
                     rr.LineStrips3D(
@@ -144,9 +145,9 @@ def rr_log_transforms_system(plant: Plant):
             )
 
     # Log all springs as lines between their entities
-    springs = plant.query().with_component(comp.Spring).entities()
+    springs = plant.query().with_component(parts.Spring).entities()
     for entity in springs:
-        spring = plant.get_components(entity).get_by_type(comp.Spring)
+        spring = plant.get_components(entity).get_by_type(parts.Spring)
         transform_a = plant.get_components(spring.entity_a).get_by_type(
             comp.RigidTransformation
         )
@@ -159,14 +160,14 @@ def rr_log_transforms_system(plant: Plant):
                 log_path(entity),
                 rr.Points3D([0.0, 0.0, 0.0], colors=Palette.Yellow),
             )
-
-        rr.log(
-            f"nodes/{entity}",
-            rr.LineStrips3D(
-                [transform_a.translation, transform_b.translation],
-                colors=Palette.Blue,
-            ),
-        )
+        else:
+            rr.log(
+                f"nodes/{entity}",
+                rr.LineStrips3D(
+                    [transform_a.translation, transform_b.translation],
+                    colors=Palette.Blue,
+                ),
+            )
 
     # Log everithing else as a point so they will be visible in the 3D view
     for entity in plant.entities.keys():

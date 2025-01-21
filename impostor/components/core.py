@@ -6,32 +6,10 @@ import enum
 import rerun as rr
 from rerun.any_value import AnyBatchValue
 
-
-class VascularType(enum.Enum):
-    STEM = "stem"
-    MIDRIB = "midrib"
-    VEIN = "vein"
-
-
 class MarkerComponent(rr.AsComponents):
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [AnyBatchValue(f"cmp.{self.__class__.__name__}", "✓")]
 
-
-@dataclass
-class Vascular(rr.AsComponents):
-    length: float = 0.0
-    radius: float = 0.04
-    rotation: Rotation = Rotation.identity()
-    type: VascularType = VascularType.STEM
-
-    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
-        return [
-            AnyBatchValue("comps.VascularType.length", self.length),
-            AnyBatchValue("comps.VascularType.radius", self.radius),
-            AnyBatchValue("comps.VascularType.rotation", self.rotation.as_euler("xyz")),
-            AnyBatchValue("comps.VascularType.type", str(self.type)),
-        ]
 
 
 @dataclass

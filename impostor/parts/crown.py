@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from impostor.parts import BasePart
 from impostor.plant import Plant
 import impostor.components as comp
+import impostor.parts as parts
 import numpy as np
 
 @dataclass
@@ -15,7 +16,7 @@ class Crown(BasePart):
 
     base_entity = None
 
-    def step(self, plant: Plant):
+    def step(self, plant: Plant, entity):
         if self.base_entity is None:
             self.base_entity = plant.create_entity(comp.Root(), comp.RigidTransformation())
 
@@ -35,15 +36,15 @@ class Crown(BasePart):
         self.current_inclanation *= 0.7
         
         first_entity = plant.create_entity(
-            comp.Vascular(
+            parts.Vascular(
                 rotation=rotation
             ),
         )
         plant.create_entity(comp.Spring(self.base_entity, first_entity))
-        meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(first_entity))
+        strawberry_stem = plant.create_entity(parts.StrawberryStem(), comp.AxePrev(first_entity))
         plant.add_components(
             first_entity,
-            comp.AxeNext(meristem),
+            comp.AxeNext(strawberry_stem),
             comp.RigidTransformation.from_rotation(
                 comp.Rotation.from_euler("xyz", [0, 0, 0], degrees=True)
             ),
@@ -51,6 +52,6 @@ class Crown(BasePart):
         plant.create_entity(
             comp.Spring(
                 first_entity,
-                meristem,
+                strawberry_stem,
             )
         )
