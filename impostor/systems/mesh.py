@@ -5,6 +5,7 @@ import numpy as np
 import rerun as rr
 
 import impostor.components as comp
+import impostor.parts as parts
 from impostor.components.core import AxeNext, Vascular
 from impostor.components.rigid_transformation import (
     RigidTransformation,
@@ -219,7 +220,7 @@ def create_stem_vertex_layers(
     return rings
 
 
-def create_blade_mesh(plant: Plant, leaf_meta: comp.LeafMeta) -> PlantMesh:
+def create_blade_mesh(plant: Plant, leaf_meta: parts.Leaf) -> PlantMesh:
     def create_half(is_left:bool):
         bases = leaf_meta.lateral_vein_bases_left if is_left else leaf_meta.lateral_vein_bases_right
         layers: List[VertexLayer] = []
@@ -271,8 +272,8 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
         rings = create_stem_vertex_layers(plant, root)
         mesh.merge(PlantMesh(layers=rings, is_closed=True).build_mesh())
 
-    for leaf in plant.query().with_component(comp.LeafMeta).entities():
-        leaf_meta = plant.get_components(leaf).get_by_type(comp.LeafMeta)
+    for leaf in plant.query().with_component(parts.Leaf).entities():
+        leaf_meta = plant.get_components(leaf).get_by_type(parts.Leaf)
         leaf_mesh = create_blade_mesh(plant, leaf_meta)
         mesh.merge(leaf_mesh)
 

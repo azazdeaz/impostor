@@ -136,8 +136,8 @@ class RigidTransformation(rr.AsComponents):
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [
-            AnyBatchValue("comps.RigidTransformation.translation", self.translation),
-            AnyBatchValue("comps.RigidTransformation.rotation", self.rotation.as_euler("xyz")),
+            AnyBatchValue("comps.RigidTransformation.translation", rr.components.Vector3D(self.translation)),
+            AnyBatchValue("comps.RigidTransformation.rotation", rr.components.Vector3D(self.rotation.as_euler("xyz"))),
         ]
     
     

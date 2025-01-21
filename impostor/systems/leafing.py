@@ -26,6 +26,8 @@ class StartLeafSystem:
             if length < self.at_stem_length.sample():
                 continue
 
+            self.at_stem_length.mean += 0.17
+
             curve = Curve(
                 [(0, 0), (0.14, 0.6), (0.7, 0.7), (0.86, 0.4), (0.98, 0.1), (1, 0.0)]
             )

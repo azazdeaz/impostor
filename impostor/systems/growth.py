@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import numpy as np
+import rerun as rr
 from scipy.spatial.transform._rotation import Rotation
 
 import impostor.components as comp
@@ -20,7 +21,7 @@ def start_root(plant: Plant):
             comp.Root(),
             comp.Vascular(
                 rotation=Rotation.from_euler("xyz", [0, 3, 0], degrees=True),
-                radius=0.01
+                radius=0.01,
             ),
         )
         meristem = plant.create_entity(comp.GrowthTip(), comp.AxePrev(root))
@@ -107,10 +108,27 @@ class RelaxSpringSystem:
 
         relaxeds = set()
 
+        lines = []
+
+        sideways = comp.AttachmentOrientation(inclination=np.pi / 2).as_rotation()
+        sideways = RigidTransformation.from_rotation(sideways)
+
+
         def relax_all_from(spring_entity: Entity):
             relaxeds.add(spring_entity)
             spring = plant.get_components(spring_entity).get_by_type(comp.Spring)
             self.relax_spring(plant, spring_entity)
+
+            ta = plant.get_components(spring.entity_a).get_by_type(RigidTransformation)
+            tb = plant.get_components(spring.entity_b).get_by_type(RigidTransformation)
+            lines.append(
+                [
+                    ta.combine(sideways).transform_point(np.array([0.01, 0.01, 0])),
+                    ta.translation,
+                    tb.translation,
+                    tb.combine(sideways).transform_point(np.array([0.01, 0.01, 0])),
+                ]
+            )
 
             for spring_entity in (
                 connection_map[spring.entity_a] | connection_map[spring.entity_b]
@@ -128,6 +146,14 @@ class RelaxSpringSystem:
                 raise ValueError(
                     f"Only {len(relaxeds)} of {len(spring_entities)} springs relaxed. Graph is not connected."
                 )
+
+        rr.log(
+            "springs",
+            rr.LineStrips3D(
+                lines,
+                radii=0.0003,
+            ),
+        )
 
     def update_spring_targets(self, plant: Plant):
         spring_entities = plant.query().with_component(comp.Spring)._entities
@@ -168,6 +194,7 @@ class RelaxSpringSystem:
 
         transform_a = comps_a.get_by_type(RigidTransformation)
 
+        # Apply gravity
         if spring.length > 0 and comp.MassAbove in comps_a:
             # Get the direction where this node is pointing
             pointing = (transform_a.rotation * spring.angle_rest).apply([0, 0, 1])
