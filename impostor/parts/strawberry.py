@@ -32,8 +32,6 @@ class StrawberryStem(rr.AsComponents, BasePart):
         for i in range(self.petiole_entity_count - 1):
             self._petiole_entities.append(plant.create_entity())
         
-
-            
         for i, petiole in enumerate(self._petiole_entities):
             length = self.petiole_length / self.petiole_entity_count
             radius = 0.005 + 0.005 * i / self.petiole_entity_count
@@ -53,6 +51,15 @@ class StrawberryStem(rr.AsComponents, BasePart):
             if i > 0:
                 prev_petiole = self._petiole_entities[i - 1]
                 plant.add_components(petiole, comp.AxePrev(prev_petiole))
+
+        # Add leaf
+        curve = Curve(
+            [(0, 0), (0.14, 0.6), (0.7, 0.7), (0.86, 0.4), (0.98, 0.1), (1, 0.0)]
+        )
+        plant.create_entity(parts.Leaf(
+            attachment_parent_entity=self._petiole_entities[-1],
+            vein_length_multiplier=curve,
+        ))
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [

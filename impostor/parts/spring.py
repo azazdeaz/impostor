@@ -71,7 +71,7 @@ class Spring(rr.AsComponents, BasePart):
     
 @dataclass
 class SpringGraphSolver(BasePart):
-    max_iterations: int = 10
+    max_iterations: int = 1
     max_distance_step: float = 10.1
     distance_relaxed_treshold: float = 0.0001
 
@@ -114,10 +114,10 @@ class SpringGraphSolver(BasePart):
             tb = plant.get_components(spring.entity_b).get_by_type(RigidTransformation)
             lines.append(
                 [
-                    ta.combine(sideways).transform_point(np.array([0.01, 0.01, 0])),
+                    ta.combine(sideways).transform_point(np.array([-0.01, 0, 0])),
                     ta.translation,
                     tb.translation,
-                    tb.combine(sideways).transform_point(np.array([0.01, 0.01, 0])),
+                    tb.combine(sideways).transform_point(np.array([-0.01, 0, 0])),
                 ]
             )
 

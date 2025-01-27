@@ -25,7 +25,7 @@ def test_grow(iterations=120):
     for i in range(iterations):
         print(f"Frame {i}")
         parts.step_parts(plant)
-        # rr.set_time_sequence("frame_idx", i)
+        rr.set_time_sequence("frame_idx", i)
         # syst.grow_system(plant)
         # secondary_growth_system.execute(plant)
         # start_leaf_system.execute(plant)

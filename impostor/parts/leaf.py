@@ -36,11 +36,13 @@ class Leaf(BasePart):
 
     def step(self, plant: Plant, entity: Entity):
         if self.base_entity is None:
-            self.initialize(plant, entity)
+            self.base_entity = entity
+            self.initialize(plant)
 
-    def initialize(self, plant: Plant, entity: Entity):
+    def initialize(self, plant: Plant):
         # Create the attachment point for the leaf
-        self.base_entity = plant.create_entity(
+        plant.add_components(
+            self.base_entity,
             comp.LeafAttachment(),
             parts.Vascular(radius=0.005, type=parts.VascularType.MIDRIB),
             self.attacment_orientation,
@@ -71,10 +73,10 @@ class Leaf(BasePart):
                     radius=0.005,
                     type=parts.VascularType.MIDRIB,
                 ),
-                comp.GrowthPlan(
+                parts.GrowthPlan(
                     length_end=self.midrib_length / self.midrib_entitiy_count,
                     rotation_start=Rotation.from_euler("xyz", [12, 0, 0], degrees=True),
-                    rotation_end=Rotation.from_euler("xyz", [1, 4, 0], degrees=True),
+                    rotation_end=Rotation.from_euler("xyz", [1, 0, 0], degrees=True),
                 ),
                 comp.AxePrev(prev_entity),
             )
@@ -111,7 +113,7 @@ class Leaf(BasePart):
                         type=parts.VascularType.VEIN,
                     ),
                     comp.AttachmentOrientation(inclination=-np.pi / 4, azimuth=azimuth),
-                    comp.GrowthPlan(
+                    parts.GrowthPlan(
                         length_end=entity_length,
                     ),
                     comp.VeinAttachment(),
