@@ -45,6 +45,7 @@ class Leaf(BasePart):
             self.base_entity,
             comp.LeafAttachment(),
             parts.Vascular(radius=0.005, type=parts.VascularType.MIDRIB),
+            parts.Mass(),
             self.attacment_orientation,
         )
         print(f"Creating Leaf {self.base_entity}, {self.attacment_orientation}")
@@ -73,6 +74,7 @@ class Leaf(BasePart):
                     radius=0.005,
                     type=parts.VascularType.MIDRIB,
                 ),
+                parts.Mass(),
                 parts.GrowthPlan(
                     length_end=self.midrib_length / self.midrib_entitiy_count,
                     rotation_start=Rotation.from_euler("xyz", [12, 0, 0], degrees=True),
@@ -112,6 +114,7 @@ class Leaf(BasePart):
                         radius=0.005,
                         type=parts.VascularType.VEIN,
                     ),
+                    parts.Mass(),
                     comp.AttachmentOrientation(inclination=-np.pi / 4, azimuth=azimuth),
                     parts.GrowthPlan(
                         length_end=entity_length,
