@@ -2,30 +2,12 @@ from dataclasses import dataclass, field
 from typing import Iterable
 from scipy.spatial.transform._rotation import Rotation
 from impostor.plant import Entity
-import enum
 import rerun as rr
 from rerun.any_value import AnyBatchValue
 
 class MarkerComponent(rr.AsComponents):
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [AnyBatchValue(f"cmp.{self.__class__.__name__}", "✓")]
-
-
-
-@dataclass
-class Mass(rr.AsComponents):
-    mass: float = 1.0
-
-    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
-        return [AnyBatchValue("comps.Mass.mass", self.mass)]
-
-
-@dataclass
-class MassAbove(rr.AsComponents):
-    mass: float = 0.0
-
-    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
-        return [AnyBatchValue("comps.MassAbove.mass", self.mass)]
 
 
 @dataclass

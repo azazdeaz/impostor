@@ -32,11 +32,12 @@ def test_grow(iterations=120):
         # grow_leaf_system.execute(plant)
         # update_mass_above_system.execute(plant)
         # relax_spring_system.execute(plant)
-        syst.rr_log_components(plant)
-        # # syst.rr_log_graph(plant)
-        syst.rr_log_transforms_system(plant)
-        # mesh = syst.create_plant_mesh(plant)
-        # mesh.rr_log()
+        if i % 6 == 0:
+            syst.rr_log_components(plant)
+            # # syst.rr_log_graph(plant)
+            syst.rr_log_transforms_system(plant)
+            # mesh = syst.create_plant_mesh(plant)
+            # mesh.rr_log()
 
 
 if __name__ == "__main__":

@@ -33,7 +33,10 @@ def rr_log_components(plant: Plant):
         comps = plant.get_components(entity)
         for component in comps:
             values = {}
-            items = asdict(component).items()
+            try:
+                items = asdict(component).items()
+            except Exception as _:
+                raise ValueError(f"Failed to log component {component}")
             if hasattr(component, "as_component_batches"):
                 rr.log(f"nodes/{entity}", component)
                 continue

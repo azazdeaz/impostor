@@ -50,8 +50,8 @@ class Spring(rr.AsComponents, BasePart):
             self.angle = self.angle_rest
 
         # If the angle stiffness is not fixed, compute it from the mass
-        if not self.fixed_angle_stiffness and comp.Mass in comps_a:
-            mass_a = comps_a.get_by_type(comp.Mass)
+        if not self.fixed_angle_stiffness and parts.Mass in comps_a:
+            mass_a = comps_a.get_by_type(parts.Mass)
             # For now, the mass determines how bendable the spring is
             self.angle_stiffness = (mass_a.mass / 1.1) ** 2
             
@@ -61,12 +61,13 @@ class Spring(rr.AsComponents, BasePart):
     
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [
-            AnyBatchValue("comps.Spring.entity_a", self.entity_a),
-            AnyBatchValue("comps.Spring.entity_b", self.entity_b),
-            AnyBatchValue("comps.Spring.length", self.length),
-            AnyBatchValue("comps.Spring.angle", rr.components.Vector3D(self.angle.as_euler("xyz"))),
-            AnyBatchValue("comps.Spring.angle_rest", rr.components.Vector3D(self.angle_rest.as_euler("xyz"))),
-            AnyBatchValue("comps.Spring.angle_stiffness", self.angle_stiffness),
+            AnyBatchValue("Spring.entity_a", self.entity_a),
+            AnyBatchValue("Spring.entity_b", self.entity_b),
+            AnyBatchValue("Spring.length", self.length),
+            AnyBatchValue("Spring.angle", rr.components.Vector3D(self.angle.as_euler("xyz"))),
+            AnyBatchValue("Spring.angle_rest", rr.components.Vector3D(self.angle_rest.as_euler("xyz"))),
+            AnyBatchValue("Spring.angle_stiffness", self.angle_stiffness),
+            AnyBatchValue("Spring.fixed_angle_stiffness", self.fixed_angle_stiffness),
         ]
     
 @dataclass
@@ -154,7 +155,7 @@ class SpringGraphSolver(BasePart):
         transform_a = comps_a.get_by_type(RigidTransformation)
 
         # Apply gravity
-        if spring.length > 0 and comp.MassAbove in comps_a:
+        if spring.length > 0 and parts.MassAbove in comps_a:
             # Get the direction where this node is pointing
             pointing = (transform_a.rotation * spring.angle_rest).apply([0, 0, 1])
             # Make it flat on the horizontal plane
@@ -164,10 +165,11 @@ class SpringGraphSolver(BasePart):
             if magnitude != 0 and spring.angle_stiffness > 0:
                 pointing = pointing / magnitude
                 # The rotation axis is perpendicular to the pointing direction on the horizontal plane
-                rotation_axis = np.array([-pointing[1], pointing[0], 0])
+                # rotation_axis = np.array([-pointing[1], pointing[0], 0])
+                rotation_axis = np.array([1, 0, 0])
                 bend = 5.0 * (1 - np.clip(spring.angle_stiffness, 0.0, 1))
                 rotation = Rotation.from_rotvec(rotation_axis * np.deg2rad(bend))
-                spring.angle = rotation * spring.angle_rest
+                spring.angle = spring.angle_rest * rotation
 
         transform_a_b = RigidTransformation.from_rotation(spring.angle).combine(
             RigidTransformation.from_z_translation(spring.length)

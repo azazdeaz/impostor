@@ -39,13 +39,14 @@ class StrawberryStem(rr.AsComponents, BasePart):
                 petiole,
                 parts.GrowthPlan(length_end=length, radius_end=radius),
                 parts.Vascular(length=0.001, radius=0.001),
+                parts.Mass(),
             )
 
             if i < self.petiole_entity_count - 1:
                 next_petiole = self._petiole_entities[i + 1]
                 plant.add_components(petiole, comp.AxeNext(next_petiole))
                 plant.create_entity(
-                    parts.Spring(petiole, next_petiole, fixed_angle_stiffness=True)
+                    parts.Spring(petiole, next_petiole)
                 )
             
             if i > 0:
