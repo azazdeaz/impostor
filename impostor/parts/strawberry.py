@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Iterable
 
+import numpy as np
 import rerun as rr
 from rerun.any_value import AnyBatchValue
 from scipy.spatial.transform import Rotation, Slerp
@@ -59,6 +60,18 @@ class StrawberryStem(rr.AsComponents, BasePart):
         )
         plant.create_entity(parts.Leaf(
             attachment_parent_entity=self._petiole_entities[-1],
+
+            # attacment_orientation=comp.AttachmentOrientation(inclination=np.deg2rad(-30), azimuth=np.deg2rad(90)),
+            vein_length_multiplier=curve,
+        ))
+        plant.create_entity(parts.Leaf(
+            attachment_parent_entity=self._petiole_entities[-1],
+            attacment_orientation=comp.AttachmentOrientation(inclination=np.deg2rad(-90), azimuth=np.deg2rad(0)),
+            vein_length_multiplier=curve,
+        ))
+        plant.create_entity(parts.Leaf(
+            attachment_parent_entity=self._petiole_entities[-1],
+            attacment_orientation=comp.AttachmentOrientation(inclination=np.deg2rad(90), azimuth=np.deg2rad(0)),
             vein_length_multiplier=curve,
         ))
 
