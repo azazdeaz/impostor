@@ -121,33 +121,33 @@ def rr_log_transforms_system(plant: Plant):
         if parts.Vascular in comps:
             vascular = comps.get_by_type(parts.Vascular)
             r = vascular.radius
-            if comps.get_by_type(parts.Vascular).type == parts.VascularType.STEM:
-                rr.log(
-                    log_path(entity),
-                    rr.LineStrips3D(
+            # if comps.get_by_type(parts.Vascular).type == parts.VascularType.STEM:
+            rr.log(
+                log_path(entity),
+                rr.LineStrips3D(
+                    [
                         [
-                            [
-                                transform.transform_point(
-                                    np.array([np.cos(theta) * r, np.sin(theta) * r, 0])
-                                )
-                                for theta in np.linspace(0, 2 * np.pi, 10)
-                            ],
-                            [
-                                transform.translation,
-                                transform.combine(
-                                    comp.RigidTransformation.from_z_translation(r)
-                                ).translation,
-                            ],
-                            [
-                                transform.translation,
-                                transform.combine(
-                                    comp.RigidTransformation.from_x_translation(r*3)
-                                ).translation,
-                            ],
+                            transform.transform_point(
+                                np.array([np.cos(theta) * r, np.sin(theta) * r, 0])
+                            )
+                            for theta in np.linspace(0, 2 * np.pi, 10)
                         ],
-                        colors=Palette.Green,
-                    ),
-                )
+                        [
+                            transform.translation,
+                            transform.combine(
+                                comp.RigidTransformation.from_z_translation(r)
+                            ).translation,
+                        ],
+                        [
+                            transform.translation,
+                            transform.combine(
+                                comp.RigidTransformation.from_x_translation(r*3)
+                            ).translation,
+                        ],
+                    ],
+                    colors=Palette.Green,
+                ),
+            )
         else:
             rr.log(
                 log_path(entity),

@@ -33,7 +33,7 @@ class AttachmentOrientation:
     inclination: float = 0.0
 
     def as_rotation(self):
-        return Rotation.from_euler("xyz", [self.inclination, 0, self.azimuth])
+        return Rotation.from_euler("yxz", [self.inclination, 0, self.azimuth])
 
 
 @dataclass

@@ -61,8 +61,8 @@ class Leaf(BasePart):
             comp.Spring(
                 self.attachment_parent_entity,
                 self.base_entity,
-                fixed_angle_stiffness=True,
-                angle_stiffness=1.0,
+                # fixed_angle_stiffness=True,
+                # angle_stiffness=1.0,
             )
         )
 
@@ -79,6 +79,7 @@ class Leaf(BasePart):
                     length_end=self.midrib_length / self.midrib_entitiy_count,
                     rotation_start=Rotation.from_euler("xyz", [12, 0, 0], degrees=True),
                     rotation_end=Rotation.from_euler("xyz", [1, 0, 0], degrees=True),
+                    radius_end=0.005,
                 ),
                 comp.AxePrev(prev_entity),
             )
@@ -108,16 +109,19 @@ class Leaf(BasePart):
             )
 
             for is_left in [True, False]:
-                azimuth = -np.pi * 0.4 if is_left else np.pi * 0.4
+                inclanation = np.deg2rad(60 - 25 * pos_on_midrib)
+                if is_left:
+                    inclanation = -inclanation
                 base_entity = plant.create_entity(
-                    parts.Vascular(
+                    parts.Vascular(     
                         radius=0.005,
                         type=parts.VascularType.VEIN,
                     ),
                     parts.Mass(),
-                    comp.AttachmentOrientation(inclination=-np.pi / 4, azimuth=azimuth),
+                    comp.AttachmentOrientation(inclination=inclanation, azimuth=np.deg2rad(0)),
                     parts.GrowthPlan(
                         length_end=entity_length,
+                        radius_end=0.004,
                     ),
                     comp.VeinAttachment(),
                 )
@@ -154,6 +158,7 @@ class Leaf(BasePart):
                             rotation_end=Rotation.from_euler(
                                 "xyz", [1, 0, 0], degrees=True
                             ),
+                            radius_end=0.003,
                         ),
                         comp.AxePrev(prev_entity),
                     )
@@ -162,8 +167,8 @@ class Leaf(BasePart):
                         comp.Spring(
                             prev_entity,
                             new_entity,
-                            fixed_angle_stiffness=True,
-                            angle_stiffness=1.0,
+                            # fixed_angle_stiffness=True,
+                            # angle_stiffness=1.0,
                         )
                     )
                     self.lateral_vein_entities.append(new_entity)
