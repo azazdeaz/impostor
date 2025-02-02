@@ -11,6 +11,8 @@ class Crown(BasePart):
     age = 0
     current_angle = 0
     current_inclanation = np.deg2rad(35)
+    current_petiole_length = 0.4
+    current_leaf_size = 0.8
     angle_step = np.deg2rad(75)
     step_per_sprout = 12
     stop_sprouting = 60
@@ -41,7 +43,9 @@ class Crown(BasePart):
         print(f"Start petiole in {rotation.as_euler('xyz')}")
 
         self.current_angle += self.angle_step
-        self.current_inclanation *= 0.7
+        self.current_inclanation *= 0.5
+        self.current_petiole_length += 0.06
+        self.current_leaf_size *= 0.9
 
         first_entity = plant.create_entity(
             parts.Vascular(rotation=rotation),
@@ -51,7 +55,11 @@ class Crown(BasePart):
             comp.Attachments
         ).attachments.append(first_entity)
         strawberry_stem = plant.create_entity(
-            parts.StrawberryStem(), comp.AxePrev(first_entity)
+            parts.StrawberryStem(
+                petiole_length=self.current_petiole_length,
+                leaf_size=self.current_leaf_size,
+            ),
+            comp.AxePrev(first_entity),
         )
         plant.add_components(
             first_entity,

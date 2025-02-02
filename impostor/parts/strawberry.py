@@ -19,6 +19,7 @@ class StrawberryStem(rr.AsComponents, BasePart):
     _initialized: bool = False
     petiole_length: float = 1.15
     petiole_entity_count: int = 9
+    leaf_size: float = 1.0
 
     _petiole_entities: list[Entity] = field(default_factory=list)
 
@@ -35,7 +36,7 @@ class StrawberryStem(rr.AsComponents, BasePart):
         
         for i, petiole in enumerate(self._petiole_entities):
             length = self.petiole_length / self.petiole_entity_count
-            radius = 0.005 + 0.005 * i / self.petiole_entity_count
+            radius = 0.008 - 0.006 * i / self.petiole_entity_count
             plant.add_components(
                 petiole,
                 parts.GrowthPlan(length_end=length, radius_end=radius),
@@ -56,23 +57,29 @@ class StrawberryStem(rr.AsComponents, BasePart):
 
         # Add leaf
         curve = Curve(
-            [(0, 0), (0.14, 0.6), (0.7, 0.7), (0.86, 0.4), (0.98, 0.1), (1, 0.0)]
+            [(0, 0), (0.14, 0.6), (0.5, 0.7), (0.72, 0.4), (0.92, 0.12), (1, 0.0)]
         )
         plant.create_entity(parts.Leaf(
             attachment_parent_entity=self._petiole_entities[-1],
 
             # attacment_orientation=comp.AttachmentOrientation(inclination=np.deg2rad(-30), azimuth=np.deg2rad(90)),
             vein_length_multiplier=curve,
+            midrib_length=0.6 * self.leaf_size,
+            lateral_vein_length=0.32 * self.leaf_size,
         ))
         plant.create_entity(parts.Leaf(
             attachment_parent_entity=self._petiole_entities[-1],
             attacment_orientation=comp.AttachmentOrientation(inclination=np.deg2rad(-90), azimuth=np.deg2rad(0)),
             vein_length_multiplier=curve,
+            midrib_length=0.6 * self.leaf_size * 0.9,
+            lateral_vein_length=0.32 * self.leaf_size * 0.9,
         ))
         plant.create_entity(parts.Leaf(
             attachment_parent_entity=self._petiole_entities[-1],
             attacment_orientation=comp.AttachmentOrientation(inclination=np.deg2rad(90), azimuth=np.deg2rad(0)),
             vein_length_multiplier=curve,
+            midrib_length=0.6 * self.leaf_size * 0.9,
+            lateral_vein_length=0.32 * self.leaf_size * 0.9,
         ))
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
