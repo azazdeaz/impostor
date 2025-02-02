@@ -6,7 +6,6 @@ import rerun as rr
 
 import impostor.components as comp
 import impostor.parts as parts
-from impostor.components.core import AxeNext, Vascular
 from impostor.components.rigid_transformation import (
     RigidTransformation,
 )
@@ -188,7 +187,7 @@ class PlantMesh:
         rr.log(
             "normals",
             rr.LineStrips3D(
-                np.stack((self.vertices, self.vertices + self.normals * 0.05), axis=1),
+                np.stack((self.vertices, self.vertices + self.normals * 0.03), axis=1),
                 radii=0.0005,
                 colors=[255, 255, 0],
             ),
@@ -207,14 +206,14 @@ def create_stem_vertex_layers(
 
     if RigidTransformation in comps:
         radius = 0.01
-        if Vascular in comps:
-            radius = comps.get_by_type(Vascular).radius
+        if parts.Vascular in comps:
+            radius = comps.get_by_type(parts.Vascular).radius
         transform = comps.get_by_type(RigidTransformation)
         ring = VertexLayer.create_ring(transform, radius, resolution)
         rings.append(ring)
-        if AxeNext in comps:
+        if comp.AxeNext in comps:
             return create_stem_vertex_layers(
-                plant, comps.get_by_type(AxeNext).next, rings
+                plant, comps.get_by_type(comp.AxeNext).next, rings
             )
 
     return rings
@@ -259,11 +258,11 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
 
     roots = (
         plant.query()
-        .with_component(comp.Vascular)
+        .with_component(parts.Vascular)
         .without_component(comp.AxePrev)
         .filter(
-            lambda comps: comps.get_by_type(comp.Vascular).type
-            == comp.VascularType.STEM
+            lambda comps: comps.get_by_type(parts.Vascular).type
+            == parts.VascularType.STEM
         )
         .entities()
     )
@@ -274,7 +273,11 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
 
     for leaf in plant.query().with_component(parts.Leaf).entities():
         leaf_meta = plant.get_components(leaf).get_by_type(parts.Leaf)
-        leaf_mesh = create_blade_mesh(plant, leaf_meta)
-        mesh.merge(leaf_mesh)
+        if leaf_meta.is_initialized():
+            try:
+                leaf_mesh = create_blade_mesh(plant, leaf_meta)
+                mesh.merge(leaf_mesh)
+            except Exception as e:
+                print(e)
 
     return mesh

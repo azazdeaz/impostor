@@ -17,7 +17,7 @@ from impostor.utils import Curve
 
     
 @dataclass
-class Leaf(BasePart):
+class Leaf(BasePart, rr.AsComponents):
     attachment_parent_entity: Entity
 
     midrib_entitiy_count: int = 12
@@ -38,6 +38,9 @@ class Leaf(BasePart):
         if self.base_entity is None:
             self.base_entity = entity
             self.initialize(plant)
+
+    def is_initialized(self):
+        return self.base_entity is not None
 
     def initialize(self, plant: Plant):
         # Create the attachment point for the leaf
@@ -67,6 +70,7 @@ class Leaf(BasePart):
         )
 
         # Initialize the midrib
+        curve = np.random.normal(1, 3.1) 
         for i in range(self.midrib_entitiy_count):
             prev_entity = self.base_entity if i == 0 else self.midrib_entities[i - 1]
             new_entity = plant.create_entity(
@@ -78,7 +82,7 @@ class Leaf(BasePart):
                 parts.GrowthPlan(
                     length_end=self.midrib_length / self.midrib_entitiy_count,
                     rotation_start=Rotation.from_euler("xyz", [12, 0, 0], degrees=True),
-                    rotation_end=Rotation.from_euler("xyz", [1, 0, 0], degrees=True),
+                    rotation_end=Rotation.from_euler("xyz", [curve, 0, 0], degrees=True),
                     radius_end=0.005,
                 ),
                 comp.AxePrev(prev_entity),
@@ -90,6 +94,8 @@ class Leaf(BasePart):
             )
 
         # Initialize the lateral veins
+
+        lateral_curve = np.random.normal(1, 3.1) 
         for i in range(self.lateral_vein_count):
             entity_length = self.lateral_vein_length / self.lateral_vein_entitiy_count
 
@@ -122,6 +128,12 @@ class Leaf(BasePart):
                     parts.GrowthPlan(
                         length_end=entity_length,
                         radius_end=0.004,
+                        rotation_start=Rotation.from_euler(
+                            "xyz", [12, 0, 0], degrees=True
+                        ),
+                        rotation_end=Rotation.from_euler(
+                            "xyz", [lateral_curve, 0, 0], degrees=True
+                        ),
                     ),
                     comp.VeinAttachment(),
                 )
@@ -156,7 +168,7 @@ class Leaf(BasePart):
                                 "xyz", [12, 0, 0], degrees=True
                             ),
                             rotation_end=Rotation.from_euler(
-                                "xyz", [1, 0, 0], degrees=True
+                                "xyz", [lateral_curve, 0, 0], degrees=True
                             ),
                             radius_end=0.003,
                         ),
@@ -173,3 +185,20 @@ class Leaf(BasePart):
                     )
                     self.lateral_vein_entities.append(new_entity)
                     prev_entity = new_entity
+    
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [
+            AnyBatchValue("Leaf.attachment_parent_entity", self.attachment_parent_entity),
+            AnyBatchValue("Leaf.midrib_entitiy_count", self.midrib_entitiy_count),
+            AnyBatchValue("Leaf.midrib_length", self.midrib_length),
+            AnyBatchValue("Leaf.lateral_vein_count", self.lateral_vein_count),
+            AnyBatchValue("Leaf.lateral_vein_length", self.lateral_vein_length),
+            AnyBatchValue("Leaf.lateral_vein_entitiy_count", self.lateral_vein_entitiy_count),
+            # AnyBatchValue("Leaf.vein_length_multiplier", self.vein_length_multiplier._control_points),
+            # AnyBatchValue("Leaf.attacment_orientation", self.attacment_orientation),
+            # AnyBatchValue("Leaf.base_entity", self.base_entity),
+            # AnyBatchValue("Leaf.midrib_entities", self.midrib_entities),
+            # AnyBatchValue("Leaf.lateral_vein_entities", self.lateral_vein_entities),
+            # AnyBatchValue("Leaf.lateral_vein_bases_left", self.lateral_vein_bases_left),
+            # AnyBatchValue("Leaf.lateral_vein_bases_right", self.lateral_vein_bases_right),
+        ]

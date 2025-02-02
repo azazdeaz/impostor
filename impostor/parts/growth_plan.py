@@ -11,7 +11,7 @@ from impostor.parts.core import BasePart
 @dataclass
 class GrowthPlan(rr.AsComponents, BasePart):
     state: float = 0.0
-    growth_speed: float = 0.08
+    growth_speed: float = 0.04
     length_start: float = 0.0
     length_end: float = 0.0
     radius_start: float = 0.0
@@ -40,7 +40,8 @@ class GrowthPlan(rr.AsComponents, BasePart):
         return self.get_rotation_at(self.state)
     
     def step(self, plant, entity):
-        self.state = np.minimum(1.0, self.state + self.growth_speed)
+        step = np.minimum(self.growth_speed, (1.0 - self.state) / 6) # NOTE: Hacky way to keep all the parts of the plant moving a bit
+        self.state = np.minimum(1.0, self.state + step)
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [
