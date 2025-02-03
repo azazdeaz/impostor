@@ -8,3 +8,7 @@
 
 🚧 Heavily work in progress, but `pixi run start` should always demo something 🤞
 
+
+
+https://github.com/user-attachments/assets/e50ebc65-a6dc-4384-bd2b-015be679feba
+
