@@ -9,8 +9,17 @@ import time
 
 def test_grow(iterations=120):
     plant = Plant()
+    stepper = parts.PartStepperSystem(
+        exec_order=[
+            parts.Collider,
+            parts.SpringGraphSolver,
+            parts.CollisionSolver,
+            parts.Leaf,
+        ]
+    )
     plant.create_entity(parts.Crown())
-    plant.create_entity(parts.SpringGraphSolver())
+    plant.create_entity(parts.SpringGraphSolver(), parts.CollisionSolver())
+    plant.create_entity(parts.Collider(radius=0.1, compute_from_vascular=False), parts.RigidTransformation.from_z_translation(0.12))
 
     # relax_spring_system = syst.RelaxSpringSystem()
     # secondary_growth_system = syst.SecondaryGrowthSystem(
@@ -24,7 +33,7 @@ def test_grow(iterations=120):
 
     for i in range(iterations):
         print(f"Frame {i}")
-        parts.step_parts(plant)
+        stepper.step_parts(plant)
         rr.set_time_sequence("frame_idx", i)
         # syst.grow_system(plant)
         # secondary_growth_system.execute(plant)
@@ -35,7 +44,8 @@ def test_grow(iterations=120):
         # if i % 16 == 0 or i == iterations - 1:
         syst.rr_log_components(plant)
         # syst.rr_log_graph(plant)
-        syst.rr_log_transforms_system(plant)
+        # syst.rr_log_transforms_system(plant)
+        syst.rr_log_collideres(plant)
 
         mesh = syst.create_plant_mesh(plant)
         mesh.rr_log()

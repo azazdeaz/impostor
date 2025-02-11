@@ -6,7 +6,7 @@ import rerun as rr
 from rerun.any_value import AnyBatchValue
 from scipy.spatial.transform._rotation import Rotation
 
-from impostor.components import Entity, RigidTransformation
+from impostor.components import Entity
 from impostor.parts.core import BasePart
 from impostor.plant import Plant
 import impostor.components as comp
@@ -22,8 +22,16 @@ class Spring(rr.AsComponents, BasePart):
     length: float = 0.0
     angle: Rotation = field(default_factory=Rotation.identity)
     angle_rest: Rotation = field(default_factory=Rotation.identity)
-    angle_stiffness: float = 0.0 # 0.0 is no stiffness, 1.0 is full stiffness
-    fixed_angle_stiffness: bool = False # If false, angle_stiffness is computed from mass and radius
+    angle_stiffness: float = 0.0  # 0.0 is no stiffness, 1.0 is full stiffness
+    fixed_angle_stiffness: bool = (
+        False  # If false, angle_stiffness is computed from mass and radius
+    )
+
+    def _angle_between_transforms(
+        self, a: parts.RigidTransformation, b: parts.RigidTransformation
+    ) -> Rotation:
+        # pos_a_to_b = b.translation - a.translation
+        b_local = a.inverse().combine(b).rotation
 
     def step(self, plant: Plant, entity: Entity):
         comps_a = plant.get_components(self.entity_a)
@@ -38,9 +46,16 @@ class Spring(rr.AsComponents, BasePart):
             stem_a = comps_a.get_by_type(parts.Vascular)
             self.length = stem_a.length
             self.angle_rest = stem_a.rotation
-            self.angle = self.angle_rest
+            a = comps_a.get_by_type(parts.RigidTransformation)
+            b = comps_b.get_by_type(parts.RigidTransformation)
+            if a is not None and b is not None:
+                self.angle = a.inverse().combine(b).rotation
+            else:
+                self.angle = self.angle_rest
         else:
-            print(f"Spring {entity} {self.entity_a} -> {self.entity_b} is not connecting consecutive parts of a stem")
+            print(
+                f"Spring {entity} {self.entity_a} -> {self.entity_b} is not connecting consecutive parts of a stem"
+            )
 
         # If it's connecting a branch to a stem
         if comp.AttachmentOrientation in comps_b:
@@ -54,27 +69,46 @@ class Spring(rr.AsComponents, BasePart):
             mass_a = comps_a.get_by_type(parts.Mass)
             # For now, the mass determines how bendable the spring is
             self.angle_stiffness = (mass_a.mass / 1.1) ** 2
-            
 
-    def to_transform(self) -> RigidTransformation:
-        return RigidTransformation.from_rotation(self.angle).combine(RigidTransformation.from_z_translation(self.length))
-    
+    def to_transform(self) -> parts.RigidTransformation:
+        return parts.RigidTransformation.from_rotation(self.angle).combine(
+            parts.RigidTransformation.from_z_translation(self.length)
+        )
+
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [
             AnyBatchValue("Spring.entity_a", self.entity_a),
             AnyBatchValue("Spring.entity_b", self.entity_b),
             AnyBatchValue("Spring.length", self.length),
-            AnyBatchValue("Spring.angle", rr.components.Vector3D(self.angle.as_euler("xyz"))),
-            AnyBatchValue("Spring.angle_rest", rr.components.Vector3D(self.angle_rest.as_euler("xyz"))),
+            AnyBatchValue(
+                "Spring.angle", rr.components.Vector3D(self.angle.as_euler("xyz"))
+            ),
+            AnyBatchValue(
+                "Spring.angle_rest",
+                rr.components.Vector3D(self.angle_rest.as_euler("xyz")),
+            ),
             AnyBatchValue("Spring.angle_stiffness", self.angle_stiffness),
             AnyBatchValue("Spring.fixed_angle_stiffness", self.fixed_angle_stiffness),
         ]
-    
+
+
 @dataclass
-class SpringGraphSolver(BasePart):
+class SpringGraphSolver(BasePart, rr.AsComponents):
     max_iterations: int = 1
     max_distance_step: float = 10.1
     distance_relaxed_treshold: float = 0.0001
+
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [
+            AnyBatchValue("SpringGraphSolver.max_iterations", self.max_iterations),
+            AnyBatchValue(
+                "SpringGraphSolver.max_distance_step", self.max_distance_step
+            ),
+            AnyBatchValue(
+                "SpringGraphSolver.distance_relaxed_treshold",
+                self.distance_relaxed_treshold,
+            ),
+        ]
 
     def step(self, plant: Plant, entity: Entity):
         spring_entities = plant.query().with_component(Spring)._entities
@@ -104,15 +138,19 @@ class SpringGraphSolver(BasePart):
         lines = []
 
         sideways = comp.AttachmentOrientation(inclination=np.pi / 2).as_rotation()
-        sideways = RigidTransformation.from_rotation(sideways)
+        sideways = parts.RigidTransformation.from_rotation(sideways)
 
         def relax_all_from(spring_entity: Entity):
             relaxeds.add(spring_entity)
             spring = plant.get_components(spring_entity).get_by_type(Spring)
             self.relax_spring(plant, spring_entity)
 
-            ta = plant.get_components(spring.entity_a).get_by_type(RigidTransformation)
-            tb = plant.get_components(spring.entity_b).get_by_type(RigidTransformation)
+            ta = plant.get_components(spring.entity_a).get_by_type(
+                parts.RigidTransformation
+            )
+            tb = plant.get_components(spring.entity_b).get_by_type(
+                parts.RigidTransformation
+            )
             lines.append(
                 [
                     ta.combine(sideways).transform_point(np.array([-0.01, 0, 0])),
@@ -152,7 +190,7 @@ class SpringGraphSolver(BasePart):
         comps_a = plant.get_components(spring.entity_a)
         comps_b = plant.get_components(spring.entity_b)
 
-        transform_a = comps_a.get_by_type(RigidTransformation)
+        transform_a = comps_a.get_by_type(parts.RigidTransformation)
 
         # Apply gravity
         if spring.length > 0 and parts.MassAbove in comps_a:
@@ -171,9 +209,8 @@ class SpringGraphSolver(BasePart):
                 rotation = Rotation.from_rotvec(rotation_axis * np.deg2rad(bend))
                 spring.angle = spring.angle_rest * rotation
 
-        transform_a_b = RigidTransformation.from_rotation(spring.angle).combine(
-            RigidTransformation.from_z_translation(spring.length)
+        transform_a_b = parts.RigidTransformation.from_rotation(spring.angle).combine(
+            parts.RigidTransformation.from_z_translation(spring.length)
         )
 
         comps_b.add(transform_a.combine(transform_a_b))
-    

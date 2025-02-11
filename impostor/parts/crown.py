@@ -23,7 +23,7 @@ class Crown(BasePart):
         if self.base_entity is None:
             self.base_entity = plant.create_entity(
                 comp.Root(),
-                comp.RigidTransformation(),
+                parts.RigidTransformation(),
                 parts.MassAbove(),
                 comp.Attachments(),
             )
@@ -64,7 +64,7 @@ class Crown(BasePart):
         plant.add_components(
             first_entity,
             comp.AxeNext(strawberry_stem),
-            comp.RigidTransformation.from_rotation(
+            parts.RigidTransformation.from_rotation(
                 comp.Rotation.from_euler("xyz", [0, 0, 0], degrees=True)
             ),
         )

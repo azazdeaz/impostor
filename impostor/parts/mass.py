@@ -63,8 +63,6 @@ class MassAbove(rr.AsComponents, BasePart):
                 if dependency not in dependency_map:
                     queue.append(dependency)
 
-        print(f"dependency_map: {dependency_map}")
-
         # This shouldn't need to be higher than the max branch order
         recusion_limit = 100
 

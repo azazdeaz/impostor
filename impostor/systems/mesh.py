@@ -6,9 +6,6 @@ import rerun as rr
 
 import impostor.components as comp
 import impostor.parts as parts
-from impostor.components.rigid_transformation import (
-    RigidTransformation,
-)
 from impostor.plant import Entity, Plant
 
 
@@ -17,7 +14,7 @@ class VertexLayer:
     vertices: np.ndarray
 
     @staticmethod
-    def create_ring(transform: RigidTransformation, radius: float, segments: int):
+    def create_ring(transform: parts.RigidTransformation, radius: float, segments: int):
         angle = 2 * np.pi / segments
         vertices = []
         for i in range(segments):
@@ -45,7 +42,7 @@ def compute_face_normal(v1, v2, v3):
     normal = np.cross(edge1, edge2)
     magnitude = np.linalg.norm(normal)
     if magnitude < 1e-6:
-        pass # TODO
+        pass  # TODO
         # print("Warning: Face has a normal of length 0")
     else:
         normal = normal / np.linalg.norm(normal)  # Normalize the normal
@@ -65,7 +62,7 @@ class PlantMesh:
         self.layers.append(layer)
 
     def build_mesh(self, winding_clockwise: bool = True):
-        if len(self.layers) == 0:
+        if len(self.layers) < 2:
             return self
 
         self.vertices = np.concatenate([layer.vertices for layer in self.layers])
@@ -74,6 +71,7 @@ class PlantMesh:
 
         one_start = 0
         faces = []
+        # Save which faces are adjacent to each vertex (vertex_id -> [face_idx])
         adjacent_faces = {}
         face_normals = []
 
@@ -125,7 +123,6 @@ class PlantMesh:
             one_start = two_start
 
         self.faces = np.array(faces, dtype=int)
-
         # Compute the normal of a vertex given its adjacent faces
         for vertex_idx in range(len(self.vertices)):
             normals = []
@@ -136,7 +133,7 @@ class PlantMesh:
             vertex_normal = np.mean(normals, axis=0)
             # warn if the normal is zero
             if np.linalg.norm(vertex_normal) < 1e-6:
-                pass # TODO
+                pass  # TODO
                 # print(
                 #     f"Warning: Vertex {vertex_idx} has a normal of length {np.linalg.norm(vertex_normal)}"
                 # )
@@ -204,11 +201,11 @@ def create_stem_vertex_layers(
 
     resolution = 10
 
-    if RigidTransformation in comps:
+    if parts.RigidTransformation in comps:
         radius = 0.01
         if parts.Vascular in comps:
             radius = comps.get_by_type(parts.Vascular).radius
-        transform = comps.get_by_type(RigidTransformation)
+        transform = comps.get_by_type(parts.RigidTransformation)
         ring = VertexLayer.create_ring(transform, radius, resolution)
         rings.append(ring)
         if comp.AxeNext in comps:
@@ -220,8 +217,12 @@ def create_stem_vertex_layers(
 
 
 def create_blade_mesh(plant: Plant, leaf_meta: parts.Leaf) -> PlantMesh:
-    def create_half(is_left:bool):
-        bases = leaf_meta.lateral_vein_bases_left if is_left else leaf_meta.lateral_vein_bases_right
+    def create_half(is_left: bool):
+        bases = (
+            leaf_meta.lateral_vein_bases_left
+            if is_left
+            else leaf_meta.lateral_vein_bases_right
+        )
         layers: List[VertexLayer] = []
         for vein_base in bases:
             entities = [vein_base]
@@ -233,19 +234,23 @@ def create_blade_mesh(plant: Plant, leaf_meta: parts.Leaf) -> PlantMesh:
             for entity in entities:
                 poses.append(
                     plant.get_components(entity)
-                    .get_by_type(RigidTransformation)
+                    .get_by_type(parts.RigidTransformation)
                     .translation
                 )
             layers.append(VertexLayer.from_vertices(np.array(poses)))
         # Add one more layer to close the mesh at the tip of the leaf
         tip = leaf_meta.midrib_entities[-1]
-        tip_pos = plant.get_components(tip).get_by_type(RigidTransformation).translation
+        tip_pos = (
+            plant.get_components(tip).get_by_type(parts.RigidTransformation).translation
+        )
         layers.append(VertexLayer.from_vertices(np.array([tip_pos])))
 
         for layer in layers:
             layer.merge_close_vertices()
 
-        return PlantMesh(layers=layers, is_closed=False).build_mesh(winding_clockwise=is_left)
+        return PlantMesh(layers=layers, is_closed=False).build_mesh(
+            winding_clockwise=is_left
+        )
 
     blade = create_half(is_left=True)
     blade.merge(create_half(is_left=False))

@@ -41,6 +41,7 @@ class StrawberryStem(rr.AsComponents, BasePart):
                 petiole,
                 parts.GrowthPlan(length_end=length, radius_end=radius),
                 parts.Vascular(length=0.001, radius=0.001),
+                parts.Collider(),
                 parts.Mass(),
             )
 

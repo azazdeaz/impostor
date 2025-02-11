@@ -1036,7 +1036,7 @@ packages:
 - pypi: .
   name: impostor
   version: 0.1.0
-  sha256: 26a931df60e2e25e5112ffee6389789547e6353c7bc84ae688955ab15fb31446
+  sha256: 9f712373cc936ed01d497fa5605cb0a76c14f02087ebbbfa1b3aa3172290a71d
   requires_python: '>=3.10,<3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/noarch/ipykernel-6.29.5-pyh3099207_0.conda
@@ -2871,6 +2871,8 @@ packages:
   - typing_extensions >=4.5
   constrains:
   - __glibc >=2.17
+  arch: x86_64
+  platform: linux
   license: MIT OR Apache-2.0
   purls:
   - pkg:pypi/rerun-notebook?source=hash-mapping

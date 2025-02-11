@@ -1,5 +1,5 @@
 from copy import copy
-from typing import Callable, Dict, NewType
+from typing import Callable, Dict, Iterable, NewType, Tuple
 
 from impostor.type_set import TypeSet
 
@@ -34,7 +34,7 @@ class Query:
     def __init__(self, entities: Dict[Entity, TypeSet]):
         self._entities = entities
 
-    def with_component(self, component_cls):
+    def with_component(self, component_cls) -> "Query":
         remove = [
             entity
             for entity, components in self._entities.items()
@@ -43,8 +43,13 @@ class Query:
         for entity in remove:
             del self._entities[entity]
         return self
+    
+    def with_components(self, *component_clss) -> "Query":
+        for component_cls in component_clss:
+            self.with_component(component_cls)
+        return self
 
-    def without_component(self, component_cls):
+    def without_component(self, component_cls) -> "Query":
         remove = [
             entity
             for entity, components in self._entities.items()
@@ -54,7 +59,7 @@ class Query:
             del self._entities[entity]
         return self
 
-    def filter(self, func: Callable[[TypeSet], bool]):
+    def filter(self, func: Callable[[TypeSet], bool]) -> "Query":
         remove = [
             entity
             for entity, components in self._entities.items()
@@ -64,14 +69,17 @@ class Query:
             del self._entities[entity]
         return self
 
-    def single(self):
+    def single(self) -> Entity:
         try:
             return list(self._entities.keys())[0]
         except IndexError:
             None
     
-    def entities(self):
+    def entities(self) -> Iterable[Entity]:
         return self._entities.keys()
     
-    def items(self):
+    def values(self) -> Iterable[TypeSet]:
+        return self._entities.values()
+    
+    def items(self) -> Iterable[Tuple[Entity, TypeSet]]:
         return self._entities.items()

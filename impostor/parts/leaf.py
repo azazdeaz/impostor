@@ -78,6 +78,7 @@ class Leaf(BasePart, rr.AsComponents):
                     radius=0.005,
                     type=parts.VascularType.MIDRIB,
                 ),
+                parts.Collider(),
                 parts.Mass(),
                 parts.GrowthPlan(
                     length_end=self.midrib_length / self.midrib_entitiy_count,

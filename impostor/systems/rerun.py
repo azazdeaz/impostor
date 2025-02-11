@@ -20,6 +20,7 @@ class Palette:
     Brown = Color([166, 86, 40])
     Pink = Color([247, 129, 191])
     Gray = Color([153, 153, 153])
+    SkyBlue = Color([166, 206, 227])
 
 
 def log_path(entity: Entity):
@@ -35,8 +36,8 @@ def rr_log_components(plant: Plant):
             values = {}
             try:
                 items = asdict(component).items()
-            except Exception as _:
-                raise ValueError(f"Failed to log component {component}")
+            except Exception as e:
+                raise ValueError(f"Failed to log component {component}:\n{e}")
             if hasattr(component, "as_component_batches"):
                 rr.log(f"nodes/{entity}", component)
                 continue
@@ -110,12 +111,33 @@ def rr_log_graph(plant: Plant):
     )
 
 
+def rr_log_collideres(plant: Plant):
+    colliders = (
+        plant.query()
+        .with_components(parts.Collider, parts.RigidTransformation)
+        .values()
+    )
+    centers = [
+        comps.get_by_type(parts.RigidTransformation).translation for comps in colliders
+    ]
+    half_sizes = [[comps.get_by_type(parts.Collider).radius] * 3 for comps in colliders]
+
+    rr.log(
+        "colliders",
+        rr.Ellipsoids3D(
+            centers=centers,
+            half_sizes=half_sizes,
+            colors=[Palette.SkyBlue],
+        ),
+    )
+
+
 def rr_log_transforms_system(plant: Plant):
     # Log all entities with a RigidTransformation component
-    transforms = plant.query().with_component(comp.RigidTransformation).entities()
+    transforms = plant.query().with_component(parts.RigidTransformation).entities()
     for entity in transforms:
         comps = plant.get_components(entity)
-        transform = comps.get_by_type(comp.RigidTransformation)
+        transform = comps.get_by_type(parts.RigidTransformation)
 
         # Draw a circle around the stem
         if parts.Vascular in comps:
@@ -135,13 +157,13 @@ def rr_log_transforms_system(plant: Plant):
                         [
                             transform.translation,
                             transform.combine(
-                                comp.RigidTransformation.from_z_translation(r)
+                                parts.RigidTransformation.from_z_translation(r)
                             ).translation,
                         ],
                         [
                             transform.translation,
                             transform.combine(
-                                comp.RigidTransformation.from_x_translation(r*3)
+                                parts.RigidTransformation.from_x_translation(r * 3)
                             ).translation,
                         ],
                     ],
@@ -159,10 +181,10 @@ def rr_log_transforms_system(plant: Plant):
     for entity in springs:
         spring = plant.get_components(entity).get_by_type(parts.Spring)
         transform_a = plant.get_components(spring.entity_a).get_by_type(
-            comp.RigidTransformation
+            parts.RigidTransformation
         )
         transform_b = plant.get_components(spring.entity_b).get_by_type(
-            comp.RigidTransformation
+            parts.RigidTransformation
         )
 
         if transform_a is None or transform_b is None:
