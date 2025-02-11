@@ -1,5 +1,6 @@
 from impostor.plant import Plant
 import impostor.systems as syst
+
 # from impostor.utils import NormalDistribution
 from impostor import parts
 
@@ -19,7 +20,11 @@ def test_grow(iterations=120):
     )
     plant.create_entity(parts.Crown())
     plant.create_entity(parts.SpringGraphSolver(), parts.CollisionSolver())
-    plant.create_entity(parts.Collider(radius=0.1, compute_from_vascular=False), parts.RigidTransformation.from_z_translation(0.12))
+    plant.create_entity(
+        parts.Collider(radius=0.1, compute_from_vascular=False),
+        parts.RigidTransformation.from_z_translation(0.12),
+        parts.Mass(100000),
+    )
 
     # relax_spring_system = syst.RelaxSpringSystem()
     # secondary_growth_system = syst.SecondaryGrowthSystem(
