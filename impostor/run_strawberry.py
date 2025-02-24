@@ -13,8 +13,8 @@ def test_grow(iterations=120):
     stepper = parts.PartStepperSystem(
         exec_order=[
             parts.Collider,
-            parts.SpringGraphSolver,
             parts.CollisionSolver,
+            parts.SpringGraphSolver,
             parts.Leaf,
         ]
     )

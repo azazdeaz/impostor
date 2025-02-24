@@ -27,12 +27,6 @@ class Spring(rr.AsComponents, BasePart):
         False  # If false, angle_stiffness is computed from mass and radius
     )
 
-    def _angle_between_transforms(
-        self, a: parts.RigidTransformation, b: parts.RigidTransformation
-    ) -> Rotation:
-        # pos_a_to_b = b.translation - a.translation
-        b_local = a.inverse().combine(b).rotation
-
     def step(self, plant: Plant, entity: Entity):
         comps_a = plant.get_components(self.entity_a)
         comps_b = plant.get_components(self.entity_b)
@@ -98,19 +92,7 @@ class SpringGraphSolver(BasePart, rr.AsComponents):
     max_distance_step: float = 10.1
     distance_relaxed_treshold: float = 0.0001
 
-    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
-        return [
-            AnyBatchValue("SpringGraphSolver.max_iterations", self.max_iterations),
-            AnyBatchValue(
-                "SpringGraphSolver.max_distance_step", self.max_distance_step
-            ),
-            AnyBatchValue(
-                "SpringGraphSolver.distance_relaxed_treshold",
-                self.distance_relaxed_treshold,
-            ),
-        ]
-
-    def step(self, plant: Plant, entity: Entity):
+    def step(self, plant: Plant, _entity: Entity):
         spring_entities = plant.query().with_component(Spring)._entities
         if len(spring_entities) == 0:
             return
@@ -143,7 +125,7 @@ class SpringGraphSolver(BasePart, rr.AsComponents):
         def relax_all_from(spring_entity: Entity):
             relaxeds.add(spring_entity)
             spring = plant.get_components(spring_entity).get_by_type(Spring)
-            self.relax_spring(plant, spring_entity)
+            self.fabrik_step(plant, spring_entity)
 
             ta = plant.get_components(spring.entity_a).get_by_type(
                 parts.RigidTransformation
@@ -185,6 +167,30 @@ class SpringGraphSolver(BasePart, rr.AsComponents):
             ),
         )
 
+    def fabrik_step(self, plant: Plant, spring_entity: Entity):
+        spring = plant.get_components(spring_entity).get_by_type(Spring)
+        comps_a = plant.get_components(spring.entity_a)
+        comps_b = plant.get_components(spring.entity_b)
+
+        transform_a = comps_a.get_by_type(parts.RigidTransformation)
+        transform_b = comps_b.get_by_type(parts.RigidTransformation)
+
+        if transform_b is None:
+            transform_b = parts.RigidTransformation.from_rotation(
+                spring.angle_rest
+            ).combine(parts.RigidTransformation.from_z_translation(spring.length))
+            comps_b.add(transform_b)
+
+        # Get the direction where this node is pointing
+        pointing = transform_b.translation - transform_a.translation
+        distance = np.linalg.norm(pointing)
+        if distance > 0:
+            direction = pointing / distance
+        else:
+            direction = (transform_a.rotation * spring.angle_rest).apply([0, 0, 1])
+        translation_a_to_b = direction * spring.length
+        transform_b.translation = transform_a.translation + translation_a_to_b
+
     def relax_spring(self, plant: Plant, spring_entity):
         spring = plant.get_components(spring_entity).get_by_type(Spring)
         comps_a = plant.get_components(spring.entity_a)
@@ -195,7 +201,7 @@ class SpringGraphSolver(BasePart, rr.AsComponents):
         # Apply gravity
         if spring.length > 0 and parts.MassAbove in comps_a:
             # Get the direction where this node is pointing
-            pointing = (transform_a.rotation * spring.angle_rest).apply([0, 0, 1])
+            pointing = (transform_a.rotation * spring.angle).apply([0, 0, 1])
             # Make it flat on the horizontal plane
             pointing[2] = 0
             # Check if the magnitude of the pointing direction is not zero
@@ -214,3 +220,15 @@ class SpringGraphSolver(BasePart, rr.AsComponents):
         )
 
         comps_b.add(transform_a.combine(transform_a_b))
+
+    def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
+        return [
+            AnyBatchValue("SpringGraphSolver.max_iterations", self.max_iterations),
+            AnyBatchValue(
+                "SpringGraphSolver.max_distance_step", self.max_distance_step
+            ),
+            AnyBatchValue(
+                "SpringGraphSolver.distance_relaxed_treshold",
+                self.distance_relaxed_treshold,
+            ),
+        ]
