@@ -34,13 +34,14 @@ def rr_log_components(plant: Plant):
         comps = plant.get_components(entity)
         for component in comps:
             values = {}
+            if hasattr(component, "as_component_batches"):
+                rr.log(f"nodes/{entity}", component)
+                continue
+            
             try:
                 items = asdict(component).items()
             except Exception as e:
                 raise ValueError(f"Failed to log component {component}:\n{e}")
-            if hasattr(component, "as_component_batches"):
-                rr.log(f"nodes/{entity}", component)
-                continue
 
             if len(items) == 0:
                 values[f"cmp.{component.__class__.__name__}"] = "✓"
@@ -111,7 +112,7 @@ def rr_log_graph(plant: Plant):
     )
 
 
-def rr_log_collideres(plant: Plant):
+def rr_log_colliders(plant: Plant):
     colliders = (
         plant.query()
         .with_components(parts.Collider, parts.RigidTransformation)

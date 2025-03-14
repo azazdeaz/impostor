@@ -283,6 +283,6 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
                 leaf_mesh = create_blade_mesh(plant, leaf_meta)
                 mesh.merge(leaf_mesh)
             except Exception as e:
-                print(e)
+                print("Error on creating blade mesh", e)
 
     return mesh

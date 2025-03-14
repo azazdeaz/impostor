@@ -59,16 +59,6 @@ class Leaf(BasePart, rr.AsComponents):
         ).get_or_create_by_type(comp.Attachments)
         base_entity_attachments.attachments.append(self.base_entity)
 
-        # Setup physics between the attachment point and the parent entity
-        plant.create_entity(
-            comp.Spring(
-                self.attachment_parent_entity,
-                self.base_entity,
-                # fixed_angle_stiffness=True,
-                # angle_stiffness=1.0,
-            )
-        )
-
         # Initialize the midrib
         curve = np.random.normal(1, 3.1) 
         for i in range(self.midrib_entitiy_count):
@@ -90,9 +80,6 @@ class Leaf(BasePart, rr.AsComponents):
             )
             self.midrib_entities.append(new_entity)
             plant.add_components(prev_entity, comp.AxeNext(new_entity))
-            plant.create_entity(
-                comp.Spring(prev_entity, new_entity, fixed_angle_stiffness=True)
-            )
 
         # Initialize the lateral veins
 
@@ -141,15 +128,6 @@ class Leaf(BasePart, rr.AsComponents):
 
                 attachments.attachments.append(base_entity)
 
-                plant.create_entity(
-                    comp.Spring(
-                        midrib_attachment_entity,
-                        base_entity,
-                        fixed_angle_stiffness=True,
-                        angle_stiffness=1.0,
-                    )
-                )
-
                 self.lateral_vein_entities.append(base_entity)
                 if is_left:
                     self.lateral_vein_bases_left.append(base_entity)
@@ -176,14 +154,6 @@ class Leaf(BasePart, rr.AsComponents):
                         comp.AxePrev(prev_entity),
                     )
                     plant.add_components(prev_entity, comp.AxeNext(new_entity))
-                    plant.create_entity(
-                        comp.Spring(
-                            prev_entity,
-                            new_entity,
-                            # fixed_angle_stiffness=True,
-                            # angle_stiffness=1.0,
-                        )
-                    )
                     self.lateral_vein_entities.append(new_entity)
                     prev_entity = new_entity
     

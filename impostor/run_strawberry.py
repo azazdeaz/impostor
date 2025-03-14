@@ -13,18 +13,17 @@ def test_grow(iterations=120):
     stepper = parts.PartStepperSystem(
         exec_order=[
             parts.Collider,
-            parts.CollisionSolver,
-            parts.SpringGraphSolver,
+            parts.ScaffoldingSolver,
             parts.Leaf,
         ]
     )
     plant.create_entity(parts.Crown())
-    plant.create_entity(parts.SpringGraphSolver(), parts.CollisionSolver())
-    plant.create_entity(
-        parts.Collider(radius=0.1, compute_from_vascular=False),
-        parts.RigidTransformation.from_z_translation(0.12),
-        parts.Mass(100000),
-    )
+    plant.create_entity(parts.ScaffoldingSolver())
+    # plant.create_entity(
+    #     parts.Collider(radius=0.1, compute_from_vascular=False),
+    #     parts.RigidTransformation.from_z_translation(0.12),
+    #     parts.Mass(100000),
+    # )
 
     # relax_spring_system = syst.RelaxSpringSystem()
     # secondary_growth_system = syst.SecondaryGrowthSystem(
@@ -49,11 +48,11 @@ def test_grow(iterations=120):
         # if i % 16 == 0 or i == iterations - 1:
         syst.rr_log_components(plant)
         # syst.rr_log_graph(plant)
-        # syst.rr_log_transforms_system(plant)
-        syst.rr_log_collideres(plant)
+        syst.rr_log_transforms_system(plant)
+        # syst.rr_log_colliders(plant)
 
-        mesh = syst.create_plant_mesh(plant)
-        mesh.rr_log()
+        # mesh = syst.create_plant_mesh(plant)
+        # mesh.rr_log()
 
 
 if __name__ == "__main__":

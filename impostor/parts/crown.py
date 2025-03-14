@@ -15,7 +15,7 @@ class Crown(BasePart):
     current_leaf_size = 0.8
     angle_step = np.deg2rad(75)
     step_per_sprout = 12
-    stop_sprouting = 60
+    stop_sprouting = 6
 
     base_entity = None
 
@@ -50,7 +50,6 @@ class Crown(BasePart):
         first_entity = plant.create_entity(
             parts.Vascular(rotation=rotation),
         )
-        plant.create_entity(comp.Spring(self.base_entity, first_entity))
         plant.get_components(self.base_entity).get_by_type(
             comp.Attachments
         ).attachments.append(first_entity)
@@ -67,10 +66,4 @@ class Crown(BasePart):
             parts.RigidTransformation.from_rotation(
                 comp.Rotation.from_euler("xyz", [0, 0, 0], degrees=True)
             ),
-        )
-        plant.create_entity(
-            comp.Spring(
-                first_entity,
-                strawberry_stem,
-            )
         )
