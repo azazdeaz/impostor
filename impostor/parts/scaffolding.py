@@ -100,15 +100,37 @@ class ScaffoldingLayer(BasePart):
     def compute_bending(self, optimized_positions: torch.Tensor) -> Rotation:
         """Compute the rotation of the layer by finding the best fitting plane"""
         positions = optimized_positions[self.indices]
-        # Compute the center of the ring
-        center = torch.mean(positions, dim=0)
-        # Compute the covariance matrix
-        cov = torch.matmul((positions - center).T, positions - center)
-        # Compute the SVD
-        u, s, v = torch.svd(cov)
-        # Compute the rotation matrix
-        rotation = torch.matmul(u, v.T)
-        return Rotation.from_matrix(rotation.numpy())
+        
+        try:
+            # If positions are too close together, return identity rotation
+            if len(positions) < 3 or torch.max(torch.norm(positions - positions[0], dim=1)) < 1e-6:
+                return Rotation.identity()
+            
+            # Compute the center of the ring
+            center = torch.mean(positions, dim=0)
+            
+            # Compute the covariance matrix
+            cov = torch.matmul((positions - center).T, positions - center)
+            
+            # Compute the SVD
+            u, s, v = torch.svd(cov)
+            
+            # Ensure the resulting matrix is a proper rotation matrix (det = 1)
+            rotation_matrix = torch.matmul(u, v.T)
+            det = torch.det(rotation_matrix)
+            
+            # If determinant is negative, flip the last column to ensure det = 1
+            if det < 0:
+                u_adjusted = u.clone()
+                u_adjusted[:, 2] = -u[:, 2]
+                rotation_matrix = torch.matmul(u_adjusted, v.T)
+            
+            # Now create the rotation object
+            return Rotation.from_matrix(rotation_matrix.numpy())
+        except Exception as e:
+            # Fallback to identity rotation if anything goes wrong
+            print(f"Warning: Failed to compute rotation, falling back to identity. Error: {e}")
+            return Rotation.identity()
 
     def to_transform(
         self, optimized_positions: torch.Tensor
@@ -209,7 +231,6 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
         for layer in self._layers.values():
             ideal_positions[layer.indices] = layer.get_positions()
 
-        
         # Lock the poistions in the layers of the root entities
         locked_position_indices = []
         for root in roots:
@@ -284,7 +305,9 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
             stick_errors = stick_target_lengths - stick_current_lengths
             stick_loss = torch.sum(stick_errors**2)
 
-            lock_errors = self._position_param[locked_position_indices] - locked_positions
+            lock_errors = (
+                self._position_param[locked_position_indices] - locked_positions
+            )
             lock_loss = torch.sum(lock_errors**2)
 
             loss = stick_loss + lock_loss
@@ -408,8 +431,12 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
             # Connect to the corresponding point (straight connection)
             self.sticks.append(
                 Stick(
-                    lower_layer.global_idx(i + 1),  # Point i in lower ring (1-based index)
-                    upper_layer.global_idx(upper_idx + 1),  # Corresponding point in upper ring
+                    lower_layer.global_idx(
+                        i + 1
+                    ),  # Point i in lower ring (1-based index)
+                    upper_layer.global_idx(
+                        upper_idx + 1
+                    ),  # Corresponding point in upper ring
                 )
             )
 
@@ -418,12 +445,14 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
             self.sticks.append(
                 Stick(
                     lower_layer.global_idx(i + 1),  # Point i in lower ring
-                    upper_layer.global_idx(next_upper_idx + 1),  # Next point in upper ring
+                    upper_layer.global_idx(
+                        next_upper_idx + 1
+                    ),  # Next point in upper ring
                 )
             )
-            
+
             # Create triangular connections between centers and rings
-            
+
             # Triangle 1: lower center -> lower ring -> upper ring
             self.sticks.append(
                 Stick(
@@ -431,7 +460,7 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
                     upper_layer.global_idx(upper_idx + 1),  # Point on upper ring
                 )
             )
-            
+
             # Triangle 2: upper center -> upper ring -> lower ring
             self.sticks.append(
                 Stick(

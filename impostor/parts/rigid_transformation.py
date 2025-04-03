@@ -16,14 +16,14 @@ class RigidTransformation(rr.AsComponents):
         """
         Create a RigidTransformation that represents a translation along the z-axis.
         """
-        return cls(translation=np.array([0, 0, z]))
+        return cls(translation=np.asarray([0, 0, z]))
     
     @classmethod
     def from_x_translation(cls, x: float) -> 'RigidTransformation':
         """
         Create a RigidTransformation that represents a translation along the x-axis.
         """
-        return cls(translation=np.array([x, 0, 0]))
+        return cls(translation=np.asarray([x, 0, 0]))
     
     @classmethod
     def from_rotation(cls, rotation: Rotation) -> 'RigidTransformation':

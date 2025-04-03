@@ -20,8 +20,8 @@ class VertexLayer:
         for i in range(segments):
             x = radius * np.cos(i * angle)
             y = radius * np.sin(i * angle)
-            vertices.append(transform.transform_point(np.array([x, y, 0])))
-        return VertexLayer(np.array(vertices))
+            vertices.append(transform.transform_point(np.asarray([x, y, 0])))
+        return VertexLayer(np.asarray(vertices))
 
     @staticmethod
     def from_vertices(vertices: np.ndarray):
@@ -122,7 +122,7 @@ class PlantMesh:
 
             one_start = two_start
 
-        self.faces = np.array(faces, dtype=int)
+        self.faces = np.asarray(faces, dtype=int)
         # Compute the normal of a vertex given its adjacent faces
         for vertex_idx in range(len(self.vertices)):
             normals = []
@@ -237,13 +237,13 @@ def create_blade_mesh(plant: Plant, leaf_meta: parts.Leaf) -> PlantMesh:
                     .get_by_type(parts.RigidTransformation)
                     .translation
                 )
-            layers.append(VertexLayer.from_vertices(np.array(poses)))
+            layers.append(VertexLayer.from_vertices(np.asarray(poses)))
         # Add one more layer to close the mesh at the tip of the leaf
         tip = leaf_meta.midrib_entities[-1]
         tip_pos = (
             plant.get_components(tip).get_by_type(parts.RigidTransformation).translation
         )
-        layers.append(VertexLayer.from_vertices(np.array([tip_pos])))
+        layers.append(VertexLayer.from_vertices(np.asarray([tip_pos])))
 
         for layer in layers:
             layer.merge_close_vertices()

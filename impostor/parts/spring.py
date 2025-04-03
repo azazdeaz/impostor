@@ -135,10 +135,10 @@ class SpringGraphSolver(BasePart, rr.AsComponents):
             )
             lines.append(
                 [
-                    ta.combine(sideways).transform_point(np.array([-0.01, 0, 0])),
+                    ta.combine(sideways).transform_point(np.asarray([-0.01, 0, 0])),
                     ta.translation,
                     tb.translation,
-                    tb.combine(sideways).transform_point(np.array([-0.01, 0, 0])),
+                    tb.combine(sideways).transform_point(np.asarray([-0.01, 0, 0])),
                 ]
             )
 
@@ -209,8 +209,8 @@ class SpringGraphSolver(BasePart, rr.AsComponents):
             if magnitude != 0 and spring.angle_stiffness > 0:
                 pointing = pointing / magnitude
                 # The rotation axis is perpendicular to the pointing direction on the horizontal plane
-                # rotation_axis = np.array([-pointing[1], pointing[0], 0])
-                rotation_axis = np.array([1, 0, 0])
+                # rotation_axis = np.asarray([-pointing[1], pointing[0], 0])
+                rotation_axis = np.asarray([1, 0, 0])
                 bend = 5.0 * (1 - np.clip(spring.angle_stiffness, 0.0, 1))
                 rotation = Rotation.from_rotvec(rotation_axis * np.deg2rad(bend))
                 spring.angle = spring.angle_rest * rotation

@@ -35,28 +35,28 @@ def rr_log_components(plant: Plant):
         for component in comps:
             values = {}
             if hasattr(component, "as_component_batches"):
-                rr.log(f"nodes/{entity}", component)
+                # rr.log(f"nodes/{entity}", component)
                 continue
             
-            try:
-                items = asdict(component).items()
-            except Exception as e:
-                raise ValueError(f"Failed to log component {component}:\n{e}")
+            # try:
+            #     items = asdict(component).items()
+            # except Exception as e:
+            #     raise ValueError(f"Failed to log component {component}:\n{e}")
 
-            if len(items) == 0:
-                values[f"cmp.{component.__class__.__name__}"] = "✓"
-            else:
-                for key, value in items:
-                    try:
-                        # if the value is a list, log the first element
-                        if isinstance(value, list):
-                            value = value[0]
-                        rr.any_value.AnyBatchValue(key, value)
-                        values[f"cmp.{component.__class__.__name__}.{key}"] = value
-                    except Exception as _:
-                        pass
+            # if len(items) == 0:
+            #     values[f"cmp.{component.__class__.__name__}"] = "✓"
+            # else:
+            #     for key, value in items:
+            #         try:
+            #             # if the value is a list, log the first element
+            #             if isinstance(value, list):
+            #                 value = value[0]
+            #             rr.any_value.AnyBatchValue(key, value)
+            #             values[f"cmp.{component.__class__.__name__}.{key}"] = value
+            #         except Exception as _:
+            #             pass
 
-            rr.log(f"nodes/{entity}", rr.AnyValues(**values))
+            # rr.log(f"nodes/{entity}", rr.AnyValues(**values))
 
 
 def rr_log_graph(plant: Plant):
@@ -151,7 +151,7 @@ def rr_log_transforms_system(plant: Plant):
                     [
                         [
                             transform.transform_point(
-                                np.array([np.cos(theta) * r, np.sin(theta) * r, 0])
+                                np.asarray([np.cos(theta) * r, np.sin(theta) * r, 0])
                             )
                             for theta in np.linspace(0, 2 * np.pi, 10)
                         ],
