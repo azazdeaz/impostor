@@ -11,7 +11,7 @@ from impostor.parts.core import BasePart
 @dataclass
 class GrowthPlan(rr.AsComponents, BasePart):
     state: float = 0.0
-    growth_speed: float = 0.04
+    growth_speed: float = 0.004
     length_start: float = 0.0
     length_end: float = 0.0
     radius_start: float = 0.0

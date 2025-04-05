@@ -15,7 +15,7 @@ class Crown(BasePart):
     current_leaf_size = 0.8
     angle_step = np.deg2rad(75)
     step_per_sprout = 12
-    stop_sprouting = 6
+    stop_sprouting = 60
 
     base_entity = None
 
