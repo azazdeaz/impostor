@@ -98,6 +98,10 @@ class ScaffoldingLayer(BasePart):
     def get_global_indices(self) -> List[int]:
         """Return the global indices of the positions in the layer"""
         return self.indices
+    
+    def get_global_center_index(self) -> int:
+        """Return the global index of the center position"""
+        return self.indices[0]
 
     def compute_bending(self, optimized_positions: torch.Tensor) -> Rotation:
         """Compute the rotation of the layer by finding the best fitting plane"""

@@ -1,6 +1,4 @@
-# pixi environments
-.pixi
-
+.doit.db
 *.egg-info
 .idea
 .vscode

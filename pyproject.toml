@@ -15,27 +15,9 @@ dependencies = [
     "rerun-sdk>=0.21.0,<0.22",
     "scipy>=1.14.1,<2",
     "pyyaml>=6.0.2,<7",
+    "pydantic>=2.11.3",
+    "doit>=0.36.0",
 ]
 readme = "README.md"
 license = { text = "MIT" }
 
-[[tool.pdm.source]]
-name = "torch"
-url = "https://download.pytorch.org/whl/cu121"
-include_packages = ["torch", "torchvision"]
-
-[tool.pdm]
-distribution = false
-
-[tool.pdm.dev-dependencies]
-dev = ["ruff>=0.8.3,<0.9"]
-
-[tool.pdm.scripts]
-start = "python -m impostor.run_strawberry"
-setup-vscode = "python scripts/setup_vscode.py"
-register-jupyter-kernel = "ipython kernel install --user --name=impostor-pdm --display-name='Impostor PDM'"
-
-# Special note for PyTorch dependencies
-# PDM doesn't support index URLs in pyproject.toml directly
-# You'll need to add them manually with:
-# pdm add torch torchvision --extra-index-url https://download.pytorch.org/whl/cu121

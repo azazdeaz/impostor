@@ -6,7 +6,7 @@
 
 > #### Growing simulator agonistic procedural plants for training robots.
 
-🚧 Heavily work in progress, but `pixi run start` should always demo something 🤞
+🚧 Heavily work in progress, but `uv run doit start` should always demo something 🤞
 
 
 
