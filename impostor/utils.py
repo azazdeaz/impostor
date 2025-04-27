@@ -1,6 +1,7 @@
+from enum import Enum
 import numpy as np
 from dataclasses import dataclass, replace
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import CubicSpline, Akima1DInterpolator
 
 @dataclass
 class NormalDistribution:
@@ -29,7 +30,12 @@ def fluent_methods(cls):
     return cls
 
 class Curve:
-    def __init__(self, control_points: list[tuple[float, float]]):
+    class Method(Enum):
+        CUBIC_SPLINE = "cubic_spline"
+        AKIMA = "akima"
+        MAKIMA = "makima"
+
+    def __init__(self, control_points: list[tuple[float, float]], method: Method = Method.CUBIC_SPLINE):
         """
         Initialize the curve with control points.
 
@@ -37,7 +43,17 @@ class Curve:
         control_points (list[tuple[float, float]]): The control points of the curve.
         """
         self._control_points = control_points
-        self.curve = CubicSpline(*zip(*self._control_points), bc_type="not-a-knot")
+
+        points = zip(*self._control_points)
+        if method == Curve.Method.CUBIC_SPLINE:
+            self.curve = CubicSpline(*points, bc_type="not-a-knot")
+        elif method == Curve.Method.AKIMA:
+            self.curve = Akima1DInterpolator(*points, method="akima")
+        elif method == Curve.Method.MAKIMA:
+            self.curve = Akima1DInterpolator(*points, method="makima")
+        else:
+            raise ValueError(f"Unsupported curve type: {method}")
+        
         
 
     def evaluate(self, t):

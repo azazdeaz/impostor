@@ -31,39 +31,47 @@ class Crown(BasePart):
         print(f"{self.age} % {self.step_per_sprout}")
         if self.age <= self.stop_sprouting and self.age % self.step_per_sprout == 0:
             print("start petiole")
-            self.start_petiole(plant)
+            initialize_petiole(
+                plant,
+                self.base_entity,
+                self.current_petiole_length,
+                self.current_leaf_size,
+                self.current_inclanation,
+                self.current_angle,
+            )
 
         self.age += 1
         print(f"Crown is {self.age} steps old")
 
-    def start_petiole(self, plant: Plant):
-        rotation = comp.Rotation.from_euler(
-            "xyz", [self.current_inclanation, 0, self.current_angle]
-        )
-        print(f"Start petiole in {rotation.as_euler('xyz')}")
 
-        self.current_angle += self.angle_step
-        self.current_inclanation *= 0.5
-        self.current_petiole_length += 0.06
-        self.current_leaf_size *= 0.9
+def initialize_petiole(
+    plant: Plant,
+    base_entity: comp.Entity,
+    petiole_length: float,
+    leaf_size: float,
+    inclanation: float,
+    angle: float,
+) -> None:
+    rotation = comp.Rotation.from_euler("xyz", [inclanation, 0, angle])
+    print(f"Start petiole in {rotation.as_euler('xyz')}")
 
-        first_entity = plant.create_entity(
-            parts.Vascular(rotation=rotation),
-        )
-        plant.get_components(self.base_entity).get_by_type(
-            comp.Attachments
-        ).attachments.append(first_entity)
-        strawberry_stem = plant.create_entity(
-            parts.StrawberryStem(
-                petiole_length=self.current_petiole_length,
-                leaf_size=self.current_leaf_size,
-            ),
-            comp.AxePrev(first_entity),
-        )
-        plant.add_components(
-            first_entity,
-            comp.AxeNext(strawberry_stem),
-            parts.RigidTransformation.from_rotation(
-                comp.Rotation.from_euler("xyz", [0, 0, 0], degrees=True)
-            ),
-        )
+    first_entity = plant.create_entity(
+        parts.Vascular(rotation=rotation),
+    )
+    plant.get_components(base_entity).get_by_type(comp.Attachments).attachments.append(
+        first_entity
+    )
+    strawberry_stem = plant.create_entity(
+        parts.StrawberryStem(
+            petiole_length=petiole_length,
+            leaf_size=leaf_size,
+        ),
+        comp.AxePrev(first_entity),
+    )
+    plant.add_components(
+        first_entity,
+        comp.AxeNext(strawberry_stem),
+        parts.RigidTransformation.from_rotation(
+            comp.Rotation.from_euler("xyz", [0, 0, 0], degrees=True)
+        ),
+    )
