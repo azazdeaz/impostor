@@ -546,10 +546,8 @@ dependencies = [
     { name = "jupyter" },
     { name = "numpy" },
     { name = "pydantic" },
-    { name = "pyside6" },
     { name = "pyyaml" },
     { name = "rerun-sdk" },
-    { name = "ryven" },
     { name = "scipy" },
     { name = "torch" },
     { name = "torchvision" },
@@ -564,10 +562,8 @@ requires-dist = [
     { name = "jupyter", specifier = ">=1.1.1,<2" },
     { name = "numpy", specifier = ">=2.1.1,<3" },
     { name = "pydantic", specifier = ">=2.11.3" },
-    { name = "pyside6", specifier = ">=6.9.0" },
     { name = "pyyaml", specifier = ">=6.0.2,<7" },
     { name = "rerun-sdk", specifier = ">=0.21.0,<0.22" },
-    { name = "ryven", specifier = ">=3.5.0" },
     { name = "scipy", specifier = ">=1.14.1,<2" },
     { name = "torch", specifier = ">=2.5.1" },
     { name = "torchvision", specifier = ">=0.20.1" },
@@ -1540,54 +1536,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyside6"
-version = "6.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyside6-addons" },
-    { name = "pyside6-essentials" },
-    { name = "shiboken6" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/74/0b465aa77644cfc3bfde912bb999b5a441d92c699272cab722335e92df3e/PySide6-6.9.0-cp39-abi3-macosx_12_0_universal2.whl", hash = "sha256:b8f286a1bd143f3b2bdf08367b9362b13f469d26986c25700af9c4c68f79213e", size = 558001 },
-    { url = "https://files.pythonhosted.org/packages/91/53/ce78d2c279a4ed7d4baf5089a5ebff45d675670a42daa5e0f8dbb9ced6ed/PySide6-6.9.0-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:09239d1b808f18efccd3803db874d683917efcdebfdf0e8dec449cf50e74e7aa", size = 558139 },
-    { url = "https://files.pythonhosted.org/packages/4b/54/41d6ab0847c043f1fd96433a87ffd09a7cf17e11f5587e91e152777ec010/PySide6-6.9.0-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:1a176409dd0dd12b72d2c78b776e5051f569071ec52b7aaadd0a5b3333493c24", size = 558139 },
-    { url = "https://files.pythonhosted.org/packages/63/03/55a632191beadd6bc59b04055961e2c3224a3475a906a63d1899a5ab493d/PySide6-6.9.0-cp39-abi3-win_amd64.whl", hash = "sha256:0103e5d161696db40d75bfbf4e4b7d4f3372903c1b400c4e3379377b62c50290", size = 564479 },
-    { url = "https://files.pythonhosted.org/packages/e8/80/340523ecb17d2a168d7e37dfd8a7a0eebb81dcbec4870447f132f2a1a28e/PySide6-6.9.0-cp39-abi3-win_arm64.whl", hash = "sha256:846fbccf0b3501eb31cf0791a46e137615efba6ce540da2b426d79fa3e7762c4", size = 401752 },
-]
-
-[[package]]
-name = "pyside6-addons"
-version = "6.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyside6-essentials" },
-    { name = "shiboken6" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/a4/211077b3f30342827b2c543f80a5f6bc483ff3af6be99766984618e68fb6/PySide6_Addons-6.9.0-cp39-abi3-macosx_12_0_universal2.whl", hash = "sha256:98f9ad4b65820736e12d49c18db2e570eac63727407fbb59a62ac753e89dc201", size = 315606763 },
-    { url = "https://files.pythonhosted.org/packages/58/c1/21224090a7ee7e9ce5699e5bf16b84d576b7587f0712ccb6862a8b28476c/PySide6_Addons-6.9.0-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:fc9dcd63a0ce7565f238cb11c44494435a50eb6cb72b8dbce3b709618989c3dc", size = 166252767 },
-    { url = "https://files.pythonhosted.org/packages/85/c3/add4948cf15648db542531a5c292f9de946ee288243730be7607499936ec/PySide6_Addons-6.9.0-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:d8a650644e0b9d1e7a092f6bcd11f25a63706d12f77d442b6ace75d346ab5d30", size = 161938789 },
-    { url = "https://files.pythonhosted.org/packages/77/c0/b1718f62d1fcc9bac4c410d4150d7e1214235e73cc18f39dc36ad49f093f/PySide6_Addons-6.9.0-cp39-abi3-win_amd64.whl", hash = "sha256:8cf54065b3d1b4698448fad825378a25c10ef52017d9dff48cead03200636d8d", size = 142994491 },
-    { url = "https://files.pythonhosted.org/packages/29/aa/810ceb3d111fa6a0cc865520e05198dd0cad4855558c8c8309d4d3852854/PySide6_Addons-6.9.0-cp39-abi3-win_arm64.whl", hash = "sha256:260a56da59539f476c1635a3ff13591e10f1b04d92155c0617129bc53ca8b5f8", size = 26840861 },
-]
-
-[[package]]
-name = "pyside6-essentials"
-version = "6.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "shiboken6" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/ac/a3c8097d6fdcf414d961bdc0d532381d0ee141e4c699f5e2b881a7c3613f/PySide6_Essentials-6.9.0-cp39-abi3-macosx_12_0_universal2.whl", hash = "sha256:b18e3e01b507e8a57481fe19792eb373d5f10a23a50702ce540da1435e722f39", size = 131981893 },
-    { url = "https://files.pythonhosted.org/packages/9e/fd/46b713827007162de9108b22d01702868e75f31585da7eca5a79e3435590/PySide6_Essentials-6.9.0-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:45eaf7f17688d1991f39680dbfd3c41674f3cbb78f278aa10fe0b5f2f31c1989", size = 94232483 },
-    { url = "https://files.pythonhosted.org/packages/ff/f1/72e1d400017a658e271594c8bd9c447c623dfd4fb936f4e043a4f9a8c93b/PySide6_Essentials-6.9.0-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:69aedfad77119c5bec0005ca31d5620e9bac8ba5ae66c7389160530cfd698ed8", size = 92102516 },
-    { url = "https://files.pythonhosted.org/packages/96/8a/bc710350c4cf6894968e39970eaa613b85a82eb1f230052de597e44a00ac/PySide6_Essentials-6.9.0-cp39-abi3-win_amd64.whl", hash = "sha256:94a0096d6bb1d3e5cef29ca4a5366d0f229d42480fbb17aa25ad85d72b1b7947", size = 72336994 },
-    { url = "https://files.pythonhosted.org/packages/49/a4/703e379a0979985f681cf04b9af4129f5dde20141b3cc64fc2a39d006614/PySide6_Essentials-6.9.0-cp39-abi3-win_arm64.whl", hash = "sha256:d2dc45536f2269ad111991042e81257124f1cd1c9ed5ea778d7224fd65dc9e2b", size = 49449220 },
-]
-
-[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -1673,18 +1621,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/22/74/aaa837b331580c13b79ac39396601fb361454ee184ca85e8861914769b99/pyzmq-26.4.0-cp312-cp312-win32.whl", hash = "sha256:ba034a32ecf9af72adfa5ee383ad0fd4f4e38cdb62b13624278ef768fe5b5b44", size = 577992 },
     { url = "https://files.pythonhosted.org/packages/30/0f/55f8c02c182856743b82dde46b2dc3e314edda7f1098c12a8227eeda0833/pyzmq-26.4.0-cp312-cp312-win_amd64.whl", hash = "sha256:056a97aab4064f526ecb32f4343917a4022a5d9efb6b9df990ff72e1879e40be", size = 640466 },
     { url = "https://files.pythonhosted.org/packages/e4/29/073779afc3ef6f830b8de95026ef20b2d1ec22d0324d767748d806e57379/pyzmq-26.4.0-cp312-cp312-win_arm64.whl", hash = "sha256:2f23c750e485ce1eb639dbd576d27d168595908aa2d60b149e2d9e34c9df40e0", size = 556342 },
-]
-
-[[package]]
-name = "qtpy"
-version = "2.4.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "packaging" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/70/01/392eba83c8e47b946b929d7c46e0f04b35e9671f8bb6fc36b6f7945b4de8/qtpy-2.4.3.tar.gz", hash = "sha256:db744f7832e6d3da90568ba6ccbca3ee2b3b4a890c3d6fbbc63142f6e4cdf5bb", size = 66982 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/76/37c0ccd5ab968a6a438f9c623aeecc84c202ab2fabc6a8fd927580c15b5a/QtPy-2.4.3-py3-none-any.whl", hash = "sha256:72095afe13673e017946cc258b8d5da43314197b741ed2890e563cf384b51aa1", size = 95045 },
 ]
 
 [[package]]
@@ -1802,50 +1738,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ryven"
-version = "3.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jinja2" },
-    { name = "packaging" },
-    { name = "pygments" },
-    { name = "ryvencore" },
-    { name = "ryvencore-qt" },
-    { name = "textdistance" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/31/54262ecf98f021bec454049b80cb496d84e535bd8eb2a5590411bfb54267/ryven-3.5.0.tar.gz", hash = "sha256:7e2e47ba3e4d06b2cd961a89655dd314fe97576b487acaba57540bd7b57da5fd", size = 4280245 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/af/d8/e3bbe5032c0dd6c54cedd70478bbb3a9c6dd657ef3d23a0215a71cb0295a/ryven-3.5.0-py3-none-any.whl", hash = "sha256:0d250f761bc475b7e4c80a987c657e611065be30d852f81c209156dbb9b53427", size = 4388446 },
-]
-
-[[package]]
-name = "ryvencore"
-version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "packaging" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f8/27/20364c87ec329a23f5929d1c2ca31121e226e780f43746bf4fa2759364c0/ryvencore-0.5.0.tar.gz", hash = "sha256:fdc09fcbedc42e62743e3a4255f0325ede47e44ab4ffe17168956ff03bc28e42", size = 116677 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/54/714904cb3c67198735bd4c878c1b4cbe7d884b80331147ba13297156ef37/ryvencore-0.5.0-py3-none-any.whl", hash = "sha256:bbae42c24f3465585afbd59ba5b7ead6e2a1c975bee939da62a531da2190c836", size = 50551 },
-]
-
-[[package]]
-name = "ryvencore-qt"
-version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "qtpy" },
-    { name = "ryvencore" },
-    { name = "textdistance" },
-    { name = "waiting" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/f0/4614e8fa34bcb40f44702d49cb41d151d2ec2e5b464cf993c35bed0b9073/ryvencore_qt-0.5.0.tar.gz", hash = "sha256:f24f883e931ebce76d1445ac0c4900399cc63b59e52693ae7a1b1783089dd068", size = 5634499 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6e/1d/ad1e9a2278b4882342fd292e8757bf1b5f8da9a12a9d7d2fd0a8cb65e94e/ryvencore_qt-0.5.0-py3-none-any.whl", hash = "sha256:fda64e4db5cd91bb99fc5191e8e61b65fbabd5c2e73e8c125bce9c4e1da18deb", size = 5656567 },
-]
-
-[[package]]
 name = "scipy"
 version = "1.15.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1881,18 +1773,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a9/5a/0db4da3bc908df06e5efae42b44e75c81dd52716e10192ff36d0c1c8e379/setuptools-78.1.0.tar.gz", hash = "sha256:18fd474d4a82a5f83dac888df697af65afa82dec7323d09c3e37d1f14288da54", size = 1367827 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/21/f43f0a1fa8b06b32812e0975981f4677d28e0f3271601dc88ac5a5b83220/setuptools-78.1.0-py3-none-any.whl", hash = "sha256:3e386e96793c8702ae83d17b853fb93d3e09ef82ec62722e61da5cd22376dcd8", size = 1256108 },
-]
-
-[[package]]
-name = "shiboken6"
-version = "6.9.0"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/85/97b36b045a233bcea9580e8c99d5c76d65cf9727dad8cb173527f6717471/shiboken6-6.9.0-cp39-abi3-macosx_12_0_universal2.whl", hash = "sha256:c4d8e3a5907154ac4789e52c77957db95bcf584238c244d7743cb39e9b66dd26", size = 407067 },
-    { url = "https://files.pythonhosted.org/packages/45/d3/f6ddef22d4f2ac11c079157ad3714d9b1fb9324d9cd3b200f824923fe2ba/shiboken6-6.9.0-cp39-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:3f585caae5b814a7e23308db0a077355a7dc20c34d58ca4c339ff7625e9a1936", size = 206509 },
-    { url = "https://files.pythonhosted.org/packages/0d/59/6a91aad272fe89bf2293b7864fb6e926822c93a2f6192611528c6945196d/shiboken6-6.9.0-cp39-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:b61579b90bf9c53ecc174085a69429166dfe57a0b8b894f933d1281af9df6568", size = 202809 },
-    { url = "https://files.pythonhosted.org/packages/e2/6e/cf00d723ab141132fb6d35ba8faf109cbc0ee83412016343600abb423149/shiboken6-6.9.0-cp39-abi3-win_amd64.whl", hash = "sha256:121ea290ed1afa5ad6abf690b377612693436292b69c61b0f8e10b1f0850f935", size = 1153132 },
-    { url = "https://files.pythonhosted.org/packages/b5/01/d59babab05786c99ebabdd152864ea3d4c500160979952c620eec68b1ff2/shiboken6-6.9.0-cp39-abi3-win_arm64.whl", hash = "sha256:24f53857458881b54798d7e35704611d07f6b6885bcdf80f13a4c8bb485b8df2", size = 1831261 },
 ]
 
 [[package]]
@@ -1960,15 +1840,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8a/11/965c6fd8e5cc254f1fe142d547387da17a8ebfd75a3455f637c663fb38a0/terminado-0.18.1.tar.gz", hash = "sha256:de09f2c4b85de4765f7714688fff57d3e75bad1f909b589fde880460c753fd2e", size = 32701 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6a/9e/2064975477fdc887e47ad42157e214526dcad8f317a948dee17e1659a62f/terminado-0.18.1-py3-none-any.whl", hash = "sha256:a4468e1b37bb318f8a86514f65814e1afc977cf29b3992a4500d9dd305dcceb0", size = 14154 },
-]
-
-[[package]]
-name = "textdistance"
-version = "4.6.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/01/68/97ac72dd781301d6a52140066c68400c96f1a91f69737959e414844749b0/textdistance-4.6.3.tar.gz", hash = "sha256:d6dabc50b4ea832cdcf0e1e6021bd0c7fcd9ade155888d79bb6a3c31fce2dc6f", size = 32710 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c6/c2/c62601c858010b0513a6434b9be19bd740533a6e861eddfd30b7258d92a0/textdistance-4.6.3-py3-none-any.whl", hash = "sha256:0cb1b2cc8e3339ddc3e0f8c870e49fb49de6ecc42a718917308b3c971f34aa56", size = 31263 },
 ]
 
 [[package]]
@@ -2137,15 +2008,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/8a/78/16493d9c386d8e60e442a35feac5e00f0913c0f4b7c217c11e8ec2ff53e0/urllib3-2.4.0.tar.gz", hash = "sha256:414bc6535b787febd7567804cc015fee39daab8ad86268f1310a9250697de466", size = 390672 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6b/11/cc635220681e93a0183390e26485430ca2c7b5f9d33b15c74c2861cb8091/urllib3-2.4.0-py3-none-any.whl", hash = "sha256:4e16665048960a0900c702d4a66415956a584919c03361cac9f1df5c5dd7e813", size = 128680 },
-]
-
-[[package]]
-name = "waiting"
-version = "1.5.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8f/45/7e6e4af69f29f69fd1b60bd7a0d75720718e3350a42b0852512d9b7ba4f7/waiting-1.5.0.tar.gz", hash = "sha256:5e89ca8ae3c540b3f33ee2fd86c3e1a2b0fb728e5b92d57cbd35828f5c31d250", size = 6939 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/e1/d0167b66ea2014a27e9751274c5b780beec6810f584ca075dddae2d54e12/waiting-1.5.0-py3-none-any.whl", hash = "sha256:d960631f396d5094c9aee95c658bb79ac432c93efa1ff7b5fb98cb95685f8fc8", size = 5693 },
 ]
 
 [[package]]

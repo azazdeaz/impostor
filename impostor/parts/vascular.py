@@ -28,7 +28,7 @@ class Vascular(rr.AsComponents, BasePart):
         
         self.length = growth_plan.get_length()
         self.radius = growth_plan.get_radius()
-        # self.rotation = growth_plan.get_rotation()
+        self.rotation = growth_plan.get_rotation()
 
     def as_component_batches(self) -> Iterable[rr.ComponentBatchLike]:
         return [
