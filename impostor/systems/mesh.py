@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
+import xml.etree.ElementTree as ET
 
 import numpy as np
 import rerun as rr
@@ -50,6 +51,15 @@ def compute_face_normal(v1, v2, v3):
 
 
 @dataclass
+class Bone:
+    body_name: str
+    bind_position: np.ndarray  # 3D position
+    bind_quaternion: np.ndarray  # 4D quaternion [w, x, y, z]
+    vertex_indices: List[int]
+    vertex_weights: List[float]
+
+
+@dataclass
 class PlantMesh:
     layers: List[VertexLayer] = field(default_factory=list)
     vertices: np.ndarray = field(default_factory=lambda: np.ndarray((0, 3)))
@@ -57,6 +67,8 @@ class PlantMesh:
     normals: np.ndarray = field(default_factory=lambda: np.ndarray((0, 3)))
     uvs: np.ndarray = field(default_factory=lambda: np.ndarray((0, 2)))
     is_closed: bool = False
+    bones: List[Bone] = field(default_factory=list)  # New field for bone data
+    vertex_to_entity: Dict[int, Entity] = field(default_factory=dict)  # Map vertices to entities
 
     def add_layer(self, layer: VertexLayer):
         self.layers.append(layer)
@@ -145,6 +157,10 @@ class PlantMesh:
 
         return self
 
+    def add_bone(self, bone: Bone):
+        """Add a bone to the mesh."""
+        self.bones.append(bone)
+
     def merge(self, other: "PlantMesh"):
         if other.faces.size == 0:
             return
@@ -152,6 +168,22 @@ class PlantMesh:
         self.vertices = np.concatenate([self.vertices, other.vertices])
         self.normals = np.concatenate([self.normals, other.normals])
         self.uvs = np.concatenate([self.uvs, other.uvs])
+
+        # Update vertex indices in bones from the other mesh
+        for bone in other.bones:
+            updated_bone = Bone(
+                body_name=bone.body_name,
+                bind_position=bone.bind_position.copy(),
+                bind_quaternion=bone.bind_quaternion.copy(),
+                vertex_indices=[idx + vertices_start for idx in bone.vertex_indices],
+                vertex_weights=bone.vertex_weights.copy()
+            )
+            self.bones.append(updated_bone)
+
+        # Update vertex to entity mapping
+        for vertex_idx, entity in other.vertex_to_entity.items():
+            self.vertex_to_entity[vertex_idx + vertices_start] = entity
+
         try:
             self.faces = np.concatenate([self.faces, other.faces + vertices_start])
         except Exception as e:
@@ -193,12 +225,13 @@ class PlantMesh:
 
 def create_stem_vertex_layers(
     plant: Plant, entity: Entity, rings: Optional[List[VertexLayer]] = None
-) -> List[VertexLayer]:
+) -> Tuple[List[VertexLayer], List[Tuple[Entity, int]]]:  # Return entity-ring mapping
     if rings is None:
         rings = []
+    
+    entity_ring_map = []  # Track which entity corresponds to which ring
 
     comps = plant.get_components(entity)
-
     resolution = 10
 
     if parts.RigidTransformation in comps:
@@ -208,13 +241,16 @@ def create_stem_vertex_layers(
         transform = comps.get_by_type(parts.RigidTransformation)
         ring = VertexLayer.create_ring(transform, radius, resolution)
         rings.append(ring)
+        entity_ring_map.append((entity, len(rings) - 1))
+        
         if comp.AxeNext in comps:
-            return create_stem_vertex_layers(
+            next_rings, next_map = create_stem_vertex_layers(
                 plant, comps.get_by_type(comp.AxeNext).next, rings
             )
+            entity_ring_map.extend(next_map)
+            return next_rings, entity_ring_map
 
-    return rings
-
+    return rings, entity_ring_map
 
 def create_blade_mesh(plant: Plant, leaf_meta: parts.Leaf) -> PlantMesh:
     def create_half(is_left: bool):
@@ -273,9 +309,40 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
     )
 
     for root in roots:
-        rings = create_stem_vertex_layers(plant, root)
-        mesh.merge(PlantMesh(layers=rings, is_closed=True).build_mesh())
+        rings, entity_ring_map = create_stem_vertex_layers(plant, root)
+        stem_mesh = PlantMesh(layers=rings, is_closed=True)
+        
+        # Create bones for each entity in the stem
+        vertex_offset = 0
+        for i, layer in enumerate(rings):
+            # Find the entity for this ring
+            entity = None
+            for ent, ring_idx in entity_ring_map:
+                if ring_idx == i:
+                    entity = ent
+                    break
+            
+            if entity:
+                transform = plant.get_components(entity).get_by_type(parts.RigidTransformation)
+                bone = Bone(
+                    body_name=f"stem_{entity}",
+                    bind_position=transform.translation,
+                    bind_quaternion=np.array([1.0, 0.0, 0.0, 0.0]),  # Identity quaternion
+                    vertex_indices=list(range(vertex_offset, vertex_offset + len(layer.vertices))),
+                    vertex_weights=[1.0] * len(layer.vertices)
+                )
+                stem_mesh.add_bone(bone)
+                
+                # Map vertices to entities
+                for j in range(len(layer.vertices)):
+                    stem_mesh.vertex_to_entity[vertex_offset + j] = entity
+            
+            vertex_offset += len(layer.vertices)
+        
+        stem_mesh.build_mesh()
+        mesh.merge(stem_mesh)
 
+    # Handle leaves (simplified - leaves might not need bones for basic visualization)
     for leaf in plant.query().with_component(parts.Leaf).entities():
         leaf_meta = plant.get_components(leaf).get_by_type(parts.Leaf)
         if leaf_meta.is_initialized():

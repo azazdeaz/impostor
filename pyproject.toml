@@ -17,6 +17,7 @@ dependencies = [
     "pyyaml>=6.0.2,<7",
     "pydantic>=2.11.3",
     "doit>=0.36.0",
+    "mujoco>=3.3.2",
 ]
 readme = "README.md"
 license = { text = "MIT" }

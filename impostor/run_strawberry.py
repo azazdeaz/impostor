@@ -1,14 +1,14 @@
 from impostor.plant import Plant
 import impostor.systems as syst
-
-# from impostor.utils import NormalDistribution
 from impostor import parts
-
 import rerun as rr
 import time
+import numpy as np
+import mujoco
+import mujoco.viewer
 
 
-def test_grow(iterations=120):
+def test_grow(iterations=30):
     plant = Plant()
     stepper = parts.PartStepperSystem(
         exec_order=[
@@ -19,40 +19,78 @@ def test_grow(iterations=120):
     )
     plant.create_entity(parts.Crown())
     plant.create_entity(parts.ScaffoldingSolver())
-    # plant.create_entity(
-    #     parts.Collider(radius=0.1, compute_from_vascular=False),
-    #     parts.RigidTransformation.from_z_translation(0.12),
-    #     parts.Mass(100000),
-    # )
-
-    # relax_spring_system = syst.RelaxSpringSystem()
-    # secondary_growth_system = syst.SecondaryGrowthSystem(
-    #     base_radius=0.012, reduction_factor=0.005
-    # )
-    # update_mass_above_system = syst.UpdateMassAboveSystem()
-    # start_leaf_system = syst.StartLeafSystem(
-    #     at_stem_length=NormalDistribution(0.6, 0.02), branch_order=0, is_trifoliate=True
-    # )
-    # grow_leaf_system = syst.GrowLeafSystem()
 
     for i in range(iterations):
         print(f"Frame {i}")
         stepper.step_parts(plant)
         rr.set_time_sequence("frame_idx", i)
-        # syst.grow_system(plant)
-        # secondary_growth_system.execute(plant)
-        # start_leaf_system.execute(plant)
-        # grow_leaf_system.execute(plant)
-        # update_mass_above_system.execute(plant)
-        # relax_spring_system.execute(plant)
-        # if i % 16 == 0 or i == iterations - 1:
         syst.rr_log_components(plant)
-        # syst.rr_log_graph(plant)
         syst.rr_log_transforms_system(plant)
-        # syst.rr_log_colliders(plant)
 
-        # mesh = syst.create_plant_mesh(plant)
-        # mesh.rr_log()
+        mesh = syst.create_plant_mesh(plant)
+        mesh.rr_log()
+
+    xml_path = f"plant_model_{iterations}.xml"
+    syst.save_mujoco_model(mesh, xml_path, model_name=f"plant_model_{i}")
+
+    # Launch the MuJoCo viewer with mocap animation
+    model = mujoco.MjModel.from_xml_path(xml_path)
+    data = mujoco.MjData(model)
+    
+    print(f"Model has {model.nbody} bodies")
+    print(f"Model has {model.nmocap} mocap bodies")
+    
+    # Store original mocap positions and quaternions
+    original_mocap_pos = data.mocap_pos.copy()
+    original_mocap_quat = data.mocap_quat.copy()
+    
+    print("Original mocap positions:", original_mocap_pos)
+    print("Original mocap quaternions:", original_mocap_quat)
+    
+    with mujoco.viewer.launch_passive(model, data) as viewer:
+        start_time = time.time()
+        
+        while viewer.is_running():
+            step_start = time.time()
+            
+            # Animate mocap bodies with a wave
+            t = time.time() - start_time
+            
+            for mocap_id in range(model.nmocap):
+                # Create wave motion
+                amplitude = 0.04  # Small amplitude for realistic motion
+                frequency = 0.4   # 1 Hz oscillation
+                phase_offset = mocap_id * 0.3  # Phase shift between bodies
+                
+                # Apply wave in X direction to position
+                offset = amplitude * np.sin(2 * np.pi * frequency * t + phase_offset)
+                data.mocap_pos[mocap_id] = original_mocap_pos[mocap_id].copy()
+                offset *= data.mocap_pos[mocap_id][2]
+                data.mocap_pos[mocap_id][0] += offset  # Move in X direction
+                
+                # Optional: Add slight rotation as well
+                rotation_amplitude = 0.1  # Small rotation in radians
+                rotation_offset = rotation_amplitude * np.sin(2 * np.pi * frequency * t + phase_offset)
+                
+                # Create rotation quaternion around Z axis
+                cos_half = np.cos(rotation_offset / 2)
+                sin_half = np.sin(rotation_offset / 2)
+                rotation_quat = np.array([cos_half, 0, 0, sin_half])  # [w, x, y, z]
+                
+                # Combine with original quaternion
+                data.mocap_quat[mocap_id] = rotation_quat
+                
+                
+            # Step the simulation
+            mujoco.mj_step(model, data)
+            
+            # Update the viewer
+            viewer.sync()
+            
+            # Control frame rate (60 FPS)
+            time_until_next_step = model.opt.timestep - (time.time() - step_start)
+            if time_until_next_step > 0:
+                time.sleep(time_until_next_step)
 
 
 if __name__ == "__main__":
