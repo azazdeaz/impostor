@@ -61,6 +61,7 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
                 components = plant.get_components(entity)
                 vascular = components.get_by_type(parts.Vascular)
                 next = components.get_by_type(parts.AxeNext)
+                attachments = components.get_by_type(parts.Attachments)
 
                 if entity not in self._layers:
                     self.add_layer(
@@ -75,6 +76,24 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
                     self._layers[entity].update_positions(
                         ideal_transforms[entity], vascular.radius
                     )
+
+                if attachments is not None:
+                    # If the entity has attachments, add them to the buffer
+                    print(f"Entity {entity} has attachments: {attachments.attachments}")
+                    for attachment in attachments.attachments:
+                        print(f"Adding attachment {attachment} to buffer for entity {entity}")
+                        orientation = plant.get_components(attachment).get_by_type(
+                            parts.AttachmentOrientation
+                        )
+                        if orientation is not None:
+                            transform = parts.RigidTransformation.from_rotation(
+                                orientation.as_rotation()
+                            )
+                        else:
+                            transform = parts.RigidTransformation()
+                        ideal_transforms[attachment] = ideal_transforms[entity].combine(transform)
+                        buffer.append(attachment)
+                            
 
                 if next is not None:
                     # Compute the ideal transform for the next entity

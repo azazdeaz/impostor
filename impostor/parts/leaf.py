@@ -50,6 +50,7 @@ class Leaf(BasePart, rr.AsComponents):
             parts.Vascular(radius=0.005, type=parts.VascularType.MIDRIB),
             parts.Mass(),
             self.attacment_orientation,
+            comp.AxePrev(self.attachment_parent_entity),
         )
         print(f"Creating Leaf {self.base_entity}, {self.attacment_orientation}")
 

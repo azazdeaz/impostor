@@ -60,6 +60,7 @@ class StrawberryStem(rr.AsComponents, BasePart):
         curve = Curve(
             [(0, 0), (0.14, 0.6), (0.5, 0.7), (0.72, 0.4), (0.92, 0.12), (1, 0.0)]
         )
+        print(f"!!!!!!!!!!!!!!!!!!!!!!Creating leaf with curve: {curve}")
         plant.create_entity(parts.Leaf(
             attachment_parent_entity=self._petiole_entities[-1],
 
