@@ -44,8 +44,11 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
     # Create flat structure - all mocap bodies as direct children of world
     entity_to_body: Dict[int, str] = {}
     body_counter = 0
+
+    # Filter empty bones
+    bones = [bone for bone in plant_mesh.bones if len(bone.vertex_indices) > 0]
     
-    for bone in plant_mesh.bones:
+    for bone in bones:
         entity = plant_mesh.vertex_to_entity.get(bone.vertex_indices[0])
         if entity and entity not in entity_to_body:
             body_name = f"body_{body_counter}"
@@ -68,7 +71,7 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
             body_counter += 1
     
     # Add deformable section with skin element
-    if plant_mesh.bones:
+    if bones:
         deformable = ET.SubElement(mujoco, "deformable")
         skin = ET.SubElement(deformable, "skin", 
                            name="plant_skin",
@@ -89,7 +92,7 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
             skin.set("texcoord", texcoord_data)
         
         # Add bone elements
-        for bone in plant_mesh.bones:
+        for bone in bones:
             entity = plant_mesh.vertex_to_entity.get(bone.vertex_indices[0])
             if entity and entity in entity_to_body:
                 bone_elem = ET.SubElement(skin, "bone",

@@ -297,6 +297,7 @@ def create_blade_mesh(plant: Plant, leaf_meta: parts.Leaf) -> PlantMesh:
 def create_plant_mesh(plant: Plant) -> PlantMesh:
     mesh = PlantMesh()
 
+    # Process stems first to create bones
     roots = (
         plant.query()
         .with_component(parts.Vascular)
@@ -328,8 +329,8 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
                     body_name=f"stem_{entity}",
                     bind_position=transform.translation,
                     bind_quaternion=np.array([1.0, 0.0, 0.0, 0.0]),  # Identity quaternion
-                    vertex_indices=list(range(vertex_offset, vertex_offset + len(layer.vertices))),
-                    vertex_weights=[1.0] * len(layer.vertices)
+                    vertex_indices=[],
+                    vertex_weights=[]
                 )
                 stem_mesh.add_bone(bone)
                 
@@ -340,9 +341,10 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
             vertex_offset += len(layer.vertices)
         
         stem_mesh.build_mesh()
+        # We'll compute weights for the entire mesh at the end
         mesh.merge(stem_mesh)
 
-    # Handle leaves (simplified - leaves might not need bones for basic visualization)
+    # Handle leaves
     for leaf in plant.query().with_component(parts.Leaf).entities():
         leaf_meta = plant.get_components(leaf).get_by_type(parts.Leaf)
         if leaf_meta.is_initialized():
@@ -352,4 +354,62 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
             except Exception as e:
                 print("Error on creating blade mesh", e)
 
+    # After all components are merged, compute weights for the entire mesh
+    # This ensures all vertices, including those from leaves, have weights
+    if mesh.bones:
+        compute_vertex_weights(mesh)
+    else:
+        print("Warning: No bones in mesh - skinning will fail")
+
     return mesh
+
+def compute_vertex_weights(mesh: PlantMesh, max_bones_per_vertex: int = 4, distance_threshold: float = 1e-5):
+    """
+    Compute vertex weights for all vertices in the mesh.
+    For each vertex, find the closest bones and assign weights inversely proportional to distance.
+    
+    Args:
+        mesh: The mesh to compute weights for
+        max_bones_per_vertex: Maximum number of bones to influence each vertex
+        distance_threshold: If distance to a bone is less than this, assign weight 1.0 to that bone only
+    """
+    if not mesh.bones:
+        return  # No bones to compute weights for
+        
+    # Clear existing vertex assignments in bones
+    for bone in mesh.bones:
+        bone.vertex_indices = []
+        bone.vertex_weights = []
+    
+    # For each vertex, compute weights for the closest bones
+    for vertex_idx, vertex_position in enumerate(mesh.vertices):
+        # Compute distances to all bones
+        distances = []
+        for bone_idx, bone in enumerate(mesh.bones):
+            distance = np.linalg.norm(vertex_position - bone.bind_position)
+            distances.append((bone_idx, distance))
+        
+        # Sort by distance
+        distances.sort(key=lambda x: x[1])
+        
+        # Check if the closest bone is very close to the vertex
+        if distances[0][1] < distance_threshold:
+            # If a bone is very close, only use that bone with weight 1.0
+            bone_idx = distances[0][0]
+            mesh.bones[bone_idx].vertex_indices.append(vertex_idx)
+            mesh.bones[bone_idx].vertex_weights.append(1.0)
+        else:
+            # Otherwise use inverse distance weighting with the closest max_bones_per_vertex bones
+            closest_bones = distances[:max_bones_per_vertex]
+            
+            # Compute inverse distances (closer bones have higher weight)
+            weights = [1.0 / (dist + 1e-6) for _, dist in closest_bones]
+            
+            # Normalize weights to sum to 1.0
+            total_weight = sum(weights)
+            normalized_weights = [w / total_weight for w in weights]
+            
+            # Assign vertex to bones with corresponding weights
+            for i, (bone_idx, _) in enumerate(closest_bones):
+                mesh.bones[bone_idx].vertex_indices.append(vertex_idx)
+                mesh.bones[bone_idx].vertex_weights.append(normalized_weights[i])
