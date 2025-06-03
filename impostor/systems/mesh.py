@@ -57,6 +57,7 @@ class Bone:
     bind_quaternion: np.ndarray  # 4D quaternion [w, x, y, z]
     vertex_indices: List[int]
     vertex_weights: List[float]
+    radius: float = 0.001
 
 
 @dataclass
@@ -67,7 +68,7 @@ class PlantMesh:
     normals: np.ndarray = field(default_factory=lambda: np.ndarray((0, 3)))
     uvs: np.ndarray = field(default_factory=lambda: np.ndarray((0, 2)))
     is_closed: bool = False
-    bones: List[Bone] = field(default_factory=list)  # New field for bone data
+    bones: Dict[Entity, Bone] = field(default_factory=dict)
 
     def add_layer(self, layer: VertexLayer):
         self.layers.append(layer)
@@ -156,9 +157,9 @@ class PlantMesh:
 
         return self
 
-    def add_bone(self, bone: Bone):
+    def add_bone(self, entity: Entity, bone: Bone):
         """Add a bone to the mesh."""
-        self.bones.append(bone)
+        self.bones[entity] = bone
 
     def merge(self, other: "PlantMesh"):
         if other.faces.size == 0:
@@ -169,16 +170,15 @@ class PlantMesh:
         self.uvs = np.concatenate([self.uvs, other.uvs])
 
         # Update vertex indices in bones from the other mesh
-        for bone in other.bones:
+        for bone in other.bones.values():
             updated_bone = Bone(
                 body_name=bone.body_name,
                 bind_position=bone.bind_position.copy(),
                 bind_quaternion=bone.bind_quaternion.copy(),
                 vertex_indices=[idx + vertices_start for idx in bone.vertex_indices],
-                vertex_weights=bone.vertex_weights.copy()
+                vertex_weights=bone.vertex_weights.copy(),
             )
             self.bones.append(updated_bone)
-
 
         try:
             self.faces = np.concatenate([self.faces, other.faces + vertices_start])
@@ -235,7 +235,7 @@ def create_stem_vertex_layers(
         transform = comps.get_by_type(parts.RigidTransformation)
         ring = VertexLayer.create_ring(transform, radius, resolution)
         rings.append(ring)
-        
+
         if comp.AxeNext in comps:
             next_rings = create_stem_vertex_layers(
                 plant, comps.get_by_type(comp.AxeNext).next, rings
@@ -243,6 +243,7 @@ def create_stem_vertex_layers(
             return next_rings
 
     return rings
+
 
 def create_blade_mesh(plant: Plant, leaf_meta: parts.Leaf) -> PlantMesh:
     def create_half(is_left: bool):
@@ -304,29 +305,35 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
     for root in roots:
         rings = create_stem_vertex_layers(plant, root)
         stem_mesh = PlantMesh(layers=rings, is_closed=True)
-            
-        
+
         stem_mesh.build_mesh()
         # We'll compute weights for the entire mesh at the end
         mesh.merge(stem_mesh)
-    
+
     # Find the solver component
-    scaffolding_solver = plant.get_components(plant.query().with_component(parts.ScaffoldingSolver).entities()[0])
+    scaffolding_solver = plant.get_components(
+        plant.query().with_component(parts.ScaffoldingSolver).single()
+    ).get_by_type(parts.ScaffoldingSolver)
     if scaffolding_solver is not None:
         # Add each layer as a bone
-        for layer in scaffolding_solver.layers:
+        for layer_entity, layer in scaffolding_solver._layers.items():
             # Create a bone for each layer
+            transform = plant.get_components(layer_entity).get_by_type(parts.RigidTransformation)
+            if transform is None:
+                print(f"Warning: No RigidTransformation for layer {layer_entity}")
+                continue
+
             bone = Bone(
-                body_name=f"layer_{layer.base_entity}",
-                bind_position=plant.get_components(layer.base_entity).get_by_type(parts.RigidTransformation).translation,
-                bind_quaternion=np.array([1.0, 0.0, 0.0, 0.0]),  # Identity quaternion
+                body_name=f"layer_{layer_entity}",
+                bind_position=transform.translation,
+                bind_quaternion=transform.rotation.as_quat(),
                 vertex_indices=[],
-                vertex_weights=[]
+                vertex_weights=[],
             )
-            mesh.add_bone(bone)
+
+            mesh.add_bone(layer_entity, bone)
             # Add the layer vertices to the mesh
             mesh.add_layer(VertexLayer.from_vertices(layer.get_positions()))
-
 
     # Handle leaves
     for leaf in plant.query().with_component(parts.Leaf).entities():
@@ -347,11 +354,14 @@ def create_plant_mesh(plant: Plant) -> PlantMesh:
 
     return mesh
 
-def compute_vertex_weights(mesh: PlantMesh, max_bones_per_vertex: int = 4, distance_threshold: float = 1e-5):
+
+def compute_vertex_weights(
+    mesh: PlantMesh, max_bones_per_vertex: int = 4, distance_threshold: float = 1e-5
+):
     """
     Compute vertex weights for all vertices in the mesh.
     For each vertex, find the closest bones and assign weights inversely proportional to distance.
-    
+
     Args:
         mesh: The mesh to compute weights for
         max_bones_per_vertex: Maximum number of bones to influence each vertex
@@ -359,41 +369,41 @@ def compute_vertex_weights(mesh: PlantMesh, max_bones_per_vertex: int = 4, dista
     """
     if not mesh.bones:
         return  # No bones to compute weights for
-        
+
     # Clear existing vertex assignments in bones
-    for bone in mesh.bones:
+    for bone in mesh.bones.values():
         bone.vertex_indices = []
         bone.vertex_weights = []
-    
+
     # For each vertex, compute weights for the closest bones
     for vertex_idx, vertex_position in enumerate(mesh.vertices):
         # Compute distances to all bones
         distances = []
-        for bone_idx, bone in enumerate(mesh.bones):
+        for entity, bone in mesh.bones.items():
             distance = np.linalg.norm(vertex_position - bone.bind_position)
-            distances.append((bone_idx, distance))
-        
+            distances.append((entity, distance))
+
         # Sort by distance
         distances.sort(key=lambda x: x[1])
-        
+
         # Check if the closest bone is very close to the vertex
         if distances[0][1] < distance_threshold:
             # If a bone is very close, only use that bone with weight 1.0
-            bone_idx = distances[0][0]
-            mesh.bones[bone_idx].vertex_indices.append(vertex_idx)
-            mesh.bones[bone_idx].vertex_weights.append(1.0)
+            entity = distances[0][0]
+            mesh.bones[entity].vertex_indices.append(vertex_idx)
+            mesh.bones[entity].vertex_weights.append(1.0)
         else:
             # Otherwise use inverse distance weighting with the closest max_bones_per_vertex bones
             closest_bones = distances[:max_bones_per_vertex]
-            
+
             # Compute inverse distances (closer bones have higher weight)
             weights = [1.0 / (dist + 1e-6) for _, dist in closest_bones]
-            
+
             # Normalize weights to sum to 1.0
             total_weight = sum(weights)
             normalized_weights = [w / total_weight for w in weights]
-            
+
             # Assign vertex to bones with corresponding weights
-            for i, (bone_idx, _) in enumerate(closest_bones):
-                mesh.bones[bone_idx].vertex_indices.append(vertex_idx)
-                mesh.bones[bone_idx].vertex_weights.append(normalized_weights[i])
+            for i, (entity, _) in enumerate(closest_bones):
+                mesh.bones[entity].vertex_indices.append(vertex_idx)
+                mesh.bones[entity].vertex_weights.append(normalized_weights[i])
