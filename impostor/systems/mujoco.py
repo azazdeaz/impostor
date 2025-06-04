@@ -59,20 +59,20 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
             mocap="true",
         )
 
-        # Add sphere collider using bone radius
-        ET.SubElement(
-            body,
-            "geom",
-            name=f"geom_{entity}",
-            type="sphere",
-            size=str(bone.radius),
-            rgba="0.2 0.8 0.2 0.3",  # Semi-transparent green
-            mass="0.1",
-        )
+        # # Add sphere collider using bone radius
+        # ET.SubElement(
+        #     body,
+        #     "geom",
+        #     name=f"geom_{entity}",
+        #     type="sphere",
+        #     size=str(bone.radius),
+        #     rgba="0.2 0.8 0.2 0.3",  # Semi-transparent green
+        #     mass="0.1",
+        # )
 
     # Add draggable body to the world
     draggable_body = ET.SubElement(
-        worldbody, "body", name="draggable", pos="0.1 0 0.1", gravcomp="1"
+        worldbody, "body", name="draggable", pos="0.05 0 0.09", gravcomp="1"
     )
 
     ET.SubElement(
@@ -81,7 +81,7 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
         name="sphere_geom",
         type="sphere",
         size="0.015",
-        rgba="0.2 0.2 0.8 1",  # Blue sphere
+        rgba="0.2 0.2 0.8 0.4",  # Blue sphere
         mass="0.001",
         solimp="0.9 0.95 0.001",  # Soft contact parameters
         solref="0.02 1",

@@ -141,7 +141,7 @@ def rr_log_transforms_system(plant: Plant):
         transform = comps.get_by_type(parts.RigidTransformation)
 
         # Draw a circle around the stem
-        if parts.Vascular in comps:
+        if False and parts.Vascular in comps:
             vascular = comps.get_by_type(parts.Vascular)
             r = vascular.radius
             # if comps.get_by_type(parts.Vascular).type == parts.VascularType.STEM:

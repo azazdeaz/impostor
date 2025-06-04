@@ -1,12 +1,9 @@
-from dataclasses import dataclass
-from typing import Dict, List, Tuple
-from impostor.parts import BasePart, Entity, Stick, ScaffoldingLayer, Position
+from typing import Dict, List
+from impostor.parts import BasePart, Entity, Stick, ScaffoldingLayer
 from impostor.plant import Plant
 from impostor import parts
 import torch
-import numpy as np
 import rerun as rr
-from scipy.spatial.transform import Rotation
 
 class ScaffoldingSolver(BasePart, rr.AsComponents):
     def __init__(self):
@@ -28,7 +25,7 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
         self._position_param = None
         self._optimizer = None
 
-    def step(self, plant: Plant, _entity: Entity):
+    def step(self, plant: Plant, _entity: Entity, bail=False):
         roots = (
             plant.query()
             .with_component(parts.Vascular)
@@ -39,6 +36,7 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
             )
             .entities()
         )
+
 
         # Compute where all the transforms should be for each entity
         # This will be used to compute the target lengths for the sticks
@@ -61,7 +59,7 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
                 components = plant.get_components(entity)
                 vascular = components.get_by_type(parts.Vascular)
                 next = components.get_by_type(parts.AxeNext)
-                attachments = components.get_by_type(parts.Attachments)
+                attachments = None#components.get_by_type(parts.Attachments)
 
                 if entity not in self._layers:
                     self.add_layer(
@@ -79,9 +77,7 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
 
                 if attachments is not None:
                     # If the entity has attachments, add them to the buffer
-                    print(f"Entity {entity} has attachments: {attachments.attachments}")
                     for attachment in attachments.attachments:
-                        print(f"Adding attachment {attachment} to buffer for entity {entity}")
                         orientation = plant.get_components(attachment).get_by_type(
                             parts.AttachmentOrientation
                         )
@@ -150,7 +146,7 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
                 dim=1,
             )
         )
-        print(f"Average stick length: {average_stick_length}")
+
         if average_stick_length < 0.02:
             self._current_positions = ideal_positions.clone()
 
@@ -166,6 +162,15 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
         self._position_param = torch.nn.Parameter(self._current_positions.clone())
         self._optimizer = torch.optim.Adam(
             [self._position_param], lr=self.learning_rate
+        )
+
+
+        # Query all sphere colliders and compute collision penalties
+        sphere_colliders = (
+            plant.query()
+            .with_component(parts.SphereCollider)
+            .with_component(parts.RigidTransformation)
+            .entities()
         )
 
         # Run optimization loop
@@ -196,8 +201,33 @@ class ScaffoldingSolver(BasePart, rr.AsComponents):
                 self._position_param[locked_position_indices] - locked_positions
             )
             lock_loss = torch.sum(lock_errors**2)
+            
+            collision_loss = torch.tensor(0.0, requires_grad=True)
+            for collider_entity in sphere_colliders:
+                collider_components = plant.get_components(collider_entity)
+                sphere_collider = collider_components.get_by_type(parts.SphereCollider)
+                collider_transform = collider_components.get_by_type(parts.RigidTransformation)
+                
+                # Get sphere center position
+                sphere_center = torch.tensor(collider_transform.translation, dtype=torch.float32)
+                sphere_radius = sphere_collider.radius
+                
+                # Check distance from each position to sphere center
+                distances = torch.norm(self._position_param - sphere_center, dim=1)
+                
+                # Compute penetration (negative distance means inside sphere)
+                penetrations = sphere_radius - distances
+                
+                # Only penalize positions inside the sphere (penetration > 0)
+                inside_mask = penetrations > 0
+                if inside_mask.any():
+                    # Quadratic penalty for penetration
+                    collision_penalty = torch.sum(penetrations[inside_mask] ** 2)
+                    collision_loss = collision_loss + collision_penalty
 
-            loss = stick_loss + lock_loss
+            loss = stick_loss + lock_loss + collision_loss * 10.0
+
+
 
             # Backpropagate and optimize
             loss.backward()
