@@ -18,6 +18,9 @@ dependencies = [
     "pydantic>=2.11.3",
     "doit>=0.36.0",
     "mujoco>=3.3.2",
+    "toml>=0.10.2",
+    "watchdog>=6.0.0",
+    "jsonschema>=4.23.0",
 ]
 readme = "README.md"
 license = { text = "MIT" }

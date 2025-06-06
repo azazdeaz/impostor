@@ -1,0 +1,38 @@
+[[fn]]
+name = "time"
+model_kind = "Input"
+value = 0.6
+
+[[fn]]
+name = "mean"
+model_kind = "Input"
+value = 0.0
+
+[[fn]]
+name = "curve"
+model_kind = "Curve"
+control_points = [ [ 0.0, 0.0,], [ 1.0, 2.0,], [ 2.0, 0.0,], [ 3.0, 3.0,],]
+
+[fn.t]
+fn = "time"
+[[fn]]
+name = "normal_dist"
+model_kind = "NormalDistribution"
+std = 1.0
+
+[fn.mean]
+fn = "mean"
+[[fn]]
+name = "sum"
+model_kind = "Sum"
+
+[fn.a]
+fn = "curve"
+[fn.b]
+fn = "normal_dist"
+[[fn]]
+name = "output"
+model_kind = "Print"
+
+[fn.message]
+fn = "sum"
