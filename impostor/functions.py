@@ -25,7 +25,6 @@ class Function(BaseModel):
     
     
     def call_with_dependencies(self, dependencies: Dict[str, Any]) -> Any:
-        print(f"Calling {self.name} with dependencies: {dependencies}")
         # Convert self to dict and merge with dependencies
         self_dict = self.model_dump()
         

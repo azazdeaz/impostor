@@ -22,9 +22,6 @@ class Composer:
         for fn_dict in data["fn"]:
             func = function_type_adapter.validate_python(fn_dict)
             self.functions[func.name] = func
-            print(f"Loaded function: {func.name} of type {func.model_kind}")
-            print(func)  # Print the function details for debugging
-        
         
         # Clear execution plans when loading new functions
         self._execution_plans.clear()
@@ -47,7 +44,6 @@ class Composer:
             
             func = self.functions[func_name]
             func_deps = func.get_dependencies()
-            print(f"Collecting dependencies for {func_name}: {func_deps}")
             dependencies[func_name] = list(func_deps)
             
             # Recursively collect dependencies
@@ -106,6 +102,34 @@ class Composer:
         return results[function_name]
 
 if __name__ == "__main__":
-    composer = Composer("test1.toml")
+    import time
+    import os
+
+    toml_file_path = "test1.toml"
+    composer = Composer() # Initialize empty, will load in the loop
+    
+    # Initial load and evaluation
+    composer.load_from_toml(toml_file_path)
+    last_mtime = os.path.getmtime(toml_file_path)
     result = composer.evaluate("output")
-    print(f"Result: {result}")
+    print(f"Initial Result: {result}")
+
+    try:
+        while True:
+            time.sleep(1) # Check every second
+            current_mtime = os.path.getmtime(toml_file_path)
+            if current_mtime != last_mtime:
+                print(f"Detected change in {toml_file_path}. Reloading and re-evaluating...")
+                try:
+                    composer.load_from_toml(toml_file_path) # Reload functions
+                    composer.evaluate("output") # Re-evaluate
+                    last_mtime = current_mtime
+                except Exception as e:
+                    print(f"Error during reload or evaluation: {e}")
+                    # Optionally, decide if you want to update last_mtime even on error
+                    # to prevent repeated attempts with a malformed file.
+                    # last_mtime = current_mtime 
+    except KeyboardInterrupt:
+        print("Stopping file watcher.")
+    except FileNotFoundError:
+        print(f"Error: {toml_file_path} not found. Please ensure the file exists.")
