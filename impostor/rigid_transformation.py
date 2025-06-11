@@ -1,8 +1,7 @@
-from typing import Iterable, Tuple
+from typing import Iterable
 import numpy as np
-from scipy.spatial.transform._rotation import Rotation
+from scipy.spatial.transform import Rotation
 from dataclasses import dataclass, field
-import impostor.messages as messages
 import rerun as rr
 from rerun.any_value import AnyBatchValue
 
@@ -55,15 +54,6 @@ class RigidTransformation(rr.AsComponents):
         RigidTransformation: A new RigidTransformation object.
         """
         return RigidTransformation(rotation * self.rotation, self.translation)
-    
-    def to_pose_message(self) -> messages.Pose:
-        """
-        Convert the rigid transformation to a Pose message.
-        """
-        return messages.Pose(
-            position=tuple(self.translation),
-            orientation=tuple(self.rotation.as_quat())
-        )
     
 
     def transform_point(self, point: np.ndarray) -> np.ndarray:

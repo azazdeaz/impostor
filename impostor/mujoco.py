@@ -1,11 +1,8 @@
 import xml.etree.ElementTree as ET
-from typing import Dict
 from xml.dom import minidom
 
-from .mesh import PlantMesh
 
-
-def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") -> str:
+def create_mujoco_model(plant_mesh, model_name: str = "plant_model") -> str:
     """Create a MuJoCo XML model from a plant."""
 
     # Create the root XML element
@@ -44,18 +41,18 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
         rgba="0.9 0.9 0.9 1",
     )
 
-    # Filter empty bones
-    bones = {e: b for e, b in plant_mesh.bones.items() if b.vertex_indices}
+    # Filter empty bones - plant_mesh.bones is List[Bone]
+    active_bones = [b for b in plant_mesh.bones if b.vertex_indices]
 
-    for entity, bone in bones.items():
-        body_name = f"body_{entity}"
-
+    for bone in active_bones:
         # Create mocap body as direct child of world
+        # body_name is directly from bone.body_name
         body = ET.SubElement(
             worldbody,
             "body",
-            name=body_name,
+            name=bone.body_name,
             pos=f"{bone.bind_position[0]} {bone.bind_position[1]} {bone.bind_position[2]}",
+            quat=f"{bone.bind_quaternion[0]} {bone.bind_quaternion[1]} {bone.bind_quaternion[2]} {bone.bind_quaternion[3]}",
             mocap="true",
         )
 
@@ -63,12 +60,22 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
         # ET.SubElement(
         #     body,
         #     "geom",
-        #     name=f"geom_{entity}",
+        #     name=f"geom_{bone.body_name}", # Use bone.body_name for unique geom name
         #     type="sphere",
-        #     size=str(bone.radius),
+        #     size=str(bone.radius * 20),
         #     rgba="0.2 0.8 0.2 0.3",  # Semi-transparent green
         #     mass="0.1",
         # )
+        # Add a box geom to represent the bone
+        ET.SubElement(
+            body,
+            "geom",
+            name=f"geom_{bone.body_name}",
+            type="box",
+            size="0.01 0.01 0.01", 
+            rgba="0.2 0.8 0.2 0.3",  # Semi-transparent green
+            mass="0.1",
+        )
 
     # Add draggable body to the world
     draggable_body = ET.SubElement(
@@ -116,11 +123,11 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
         skin.set("texcoord", texcoord_data)
 
     # Add bone elements
-    for entity, bone in bones.items():
+    for bone in active_bones: # Iterate over the list of active_bones
         bone_elem = ET.SubElement(
             skin,
             "bone",
-            body=f"body_{entity}",
+            body=bone.body_name, # Use bone.body_name
             bindpos=f"{bone.bind_position[0]} {bone.bind_position[1]} {bone.bind_position[2]}",
             bindquat=f"{bone.bind_quaternion[0]} {bone.bind_quaternion[1]} {bone.bind_quaternion[2]} {bone.bind_quaternion[3]}",
         )
@@ -139,7 +146,7 @@ def create_mujoco_model(plant_mesh: PlantMesh, model_name: str = "plant_model") 
 
 
 def save_mujoco_model(
-    plant_mesh: PlantMesh, filename: str, model_name: str = "plant_model"
+    plant_mesh, filename: str, model_name: str = "plant_model"
 ):
     """Save a MuJoCo model to file."""
     xml_content = create_mujoco_model(plant_mesh, model_name)
