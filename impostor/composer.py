@@ -1,8 +1,11 @@
 from pathlib import Path
 from typing import Any, Dict, List
+
 import toml
 from pydantic import TypeAdapter
+
 from impostor.functions import FunctionType
+
 
 class Composer:
     def __init__(self, toml_path: str = None):
@@ -21,9 +24,13 @@ class Composer:
         
         for fn_dict in data["fn"]:
             func = function_type_adapter.validate_python(fn_dict)
-            self.functions[func.name] = func
-        
-        # Clear execution plans when loading new functions
+            self.add_function(func)
+    
+    def add_function(self, func: FunctionType):
+        """Add a function to the composer"""
+        if func.name in self.functions:
+            raise ValueError(f"Function with name '{func.name}' already exists.")
+        self.functions[func.name] = func
         self._execution_plans.clear()
     
     def _build_execution_plan(self, target_func: str) -> List[str]:
@@ -45,7 +52,7 @@ class Composer:
             func = self.functions[func_name]
             func_deps = func.get_dependencies()
             dependencies[func_name] = list(func_deps)
-            
+
             # Recursively collect dependencies
             for dep in func_deps:
                 collect_dependencies(dep, path)
@@ -102,8 +109,14 @@ class Composer:
         return results[function_name]
 
 if __name__ == "__main__":
-    import time
     import os
+    import time
+    import rerun as rr
+
+     # create a recording id so the Rust process can log to the same Rerun recording
+    recording_id = str(int(time.time()))
+    rr.init("impostor", spawn=True, recording_id=recording_id)
+
 
     toml_file_path = "test1.toml"
     composer = Composer() # Initialize empty, will load in the loop
@@ -114,12 +127,16 @@ if __name__ == "__main__":
     result = composer.evaluate("output")
     print(f"Initial Result: {result}")
 
+    iterations = 0
+
     try:
         while True:
             time.sleep(1) # Check every second
             current_mtime = os.path.getmtime(toml_file_path)
             if current_mtime != last_mtime:
                 print(f"Detected change in {toml_file_path}. Reloading and re-evaluating...")
+                iterations += 1
+                rr.set_time_sequence("iteration", iterations)
                 try:
                     composer.load_from_toml(toml_file_path) # Reload functions
                     composer.evaluate("output") # Re-evaluate

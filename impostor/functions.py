@@ -1,5 +1,6 @@
 from typing import Any, Callable, Dict, List, Set, Tuple, Literal, Union
 import numpy as np
+import rerun as rr
 from dataclasses import dataclass, field, replace
 from scipy.interpolate import CubicSpline
 from pydantic import BaseModel, Field, TypeAdapter, PrivateAttr # Added PrivateAttr
@@ -40,7 +41,7 @@ class Function(BaseModel):
         return resolved_instance.call()
 
 class Curve(Function):
-    model_kind: Literal["Curve"] = "Curve" # Discriminator field
+    model_kind: Literal["Curve"] = "Curve"
     control_points: List[Tuple[float, float]] = Field(default_factory=list)
     _curve: Any = PrivateAttr(default=None) # Declare _curve as a private attribute
     t: float | Link = Field(default=0.0, description="Parameter for evaluating the spline at a specific point")
@@ -65,7 +66,7 @@ class Curve(Function):
         return 0.0 # Or raise an error if curve cannot be evaluated
 
 class NormalDistribution(Function):
-    model_kind: Literal["NormalDistribution"] = "NormalDistribution" # Discriminator field
+    model_kind: Literal["NormalDistribution"] = "NormalDistribution"
     mean: float | Link = Field(default=0.0) 
     std: float
 
@@ -75,7 +76,7 @@ class NormalDistribution(Function):
 
 
 class Sum(Function):
-    model_kind: Literal["Sum"] = "Sum" # Discriminator field
+    model_kind: Literal["Sum"] = "Sum"
     a: float | Link = Field(default=0.0)
     b: float | Link = Field(default=0.0)
     def call(self) -> float:
@@ -83,24 +84,49 @@ class Sum(Function):
     
 
 class Input(Function):
-    model_kind: Literal["Input"] = "Input" # Discriminator field
+    model_kind: Literal["Input"] = "Input"
     value: Any
     
     def call(self) -> Any:
         return self.value
     
 class Print(Function):
-    model_kind: Literal["Print"] = "Print" # Discriminator field
+    model_kind: Literal["Print"] = "Print"
     message: str | float | Link = Field(default="")
 
     def call(self) -> None:
         print(f"Output: {str(self.message)}") 
+
+class LogScalar(Function):
+    model_kind: Literal["LogScalar"] = "LogScalar"
+    value: float | Link = Field(default=0.0)
+    name: str = Field(default="scalar")
+
+    def call(self) -> None:
+        rr.log(self.name, rr.Scalar(self.value)) # Assuming rr.log is the correct logging function
+
+class Loop(Function):
+    model_kind: Literal["Loop"] = "Loop"
+    input: List[Any] | Link = Field(default_factory=list)
+    output: str
+    fn: List['FunctionType'] = Field(default_factory=list)
+    def call(self) -> List[Any]:
+        from impostor.composer import Composer
+        composer = Composer()
+        for f in self.fn:
+            composer.add_function(f)
+        
+        return composer.evaluate(self.output)
+        
+
+        
+
     
 
     
 # List that can hold all possible function types
 # Union is implicitly created by the pipe operator in modern Python type hints
-FunctionType = Curve | NormalDistribution | Sum | Input | Print
+FunctionType = Curve | NormalDistribution | Sum | Input | Print | LogScalar
 
  
 if __name__ == "__main__":
@@ -109,7 +135,6 @@ if __name__ == "__main__":
         Input(name="mean", value=0.0),
         Curve(name="curve", control_points=[(0, 0), (1, 2), (2, 0), (3, 3)], t=Link(fn="time")),
         NormalDistribution(name="normal_dist", mean=Link(fn="mean"), std=1),
-        Sum(name="sum", a=Link(fn="curve"), b=Link(fn="normal_dist")),
         Print(name="output", message=Link(fn="sum")),
     ]
     # print(fn) # Original print
