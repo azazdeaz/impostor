@@ -98,28 +98,7 @@ def test_grow():
     print("Original mocap positions:", original_mocap_pos)
     print("Original mocap quaternions:", original_mocap_quat)
 
-    pitch_fn = Curve([(0, 10.6), (0.5, 0.8), (1, -30.0)])
-    last_transform = RigidTransformation.from_rotation(
-        Rotation.from_euler("z", 0, degrees=True)
-    )
-    bone_transforms = {
-        mesh.bones[0].body_name: last_transform
-    }
-    for i, bone in enumerate(mesh.bones[1:], start=1):
-        step = length / (bone_count - 1)
-        p0 = (i - 1) / (bone_count - 1)
-        p1 = i / (bone_count - 1)
-        pitch = pitch_fn.integrate(p0, p1)
-        rotation = Rotation.from_euler("y", pitch)
-        translation = np.array([0, 0, step])
-        transform = RigidTransformation(
-            translation=translation, rotation=rotation
-        )
-        global_transform = last_transform.combine(transform)
-        print(f"Bone {i} translation: {translation}, rotation: {rotation.as_euler('xyz', degrees=True)}")
-        print(f"Bone {i} bind position: {bone.bind_position}, bind quaternion: {bone.bind_quaternion}")
-        bone_transforms[bone.body_name] = global_transform
-        last_transform = global_transform
+    pitch_fn = Curve([(0, 1.6), (0.5, 0.8), (1, -3.0)])
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         while viewer.is_running():
@@ -131,7 +110,55 @@ def test_grow():
             draggable_body_id = mujoco.mj_name2id(
                 model, mujoco.mjtObj.mjOBJ_BODY, "draggable"
             )
+            draggable_geom_id = mujoco.mj_name2id(
+                model, mujoco.mjtObj.mjOBJ_GEOM, "sphere_geom"
+            )
             collider_translation = data.xpos[draggable_body_id].copy()
+            collider_radius = 0.015 * 2.2
+
+            last_transform = RigidTransformation.from_rotation(
+                Rotation.from_euler("z", 0, degrees=True)
+            )
+            bone_transforms = {mesh.bones[0].body_name: last_transform}
+
+            for i, bone in enumerate(mesh.bones[1:], start=1):
+                step = length / (bone_count - 1)
+                p0 = (i - 1) / (bone_count - 1)
+                p1 = i / (bone_count - 1)
+                pitch = pitch_fn.integrate(p0, p1)
+                rotation = Rotation.from_euler("y", pitch)
+                translation = np.array([0, 0, step])
+                transform = RigidTransformation(
+                    translation=translation, rotation=rotation
+                )
+                global_transform = last_transform.combine(transform)
+
+                # check it the bone is inside the collision sphere
+                is_colliding = (
+                    np.linalg.norm(global_transform.translation - collider_translation)
+                    < collider_radius
+                )
+
+                if is_colliding:
+                    print(
+                        f"Bone {bone.body_name} is colliding with the sphere at {global_transform.translation}"
+                    )
+                    # Push transform to the closest point on the sphere
+                    direction = global_transform.translation - collider_translation
+                    direction /= np.linalg.norm(direction)
+                    global_transform.translation = (
+                        collider_translation + direction * collider_radius
+                    )
+
+                bone_transforms[bone.body_name] = global_transform
+                if is_colliding:
+                    bone_names = [mesh.bones[i].body_name for i in range(i + 1)]
+                    transforms = [bone_transforms[name] for name in bone_names]
+                    fabrik_adjustment(transforms, [step] * i)
+                    for j, name in enumerate(bone_names):
+                        bone_transforms[name] = transforms[j]
+
+                last_transform = global_transform
 
             for bone in mesh.bones:
                 body_id = mujoco.mj_name2id(
@@ -140,8 +167,54 @@ def test_grow():
                 mocap_id = model.body_mocapid[body_id]
                 transform = bone_transforms[bone.body_name]
                 data.mocap_pos[mocap_id] = transform.translation.copy()
-                data.mocap_quat[mocap_id] = transform.rotation.as_quat(scalar_first=True).copy()
+                data.mocap_quat[mocap_id] = transform.rotation.as_quat(
+                    scalar_first=True
+                ).copy()
 
+
+def fabrik_adjustment(transforms, bone_lengths):
+    """
+    Adjust the transforms using FABRIK algorithm.
+    """
+    n = len(transforms)
+    if n == 0:
+        return transforms
+    
+    # Save different between the rotation of the last bone and the second last
+    last_rotation_diff = transforms[-1].rotation.as_rotvec() - transforms[-2].rotation.as_rotvec()
+
+    # Backward pass
+    for i in range(n - 2, 0, -1):
+        direction = transforms[i + 1].translation - transforms[i].translation
+        length = np.linalg.norm(direction)
+        if length > 0:
+            direction /= length
+            transforms[i].translation = (
+                transforms[i + 1].translation - direction * bone_lengths[i]
+            )
+
+    # Foward pass
+    for i in range(1, n):
+        direction = transforms[i].translation - transforms[i - 1].translation
+        length = np.linalg.norm(direction)
+        if length > 0:
+            direction /= length
+            transforms[i].translation = (
+                transforms[i - 1].translation + direction * bone_lengths[i - 1]
+            )
+
+    # Update rotations to point towards the next bone
+    for i in range(n - 1):
+        direction = transforms[i + 1].translation - transforms[i].translation
+        if np.linalg.norm(direction) > 0:
+            direction /= np.linalg.norm(direction)
+            transforms[i].rotation = Rotation.from_rotvec(
+                np.cross([0, 0, 1], direction)
+            )
+    # Make the last bone point the same direction as the second last plus the original difference
+    transforms[-1].rotation = Rotation.from_rotvec(
+        transforms[-2].rotation.as_rotvec() + last_rotation_diff
+    )
 
 if __name__ == "__main__":
     test_grow()
