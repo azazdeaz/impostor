@@ -2,6 +2,7 @@ from impostor.rigid_transformation import RigidTransformation
 from impostor.mujoco import save_mujoco_model
 from impostor.mesh import Mesh, Bone, compute_vertex_weights
 from scipy.spatial.transform._rotation import Rotation
+from scipy.spatial.transform import Slerp
 import numpy as np
 import mujoco
 import mujoco.viewer
@@ -101,6 +102,8 @@ def test_grow():
     pitch_fn = Curve([(0, 1.6), (0.5, 0.8), (1, -3.0)])
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
+        previous_bone_transforms = {}
+
         while viewer.is_running():
             # Step the simulation
             mujoco.mj_step(model, data)
@@ -109,9 +112,6 @@ def test_grow():
             # Find the body called "draggable" and copy its position into the collider entity
             draggable_body_id = mujoco.mj_name2id(
                 model, mujoco.mjtObj.mjOBJ_BODY, "draggable"
-            )
-            draggable_geom_id = mujoco.mj_name2id(
-                model, mujoco.mjtObj.mjOBJ_GEOM, "sphere_geom"
             )
             collider_translation = data.xpos[draggable_body_id].copy()
             collider_radius = 0.015 * 2.2
@@ -126,41 +126,68 @@ def test_grow():
                 p0 = (i - 1) / (bone_count - 1)
                 p1 = i / (bone_count - 1)
                 pitch = pitch_fn.integrate(p0, p1)
-                rotation = Rotation.from_euler("y", pitch)
+                natural_rotation = Rotation.from_euler("y", pitch)
                 translation = np.array([0, 0, step])
+
+                if bone.body_name in previous_bone_transforms:
+                    old_bone_transform = previous_bone_transforms[bone.body_name]
+                    direction_global = old_bone_transform.translation - last_transform.translation
+                    
+                    norm_direction_global = np.linalg.norm(direction_global)
+                    
+                    R_memory_target_local: Rotation
+                    if norm_direction_global < 1e-6:  # Threshold for zero vector
+                        R_memory_target_local = natural_rotation
+                    else:
+                        normalized_direction_global = direction_global / norm_direction_global
+                        # Transform the global direction into the local frame of the parent bone's end
+                        direction_local = last_transform.rotation.inv().apply(normalized_direction_global)
+                        
+                        # Define the bone's intrinsic forward axis in its local frame
+                        bone_axis_local = np.array([0, 0, 1])
+                        
+                        # Calculate the local rotation to align bone_axis_local with direction_local
+                        # Rotation.align_vectors returns R such that R @ v_from aligns with v_to.
+                        # We want to rotate bone_axis_local (from) to direction_local (to).
+                        R_memory_target_local = Rotation.align_vectors(direction_local.reshape(1, -1), 
+                                                                       bone_axis_local.reshape(1, -1))[0]
+
+                    memory_weight = 0.0
+                    # Slerp between natural_rotation and R_memory_target_local
+                    # (Target * Current.inv())**weight * Current
+                    delta_rotation = R_memory_target_local * natural_rotation.inv()
+                    rotation = (delta_rotation**memory_weight) * natural_rotation
+                else:
+                    rotation = natural_rotation
+
                 transform = RigidTransformation(
                     translation=translation, rotation=rotation
                 )
                 global_transform = last_transform.combine(transform)
 
                 # check it the bone is inside the collision sphere
-                is_colliding = (
-                    np.linalg.norm(global_transform.translation - collider_translation)
-                    < collider_radius
+                distance = np.linalg.norm(
+                    global_transform.translation - collider_translation
                 )
-
-                if is_colliding:
-                    print(
-                        f"Bone {bone.body_name} is colliding with the sphere at {global_transform.translation}"
-                    )
-                    # Push transform to the closest point on the sphere
+                if distance < collider_radius:
+                    # Find the closes point on the collider sphere and update the transform for look at that direction
                     direction = global_transform.translation - collider_translation
-                    direction /= np.linalg.norm(direction)
+                    direction /= (
+                        np.linalg.norm(direction)
+                        if np.linalg.norm(direction) > 0
+                        else 1.0
+                    )
                     global_transform.translation = (
                         collider_translation + direction * collider_radius
                     )
 
                 bone_transforms[bone.body_name] = global_transform
-                if is_colliding:
-                    bone_names = [mesh.bones[i].body_name for i in range(i + 1)]
-                    transforms = [bone_transforms[name] for name in bone_names]
-                    fabrik_adjustment(transforms, [step] * i)
-                    for j, name in enumerate(bone_names):
-                        bone_transforms[name] = transforms[j]
-
                 last_transform = global_transform
 
             for bone in mesh.bones:
+                previous_bone_transforms[bone.body_name] = bone_transforms[
+                    bone.body_name
+                ]
                 body_id = mujoco.mj_name2id(
                     model, mujoco.mjtObj.mjOBJ_BODY, bone.body_name
                 )
@@ -179,9 +206,11 @@ def fabrik_adjustment(transforms, bone_lengths):
     n = len(transforms)
     if n == 0:
         return transforms
-    
+
     # Save different between the rotation of the last bone and the second last
-    last_rotation_diff = transforms[-1].rotation.as_rotvec() - transforms[-2].rotation.as_rotvec()
+    last_rotation_diff = (
+        transforms[-1].rotation.as_rotvec() - transforms[-2].rotation.as_rotvec()
+    )
 
     # Backward pass
     for i in range(n - 2, 0, -1):
@@ -215,6 +244,7 @@ def fabrik_adjustment(transforms, bone_lengths):
     transforms[-1].rotation = Rotation.from_rotvec(
         transforms[-2].rotation.as_rotvec() + last_rotation_diff
     )
+
 
 if __name__ == "__main__":
     test_grow()
