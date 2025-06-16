@@ -115,119 +115,42 @@ def test_grow():
             collider_translation = data.xpos[draggable_body_id].copy()
             collider_radius = 0.015 * 2.2
 
-            last_transform = RigidTransformation.from_rotation(
-                Rotation.from_euler("z", 0, degrees=True)
-            )
-            bone_transforms = [None] * bone_count
-            bone_transforms[0] = last_transform
-            index = 1
-            cycles_done = 0
-            status = "forward"
-
-            def get_natural_rotation(bone_index) -> Rotation:
-                p0 = (bone_index - 1) / (bone_count - 1)
-                p1 = bone_index / (bone_count - 1)
+            bone_vectors = []
+            bone_length = length / (bone_count - 1)
+            for i in range(bone_count):
+                prev_vector = np.array([0, 0, 1]) if i == 0 else bone_vectors[i - 1]
+                p0 = (i - 1) / (bone_count - 1)
+                p1 = i / (bone_count - 1)
                 pitch = pitch_fn.integrate(p0, p1)
-                natural_rotation = Rotation.from_euler("y", pitch)
-                return natural_rotation
+                bending_vector = Rotation.from_euler("y", pitch).apply(prev_vector)
+                bone_vectors.append(bending_vector)
             
-            def aligning_rotation(bone_from: int, bone_to: int) -> Rotation:
-                """Return the rotation needed for bone_from to point towards bone_to."""
-                # Get the positions of the bones
-                point_a = bone_transforms[bone_from].translation
-                point_b = bone_transforms[bone_to].translation
-                target_direction = point_b - point_a
-                # Bail if the distance is too small
-                target_direction_norm = np.linalg.norm(target_direction)
-                if target_direction_norm < 1e-6:
-                    print(f"Small distance between bones {bone_from} and {bone_to}, skipping alignment.")
-                    return Rotation.identity()
-                # Normalize the target direction
-                normalized_target_direction = target_direction / target_direction_norm
-
-                # Get the current direction of the bone
-                current_direction = bone_transforms[bone_from].rotation.apply([0, 0, 1])
-                # Calculate the rotation needed to align the current direction with the target direction
-                rotation_needed, _rssd = Rotation.align_vectors(
-                    normalized_target_direction.reshape(1, 3),
-                    current_direction.reshape(1, 3),
+            bone_transforms = []
+            for vector in bone_vectors:
+                prev_transform = (
+                    bone_transforms[-1] if bone_transforms else RigidTransformation()
                 )
-                return rotation_needed
-
-
-            while True:
-                print(f"Processing bone {index} with status {status}")
-                if cycles_done >= 300:
-                    raise RuntimeError("Too many cycles, something went wrong.")
-                
-                step = length / (bone_count - 1)
-                translation = np.array([0, 0, step])
-                natural_rotation = get_natural_rotation(index)
-                if bone_transforms[index] is None or index == bone_count - 1:
-                    memory_alignment = Rotation.identity()
-                else:
-                    memory_alignment = aligning_rotation(index, index + 1)
-                alignment_weight = 0.5
-                rotation = (
-                    memory_alignment**alignment_weight * natural_rotation
+                translation = prev_transform.translation + vector * bone_length
+                rotation = Rotation.from_rotvec(
+                    np.cross([0, 0, 1], vector)
                 )
-                if status == "forward":
-                    transform = RigidTransformation(
-                        translation=translation, rotation=rotation
+                transform = RigidTransformation(
+                    translation=translation,
+                    rotation=rotation
+                )
+                bone_transforms.append(transform)
+
+            # Handle collisions
+            for i, transform in enumerate(bone_transforms):
+                if np.linalg.norm(transform.translation - collider_translation) < collider_radius:
+                    # Adjust the translation to avoid collision
+                    direction = transform.translation - collider_translation
+                    direction /= np.linalg.norm(direction)
+                    transform.translation = (
+                        collider_translation + direction * collider_radius
                     )
-                    global_transform = (
-                        bone_transforms[index - 1].combine(transform)
-                    )
-                elif status == "backward":
-                    transform = RigidTransformation(
-                        translation=-translation, rotation=rotation.inv()
-                    )
-                    global_transform = (
-                        bone_transforms[index + 1].combine(transform)
-                    )
-                
-                
-                print(f"memory_alignment: {memory_alignment.as_euler('xyz', degrees=True)}")
-                
-
-                
-
-                # # check it the bone is inside the collision sphere
-                # distance = np.linalg.norm(
-                #     global_transform.translation - collider_translation
-                # )
-                # if distance < collider_radius:
-                #     # Find the closes point on the collider sphere and update the transform for look at that direction
-                #     direction = global_transform.translation - collider_translation
-                #     direction /= (
-                #         np.linalg.norm(direction)
-                #         if np.linalg.norm(direction) > 0
-                #         else 1.0
-                #     )
-                #     global_transform.translation = (
-                #         collider_translation + direction * collider_radius
-                #     )
-
-                bone_transforms[index] = global_transform
-
-                if status == "forward":
-                    index += 1
-                    if index >= bone_count:
-                        # Iterate backward once to test the backward pass
-                        status = "backward"
-                        index = bone_count - 2
-                elif status == "backward":
-                    index -= 1
-                    if index < 0:
-                        cycles_done += 1
-                        index = 0
-                        break #test only one pass
-                        status = "forward"
-                        # Move the first bone back to the original position
-                        bone_transforms[0].translation = np.array([0, 0, 0])
-                        if cycles_done > 1:
-                            break
-
+                    # Adjust the transforms using FABRIK
+                    fabrik_adjustment(bone_transforms, bone_length, i)
 
             for index, bone in enumerate(mesh.bones):
                 body_id = mujoco.mj_name2id(
@@ -235,7 +158,6 @@ def test_grow():
                 )
                 mocap_id = model.body_mocapid[body_id]
                 transform = bone_transforms[index]
-                print(f"Bone {index}\n\ttranslation: {transform.translation}\n\trotation: {transform.rotation.as_euler('xyz', degrees=True)}")
                 data.mocap_pos[mocap_id] = transform.translation.copy()
                 data.mocap_quat[mocap_id] = transform.rotation.as_quat(
                     scalar_first=True
@@ -243,7 +165,7 @@ def test_grow():
             # break
 
 
-def fabrik_adjustment(transforms, bone_lengths):
+def fabrik_adjustment(transforms, bone_length, start_back_from):
     """
     Adjust the transforms using FABRIK algorithm.
     """
@@ -257,13 +179,13 @@ def fabrik_adjustment(transforms, bone_lengths):
     )
 
     # Backward pass
-    for i in range(n - 2, 0, -1):
+    for i in range(start_back_from, 1, -1):
         direction = transforms[i + 1].translation - transforms[i].translation
         length = np.linalg.norm(direction)
         if length > 0:
             direction /= length
             transforms[i].translation = (
-                transforms[i + 1].translation - direction * bone_lengths[i]
+                transforms[i + 1].translation - direction * bone_length
             )
 
     # Foward pass
@@ -273,7 +195,7 @@ def fabrik_adjustment(transforms, bone_lengths):
         if length > 0:
             direction /= length
             transforms[i].translation = (
-                transforms[i - 1].translation + direction * bone_lengths[i - 1]
+                transforms[i - 1].translation + direction * bone_length
             )
 
     # Update rotations to point towards the next bone
@@ -284,10 +206,10 @@ def fabrik_adjustment(transforms, bone_lengths):
             transforms[i].rotation = Rotation.from_rotvec(
                 np.cross([0, 0, 1], direction)
             )
-    # Make the last bone point the same direction as the second last plus the original difference
-    transforms[-1].rotation = Rotation.from_rotvec(
-        transforms[-2].rotation.as_rotvec() + last_rotation_diff
-    )
+    # # Make the last bone point the same direction as the second last plus the original difference
+    # transforms[-1].rotation = Rotation.from_rotvec(
+    #     transforms[-2].rotation.as_rotvec() + last_rotation_diff
+    # )
 
 
 if __name__ == "__main__":
