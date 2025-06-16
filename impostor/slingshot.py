@@ -103,6 +103,18 @@ def test_grow():
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
 
+        natural_bone_vectors = []
+        bone_length = length / (bone_count - 1)
+        for i in range(bone_count):
+            prev_vector = np.array([0, 0, 1]) if i == 0 else natural_bone_vectors[i - 1]
+            p0 = (i - 1) / (bone_count - 1)
+            p1 = i / (bone_count - 1)
+            pitch = pitch_fn.integrate(p0, p1)
+            bending_vector = Rotation.from_euler("y", pitch).apply(prev_vector)
+            natural_bone_vectors.append(bending_vector)
+
+        bone_transforms = [None] * bone_count
+
         while viewer.is_running():
             # Step the simulation
             mujoco.mj_step(model, data)
@@ -115,22 +127,22 @@ def test_grow():
             collider_translation = data.xpos[draggable_body_id].copy()
             collider_radius = 0.015 * 2.2
 
-            bone_vectors = []
-            bone_length = length / (bone_count - 1)
-            for i in range(bone_count):
-                prev_vector = np.array([0, 0, 1]) if i == 0 else bone_vectors[i - 1]
-                p0 = (i - 1) / (bone_count - 1)
-                p1 = i / (bone_count - 1)
-                pitch = pitch_fn.integrate(p0, p1)
-                bending_vector = Rotation.from_euler("y", pitch).apply(prev_vector)
-                bone_vectors.append(bending_vector)
             
-            bone_transforms = []
-            for vector in bone_vectors:
-                prev_transform = (
-                    bone_transforms[-1] if bone_transforms else RigidTransformation()
-                )
-                translation = prev_transform.translation + vector * bone_length
+            for i, vector in enumerate(natural_bone_vectors):
+                parent_transform = bone_transforms[i - 1] if i > 0 else None
+                if parent_transform is None:
+                    parent_translation = np.array([0, 0, 0])
+                else:
+                    parent_translation = parent_transform.translation
+
+                translation = parent_translation + vector * bone_length
+                if bone_transforms[i] is not None:
+                    old_translation = bone_transforms[i].translation
+                    translation = (
+                        old_translation + (translation - old_translation) * 0.1
+                    )
+
+                
                 rotation = Rotation.from_rotvec(
                     np.cross([0, 0, 1], vector)
                 )
@@ -138,7 +150,7 @@ def test_grow():
                     translation=translation,
                     rotation=rotation
                 )
-                bone_transforms.append(transform)
+                bone_transforms[i] = transform
 
             # Handle collisions
             for i, transform in enumerate(bone_transforms):
