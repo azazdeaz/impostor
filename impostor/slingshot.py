@@ -102,7 +102,6 @@ def test_grow():
     pitch_fn = Curve([(0, 1.6), (0.5, 0.8), (1, -3.0)])
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
-        previous_bone_transforms = {}
 
         while viewer.is_running():
             # Step the simulation
@@ -119,84 +118,129 @@ def test_grow():
             last_transform = RigidTransformation.from_rotation(
                 Rotation.from_euler("z", 0, degrees=True)
             )
-            bone_transforms = {mesh.bones[0].body_name: last_transform}
+            bone_transforms = [None] * bone_count
+            bone_transforms[0] = last_transform
+            index = 1
+            cycles_done = 0
+            status = "forward"
 
-            for i, bone in enumerate(mesh.bones[1:], start=1):
-                step = length / (bone_count - 1)
-                p0 = (i - 1) / (bone_count - 1)
-                p1 = i / (bone_count - 1)
+            def get_natural_rotation(bone_index) -> Rotation:
+                p0 = (bone_index - 1) / (bone_count - 1)
+                p1 = bone_index / (bone_count - 1)
                 pitch = pitch_fn.integrate(p0, p1)
                 natural_rotation = Rotation.from_euler("y", pitch)
+                return natural_rotation
+            
+            def aligning_rotation(bone_from: int, bone_to: int) -> Rotation:
+                """Return the rotation needed for bone_from to point towards bone_to."""
+                # Get the positions of the bones
+                point_a = bone_transforms[bone_from].translation
+                point_b = bone_transforms[bone_to].translation
+                target_direction = point_b - point_a
+                # Bail if the distance is too small
+                target_direction_norm = np.linalg.norm(target_direction)
+                if target_direction_norm < 1e-6:
+                    print(f"Small distance between bones {bone_from} and {bone_to}, skipping alignment.")
+                    return Rotation.identity()
+                # Normalize the target direction
+                normalized_target_direction = target_direction / target_direction_norm
+
+                # Get the current direction of the bone
+                current_direction = bone_transforms[bone_from].rotation.apply([0, 0, 1])
+                # Calculate the rotation needed to align the current direction with the target direction
+                rotation_needed, _rssd = Rotation.align_vectors(
+                    normalized_target_direction.reshape(1, 3),
+                    current_direction.reshape(1, 3),
+                )
+                return rotation_needed
+
+
+            while True:
+                print(f"Processing bone {index} with status {status}")
+                if cycles_done >= 300:
+                    raise RuntimeError("Too many cycles, something went wrong.")
+                
+                step = length / (bone_count - 1)
                 translation = np.array([0, 0, step])
-
-                if bone.body_name in previous_bone_transforms:
-                    old_bone_transform = previous_bone_transforms[bone.body_name]
-                    direction_global = old_bone_transform.translation - last_transform.translation
-                    
-                    norm_direction_global = np.linalg.norm(direction_global)
-                    
-                    R_memory_target_local: Rotation
-                    if norm_direction_global < 1e-6:  # Threshold for zero vector
-                        R_memory_target_local = natural_rotation
-                    else:
-                        normalized_direction_global = direction_global / norm_direction_global
-                        # Transform the global direction into the local frame of the parent bone's end
-                        direction_local = last_transform.rotation.inv().apply(normalized_direction_global)
-                        
-                        # Define the bone's intrinsic forward axis in its local frame
-                        bone_axis_local = np.array([0, 0, 1])
-                        
-                        # Calculate the local rotation to align bone_axis_local with direction_local
-                        # Rotation.align_vectors returns R such that R @ v_from aligns with v_to.
-                        # We want to rotate bone_axis_local (from) to direction_local (to).
-                        R_memory_target_local = Rotation.align_vectors(direction_local.reshape(1, -1), 
-                                                                       bone_axis_local.reshape(1, -1))[0]
-
-                    memory_weight = 0.0
-                    # Slerp between natural_rotation and R_memory_target_local
-                    # (Target * Current.inv())**weight * Current
-                    delta_rotation = R_memory_target_local * natural_rotation.inv()
-                    rotation = (delta_rotation**memory_weight) * natural_rotation
+                natural_rotation = get_natural_rotation(index)
+                if bone_transforms[index] is None or index == bone_count - 1:
+                    memory_alignment = Rotation.identity()
                 else:
-                    rotation = natural_rotation
-
-                transform = RigidTransformation(
-                    translation=translation, rotation=rotation
+                    memory_alignment = aligning_rotation(index, index + 1)
+                alignment_weight = 0.5
+                rotation = (
+                    memory_alignment**alignment_weight * natural_rotation
                 )
-                global_transform = last_transform.combine(transform)
-
-                # check it the bone is inside the collision sphere
-                distance = np.linalg.norm(
-                    global_transform.translation - collider_translation
-                )
-                if distance < collider_radius:
-                    # Find the closes point on the collider sphere and update the transform for look at that direction
-                    direction = global_transform.translation - collider_translation
-                    direction /= (
-                        np.linalg.norm(direction)
-                        if np.linalg.norm(direction) > 0
-                        else 1.0
+                if status == "forward":
+                    transform = RigidTransformation(
+                        translation=translation, rotation=rotation
                     )
-                    global_transform.translation = (
-                        collider_translation + direction * collider_radius
+                    global_transform = (
+                        bone_transforms[index - 1].combine(transform)
                     )
+                elif status == "backward":
+                    transform = RigidTransformation(
+                        translation=-translation, rotation=rotation.inv()
+                    )
+                    global_transform = (
+                        bone_transforms[index + 1].combine(transform)
+                    )
+                
+                
+                print(f"memory_alignment: {memory_alignment.as_euler('xyz', degrees=True)}")
+                
 
-                bone_transforms[bone.body_name] = global_transform
-                last_transform = global_transform
+                
 
-            for bone in mesh.bones:
-                previous_bone_transforms[bone.body_name] = bone_transforms[
-                    bone.body_name
-                ]
+                # # check it the bone is inside the collision sphere
+                # distance = np.linalg.norm(
+                #     global_transform.translation - collider_translation
+                # )
+                # if distance < collider_radius:
+                #     # Find the closes point on the collider sphere and update the transform for look at that direction
+                #     direction = global_transform.translation - collider_translation
+                #     direction /= (
+                #         np.linalg.norm(direction)
+                #         if np.linalg.norm(direction) > 0
+                #         else 1.0
+                #     )
+                #     global_transform.translation = (
+                #         collider_translation + direction * collider_radius
+                #     )
+
+                bone_transforms[index] = global_transform
+
+                if status == "forward":
+                    index += 1
+                    if index >= bone_count:
+                        # Iterate backward once to test the backward pass
+                        status = "backward"
+                        index = bone_count - 2
+                elif status == "backward":
+                    index -= 1
+                    if index < 0:
+                        cycles_done += 1
+                        index = 0
+                        break #test only one pass
+                        status = "forward"
+                        # Move the first bone back to the original position
+                        bone_transforms[0].translation = np.array([0, 0, 0])
+                        if cycles_done > 1:
+                            break
+
+
+            for index, bone in enumerate(mesh.bones):
                 body_id = mujoco.mj_name2id(
                     model, mujoco.mjtObj.mjOBJ_BODY, bone.body_name
                 )
                 mocap_id = model.body_mocapid[body_id]
-                transform = bone_transforms[bone.body_name]
+                transform = bone_transforms[index]
+                print(f"Bone {index}\n\ttranslation: {transform.translation}\n\trotation: {transform.rotation.as_euler('xyz', degrees=True)}")
                 data.mocap_pos[mocap_id] = transform.translation.copy()
                 data.mocap_quat[mocap_id] = transform.rotation.as_quat(
                     scalar_first=True
                 ).copy()
+            # break
 
 
 def fabrik_adjustment(transforms, bone_lengths):
