@@ -10,4 +10,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 alum = "0.6.1"
+glam = "0.30.4"
 pyo3 = "0.25.0"

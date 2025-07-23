@@ -21,7 +21,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91a8fb111fb7ce06dc6cac9e157f83ef550e100fa4752450cca5821c8b40cc2e"
 dependencies = [
- "glam",
+ "glam 0.29.3",
  "tobj",
 ]
 
@@ -62,6 +62,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8babf46d4c1c9d92deac9f7be466f76dfc4482b6452fc5024b5e8daf6ffeb3ee"
 
 [[package]]
+name = "glam"
+version = "0.30.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50a99dbe56b72736564cfa4b85bf9a33079f16ae8b74983ab06af3b1a3696b11"
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -72,6 +78,7 @@ name = "impostor"
 version = "0.1.0"
 dependencies = [
  "alum",
+ "glam 0.30.4",
  "pyo3",
 ]
 
