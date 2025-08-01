@@ -1,5 +1,8 @@
 import numpy as np
 from impostor_gen.trail import Trail
+from impostor_gen.extrude import extrude_mesh2d_along_points
+from impostor_gen.mesh2d import Mesh2D
+import rerun as rr
 
 def main():
     """
@@ -16,12 +19,22 @@ def main():
     # Get the list of transforms
     transforms = my_trail.transforms()
 
-    print(f"Generated {len(transforms)} transforms for the trail.")
+    profile = Mesh2D(
+        vertex_positions=np.array([[0, 0], [1, 0], [1, 1], [0, 1]]),
+        line_indices=np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
+    )
 
-    # Print the position of the first and last transform
-    if transforms:
-        print(f"First transform position: {transforms[0].position}")
-        print(f"Last transform position: {transforms[-1].position}")
+    # Extrude the profile along the trail
+    extruded_mesh = extrude_mesh2d_along_points(profile, transforms)
+
+    print("Extruded Mesh:")
+    print(extruded_mesh)
+
+    rr.init("rerun_example_my_data", spawn=True)
+
+    rr.log("extruded_mesh", extruded_mesh.to_rerun())
+
+    
 
 if __name__ == "__main__":
     main()
