@@ -12,7 +12,7 @@ class Trail(BaseModel):
 
     def transforms(self) -> list[Transform]:
         """Generate a list of Transform objects representing the trail."""
-        transforms = []
+        transforms: list[Transform] = []
         step_length = self.length / self.steps
         for i in range(self.steps):
             position = self.start_point + i * step_length * self.start_direction
