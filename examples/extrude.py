@@ -11,8 +11,8 @@ def main():
     # Create a trail starting at the origin, moving along the x-axis
     my_trail = Trail(
         start_point=np.array([0, 0, 0]),
-        start_direction=np.array([1, 0, 0]),
-        length=5.0,
+        control_point=np.array([5, 0, 5]),
+        end_point=np.array([0, 0, 10]),
         steps=20
     )
 
@@ -32,9 +32,14 @@ def main():
 
     rr.init("rerun_example_my_data", spawn=True)
 
-    rr.log("extruded_mesh", extruded_mesh.to_rerun())
 
-    
+    arrows = rr.Arrows3D(
+        vectors=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        colors=[[255, 0, 0], [0, 255, 0], [0, 0, 255]],
+    )
+    rr.log("extruded_mesh", extruded_mesh.to_rerun())
+    for i, t in enumerate(transforms):
+        rr.log(f"trail_{i}", t.to_rerun(), arrows)
 
 if __name__ == "__main__":
     main()
