@@ -180,17 +180,7 @@ class LSystem(BaseModel):
 
             # (Optional) handle Stem or other symbols (could change width, spawn geometry, etc.)
 
-        # Example square profile to extrude
-        profile = Mesh2D(
-            vertex_positions=np.array(
-                [[-0.5, -0.5],
-                 [ 0.5, -0.5],
-                 [ 0.5,  0.5],
-                 [-0.5,  0.5]],
-                dtype=np.float32
-            ),
-            line_indices=np.array([[0, 1], [1, 2], [2, 3], [3, 0]], dtype=np.int32),
-        )
+        profile = Mesh2D.circle(radius=0.4, segments=7)
 
         mesh3d = extrude_mesh2d_along_points(profile, transforms)
         return mesh3d
