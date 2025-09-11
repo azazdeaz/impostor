@@ -194,8 +194,9 @@ class LSystem(BaseModel):
 
     # ------------- Interpretation ------------- #
 
-    def interpret(self) -> Mesh3D:
+    def generate_blueprints(self) -> List[StemBlueprint]:
         turtle = Transform3D()
+        transform_stack: List[Transform3D] = []
         closed_branches: List[StemBlueprint] = []
         stack: List[StemBlueprint] = [StemBlueprint()]
 
@@ -209,12 +210,13 @@ class LSystem(BaseModel):
                 blueprint.radii.append(symbol.width)
 
             elif isinstance(symbol, BranchOpen):
+                transform_stack.append(turtle.model_copy())
                 stack.append(StemBlueprint())
 
             elif isinstance(symbol, BranchClose):
                 if len(stack) > 1:
                     closed_branches.append(stack.pop())
-                    turtle = stack[-1].transforms[-1].model_copy()
+                    turtle = transform_stack.pop()
                 else:
                     raise ValueError("Unmatched BranchClose symbol encountered.")
 
@@ -222,6 +224,8 @@ class LSystem(BaseModel):
                 blueprint = stack[-1]
                 blueprint.cross_sections = symbol.cross_sections
                 blueprint.divisions = symbol.divisions
+                blueprint.transforms.append(turtle.model_copy())
+                blueprint.radii.append(1.0)  # TODO start with the parent width
 
             elif isinstance(symbol, Yaw):
                 # Positive angle = left turn; user semantic +(a)=right so you'd create Yaw(angle=-a) for '+'
@@ -240,16 +244,16 @@ class LSystem(BaseModel):
                     turtle.rotation, symbol.gravity, self.forward
                 )
 
-            # (Optional) handle Stem or other symbols (could change width, spawn geometry, etc.)
-
+        return stack + closed_branches
+    
+    def generate_mesh(self, blueprints: List[StemBlueprint]) -> Mesh3D:
         profile = Mesh2D.circle(radius=0.4, segments=7)
 
         mesh3d = Mesh3D.empty()
-        branches = stack + closed_branches
-        for b in enumerate(branches):
+        for b in enumerate(blueprints):
             print(f"Branch {b[0]}: {len(b[1].transforms)} segments")
 
-        for blueprint in branches:
+        for blueprint in blueprints:
             if len(blueprint.transforms) >= 2:
                 # Ensure we have at least two transforms and two radii to create a stem
                 if len(blueprint.radii) != len(blueprint.transforms):
@@ -258,7 +262,22 @@ class LSystem(BaseModel):
                     )
                 stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)
                 mesh3d = mesh3d.merge(stem_mesh)
+        
         return mesh3d
+
+    def log_mesh(self, blueprints: List[StemBlueprint]):
+        mesh3d = self.generate_mesh(blueprints)
+        rr.log("extruded_mesh", mesh3d.to_rerun())
+
+    def log_transforms(self, blueprints: List[StemBlueprint]):
+        arrows = rr.Arrows3D(
+            vectors=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            colors=[[255, 0, 0], [0, 255, 0], [0, 0, 255]],
+        )
+        for i, b in enumerate(blueprints):
+            for j, t in enumerate(b.transforms):
+                rr.log(f"stem/{i}/{j}", t.to_rerun(), arrows)
+        
 
     def log_graph(self):
         node_ids = [str(i) for i in range(len(self.world))]
@@ -271,14 +290,13 @@ class LSystem(BaseModel):
         for next_id, next_symbol in enumerate(self.world[1:], start=1):
             if isinstance(next_symbol, BranchOpen):
                 branch_stack.append(curr_id)
-            
+
             edges.append((node_ids[curr_id], node_ids[next_id]))
             curr_id = next_id
 
             if isinstance(next_symbol, BranchClose):
                 if branch_stack:
                     curr_id = branch_stack.pop()
-                
 
         rr.log(
             "world_graph",

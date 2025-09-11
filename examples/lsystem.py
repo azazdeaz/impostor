@@ -32,13 +32,12 @@ class Branch(Rule):
             pass # Reached the beginning of the world
         
         if length_without_branch >= min_length_for_branch:
-            # print("Branching!")
             writer.write([
                 BranchOpen(),
                 Yaw(angle=-30), 
                 Stem(),
                 Yaw(angle=-30), 
-                F(length=length_without_branch * 0.6), # Example: branch is shorter
+                F(length=0.9), # Example: branch is shorter
                 Tip(),
                 BranchClose(),
                 # Continue the main stem
@@ -47,7 +46,6 @@ class Branch(Rule):
             ])
         else:
             # Default "grow" behavior
-            # print(f"Not branching, only {leng th_without_branch} length since last branch.")
             writer.write([F(length=0.9), Tip()])
 
 def main():
@@ -69,10 +67,12 @@ def main():
         lsystem.iterate()
         print(f"Iteration {i}, world size: {len(lsystem.world)}")
         # print(f"Iteration {i}: {','.join(str(s) for s in lsystem.world)}")
-        extruded_mesh = lsystem.interpret()
+        blueprints = lsystem.generate_blueprints()
+        lsystem.log_transforms(blueprints)
+        lsystem.log_mesh(blueprints)
         lsystem.log_graph()
         lsystem.log_as_markdown()
-        rr.log("extruded_mesh", extruded_mesh.to_rerun())
+        
 
 if __name__ == "__main__":
     main()

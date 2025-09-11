@@ -8,9 +8,24 @@ import rerun as rr
 def concat_optional_arrays(
     arr1: Optional[np.ndarray],
     arr2: Optional[np.ndarray],
+    offset: int = 0,
     padding_value: Optional[float] = None,
 ) -> Optional[np.ndarray]:
-    """Concatenate two optional arrays, filling with padding_value if necessary."""
+    """
+    Concatenate two optional arrays.
+
+    Args:
+        arr1: The first array.
+        arr2: The second array.
+        offset: An integer value to add to the elements of the second array.
+        padding_value: If one array is None, fill with this value.
+
+    Returns:
+        The concatenated array, or None if both are None.
+    """
+    if arr2 is not None and offset != 0:
+        arr2 = arr2 + offset
+
     # Note: the weird conditional structuring is to calm the typechecker
     if arr1 is None:
         if arr2 is None:
@@ -147,6 +162,7 @@ class Mesh3D(BaseModel):
 
     def merge(self, other: "Mesh3D") -> "Mesh3D":
         """Merge this mesh with another Mesh3D instance."""
+        offset = len(self.vertex_positions)
 
         return Mesh3D(
             vertex_positions=np.vstack((self.vertex_positions, other.vertex_positions)),
@@ -157,9 +173,11 @@ class Mesh3D(BaseModel):
                 self.vertex_colors, other.vertex_colors
             ),
             triangle_indices=concat_optional_arrays(
-                self.triangle_indices, other.triangle_indices
+                self.triangle_indices, other.triangle_indices, offset=offset
             ),
-            line_indices=concat_optional_arrays(self.line_indices, other.line_indices),
+            line_indices=concat_optional_arrays(
+                self.line_indices, other.line_indices, offset=offset
+            ),
             vertex_texcoords=concat_optional_arrays(
                 self.vertex_texcoords, other.vertex_texcoords
             ),
