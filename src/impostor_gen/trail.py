@@ -65,3 +65,5 @@ class Trail(BaseModel):
             transforms.append(Transform3D(position=position, rotation=rotation, scale=np.ones(3)))
             
         return transforms
+
+

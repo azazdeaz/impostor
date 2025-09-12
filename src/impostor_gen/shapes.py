@@ -9,4 +9,4 @@ class Material(BaseModel):
     texture: str | None = Field(default=None)
 
 class Box(Transform3D, Material):
-    size: np.ndarray = Field(default_factory=lambda: np.ones(3))    
+    size: np.ndarray = Field(default_factory=lambda: np.ones(3))

@@ -17,12 +17,13 @@ from impostor_gen.l_systems import (
     Yaw,
 )
 from impostor_gen.leaf import create_leaf
+from impostor_gen.mesh_builder import generate_blueprints, log_mesh, log_transforms
 
 
 class Crown(Symbol):
     age: int = 0
     shoot_period: int = 12  # How many iterations between new shoots
-    max_age: int = 36      # Maximum age before the crown stops producing new shoots
+    max_age: int = 26      # Maximum age before the crown stops producing new shoots
     angle_step: float = 137.5  # Angle step in degrees for new shoots
 
 class IterateCrown(Rule):
@@ -98,9 +99,9 @@ def main():
         lsystem.iterate()
         print(f"Iteration {i}, world size: {len(lsystem.world)}")
         # print(f"Iteration {i}: {','.join(str(s) for s in lsystem.world)}")
-        blueprints = lsystem.generate_blueprints()
-        lsystem.log_transforms(blueprints)
-        lsystem.log_mesh(blueprints)
+        blueprints = generate_blueprints(lsystem.world)
+        log_transforms(blueprints)
+        log_mesh(blueprints)
         lsystem.log_graph()
         lsystem.log_as_markdown()
         

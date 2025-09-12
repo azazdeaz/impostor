@@ -101,11 +101,6 @@ class Writer(BaseModel):
         return self.world[index]
 
 
-class StemBlueprint(BaseModel):
-    transforms: List[Transform3D] = Field(default_factory=lambda: [])
-    radii: List[float] = Field(default_factory=lambda: [])
-    cross_sections: int = 0
-    divisions: int = 6
 
 
 class Rule(BaseModel):
@@ -128,7 +123,6 @@ class BasicRule(Rule):
 class LSystem(BaseModel):
     world: Sequence[Symbol]
     rules: Sequence[Rule]
-    forward: np.ndarray = Field(default_factory=lambda: np.array([0.0, 0.0, 1.0]))
 
     class Config:
         arbitrary_types_allowed = True
@@ -148,140 +142,7 @@ class LSystem(BaseModel):
                 else:
                     new_world.append(self.world[pointer])
                     pointer += 1
-            self.world = new_world
-
-    # ------------- Helper rotation methods ------------- #
-
-    @staticmethod
-    def _local_euler(rotation: Rotation, axis: str, degrees: float) -> Rotation:
-        """Return updated rotation after applying a local-axis Euler rotation."""
-        if abs(degrees) < 1e-9:
-            return rotation
-        delta = Rotation.from_euler(axis, degrees, degrees=True)
-        # Local axis -> post-multiply
-        return rotation * delta
-
-    @staticmethod
-    def _apply_tropism(
-        rotation: Rotation,
-        max_degrees: float,
-        forward: np.ndarray,
-        gravity_vec: np.ndarray = np.array([0.0, -1.0, 0.0]),
-    ) -> Rotation:
-        """Lean heading toward gravity vector by up to max_degrees (world-axis application)."""
-        if max_degrees <= 0.0:
-            return rotation
-
-        f = rotation.apply(forward)
-        g = gravity_vec.astype(np.float64)
-        g_norm = np.linalg.norm(g)
-        if g_norm < 1e-9:
-            return rotation
-        g /= g_norm
-
-        dot = np.clip(np.dot(f, g), -1.0, 1.0)
-        theta = np.arccos(dot)
-        if theta < 1e-6:
-            return rotation  # already aligned
-
-        # Axis of rotation (world)
-        axis = np.cross(f, g)
-        axis_norm = np.linalg.norm(axis)
-        if axis_norm < 1e-9:
-            return rotation
-        axis /= axis_norm
-
-        lean_rad = np.deg2rad(min(max_degrees, np.rad2deg(theta)))
-        rot_world = Rotation.from_rotvec(axis * lean_rad)
-        # World-axis rotation -> pre-multiply
-        return rot_world * rotation
-
-    # ------------- Interpretation ------------- #
-
-    def generate_blueprints(self) -> List[StemBlueprint]:
-        turtle = Transform3D()
-        transform_stack: List[Transform3D] = []
-        closed_branches: List[StemBlueprint] = []
-        stack: List[StemBlueprint] = [StemBlueprint()]
-
-        for symbol in self.world:
-            if isinstance(symbol, F):
-                # Move forward
-                direction = turtle.rotation.apply(self.forward)
-                turtle.position = turtle.position + direction * symbol.length
-                blueprint = stack[-1]
-                blueprint.transforms.append(turtle.model_copy())
-                blueprint.radii.append(symbol.width)
-
-            elif isinstance(symbol, BranchOpen):
-                transform_stack.append(turtle.model_copy())
-                stack.append(StemBlueprint())
-
-            elif isinstance(symbol, BranchClose):
-                if len(stack) > 1:
-                    closed_branches.append(stack.pop())
-                    turtle = transform_stack.pop()
-                else:
-                    raise ValueError("Unmatched BranchClose symbol encountered.")
-
-            elif isinstance(symbol, Stem):
-                blueprint = stack[-1]
-                blueprint.cross_sections = symbol.cross_sections
-                blueprint.divisions = symbol.divisions
-                blueprint.transforms.append(turtle.model_copy())
-                blueprint.radii.append(1.0)  # TODO start with the parent width
-
-            elif isinstance(symbol, Yaw):
-                # Positive angle = left turn; user semantic +(a)=right so you'd create Yaw(angle=-a) for '+'
-                turtle.rotation = self._local_euler(turtle.rotation, "y", symbol.angle)
-
-            elif isinstance(symbol, Pitch):
-                # Positive angle = pitch down
-                turtle.rotation = self._local_euler(turtle.rotation, "x", symbol.angle)
-
-            elif isinstance(symbol, Roll):
-                # Positive angle = counter-clockwise looking forward
-                turtle.rotation = self._local_euler(turtle.rotation, "z", symbol.angle)
-
-            elif isinstance(symbol, T):
-                turtle.rotation = self._apply_tropism(
-                    turtle.rotation, symbol.gravity, self.forward
-                )
-
-        return stack + closed_branches
-    
-    def generate_mesh(self, blueprints: List[StemBlueprint]) -> Mesh3D:
-        profile = Mesh2D.circle(radius=0.4, segments=7)
-
-        mesh3d = Mesh3D.empty()
-        for b in enumerate(blueprints):
-            print(f"Branch {b[0]}: {len(b[1].transforms)} segments")
-
-        for blueprint in blueprints:
-            if len(blueprint.transforms) >= 2:
-                # Ensure we have at least two transforms and two radii to create a stem
-                if len(blueprint.radii) != len(blueprint.transforms):
-                    raise ValueError(
-                        "Number of radii must match number of transforms in a StemBlueprint."
-                    )
-                stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)
-                mesh3d = mesh3d.merge(stem_mesh)
-        
-        return mesh3d
-
-    def log_mesh(self, blueprints: List[StemBlueprint]):
-        mesh3d = self.generate_mesh(blueprints)
-        rr.log("extruded_mesh", mesh3d.to_rerun())
-
-    def log_transforms(self, blueprints: List[StemBlueprint]):
-        arrows = rr.Arrows3D(
-            vectors=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-            colors=[[255, 0, 0], [0, 255, 0], [0, 0, 255]],
-        )
-        for i, b in enumerate(blueprints):
-            for j, t in enumerate(b.transforms):
-                rr.log(f"stem/{i}/{j}", t.to_rerun(), arrows)
-        
+            self.world = new_world    
 
     def log_graph(self):
         node_ids = [str(i) for i in range(len(self.world))]

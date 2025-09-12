@@ -39,6 +39,6 @@ def create_leaf() -> List[Symbol]:
         
         leaf.extend(symbols)
 
-    return leaf
+    return [BranchOpen()] + leaf + [BranchClose()]
 
 
