@@ -1,9 +1,23 @@
-from impostor_gen.l_systems import LSystem, Stem, F, Symbol, Writer, Yaw, Pitch, Roll, T, BasicRule, Rule, BranchClose, BranchOpen
 import rerun as rr
 
-class Tip(Symbol):
-    def __str__(self) -> str:
-        return "Tip"
+from impostor_gen.l_systems import (
+    BasicRule,
+    BranchClose,
+    BranchOpen,
+    F,
+    LSystem,
+    Pitch,
+    Roll,
+    Rule,
+    Stem,
+    Symbol,
+    T,
+    Tip,
+    Writer,
+    Yaw,
+)
+
+
 
 class Twist(Rule):
     def apply(self, writer: "Writer"):
@@ -12,41 +26,53 @@ class Twist(Rule):
             writer.write([Yaw(angle=symbol.angle * 0.88)])
 
 class Branch(Rule):
+    max_order: int = 1 # Limit the branching depth
+
     def apply(self, writer: "Writer"):
-        if not isinstance(writer.peek(0), Tip):
+        tip = writer.peek(0)
+        if not isinstance(tip, Tip):
             return
 
         length_without_branch = 0.0
         min_length_for_branch = 3.5
         
-        pointer = -1
-        try:
-            while True:
-                symbol = writer.peek(pointer)
-                if isinstance(symbol, F):
-                    length_without_branch += symbol.length
-                elif isinstance(symbol, BranchClose) or isinstance(symbol, Stem):
-                    break
-                pointer -= 1
-        except IndexError:
-            pass # Reached the beginning of the world
+        # Look backwards to see how much "F" length we have without a branch
+        if tip.order < self.max_order:
+            pointer = -1
+            try:
+                while True:
+                    symbol = writer.peek(pointer)
+                    if isinstance(symbol, F):
+                        length_without_branch += symbol.length
+                    elif isinstance(symbol, BranchClose) or isinstance(symbol, Stem):
+                        break
+                    pointer -= 1
+            except IndexError:
+                pass # Reached the beginning of the world
         
         if length_without_branch >= min_length_for_branch:
             writer.write([
                 BranchOpen(),
-                Yaw(angle=-30), 
+                # Yaw(angle=-30), 
                 Stem(),
                 Yaw(angle=-30), 
                 F(length=0.9), # Example: branch is shorter
-                Tip(),
+                Tip(order=tip.order + 1),
+                BranchClose(),
+                BranchOpen(),
+                Yaw(angle=30), 
+                Stem(),
+                Yaw(angle=30), 
+                F(length=0.9), # Example: branch is shorter
+                Tip(order=tip.order + 1),
                 BranchClose(),
                 # Continue the main stem
                 F(length=0.9), 
-                Tip(),
+                tip.model_copy(),
             ])
         else:
             # Default "grow" behavior
-            writer.write([F(length=0.9), Tip()])
+            writer.write([T(), F(length=0.9), tip.model_copy()])
 
 def main():
     # Define an L-system

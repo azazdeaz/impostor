@@ -72,6 +72,10 @@ class BranchClose(Symbol):
     def __str__(self) -> str:
         return "BranchClose"
 
+class Tip(Symbol):
+    order: int = 0 # Default to order 0 (main trunk)
+    def __str__(self) -> str:
+        return "Tip"
 
 # ---------------- Rewriting Infra ---------------- #
 
