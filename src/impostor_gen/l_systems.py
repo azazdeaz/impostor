@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import List, Optional, Tuple
+from typing import Callable, Generic, List, Optional, Tuple, TypeVar
 from pydantic import BaseModel, Field
 import numpy as np
 import rerun as rr
@@ -33,7 +33,7 @@ class F(Symbol):
         return f"F({self.length:.2f}, {self.width:.2f})"
 
 
-class T(Symbol):
+class Tropism(Symbol):
     """Tropism: lean toward a global (gravity) vector each time encountered."""
 
     gravity: float = 5.0  # degrees per application (max lean this step)
@@ -108,13 +108,20 @@ class Rule(BaseModel):
         pass
 
 
-class BasicRule(Rule):
-    left: type[Symbol]
-    right: List[Symbol]
+T = TypeVar('T', bound=Symbol)
+
+class BasicRule(Rule, Generic[T]):
+    left: type[T]  # This ensures left is a subclass of Symbol
+    right: List[Symbol] | Callable[[T], List[Symbol]]  # This ensures the callable accepts an instance of the specific subclass
 
     def apply(self, writer: Writer):
-        if isinstance(writer.peek(0), self.left):
-            writer.write(self.right)
+        current = writer.peek(0)
+        if isinstance(current, self.left):
+            if callable(self.right):
+                # The type checker now understands that current is of type T
+                writer.write(self.right(current))  
+            else:
+                writer.write(self.right)
 
 
 # ---------------- L-System ---------------- #

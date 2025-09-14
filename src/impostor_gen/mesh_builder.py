@@ -15,7 +15,7 @@ from .l_systems import (
     Pitch,
     Roll,
     Stem,
-    T,
+    Tropism,
     Symbol,
     Yaw,
 )
@@ -102,6 +102,7 @@ def generate_blueprints(
             # Move forward
             direction = turtle.rotation.apply(FORWARD)
             turtle.position = turtle.position + direction * symbol.length
+            turtle.set_scale(symbol.width)
             blueprint = stack[-1]
             blueprint.transforms.append(turtle.model_copy())
             blueprint.radii.append(symbol.width)
@@ -149,7 +150,7 @@ def generate_blueprints(
             # Positive angle = counter-clockwise looking forward
             turtle.rotation = local_euler(turtle.rotation, "z", symbol.angle)
 
-        elif isinstance(symbol, T):
+        elif isinstance(symbol, Tropism):
             turtle.rotation = apply_tropism(turtle.rotation, symbol.gravity, FORWARD)
 
     return stack + closed_branches + finished_leaves

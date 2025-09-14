@@ -10,6 +10,9 @@ class Transform3D(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+
+    def set_scale(self, scale: float):
+        self.scale = np.array([scale, scale, scale])
     
     def as_matrix(self) -> np.ndarray:
         """Return the transform as a 4x4 transformation matrix."""
