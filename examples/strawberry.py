@@ -11,10 +11,8 @@ from impostor_gen.l_systems import (
     Rule,
     Stem,
     Symbol,
-    T,
     Tip,
     Writer,
-    Yaw,
 )
 from impostor_gen.leaf import create_leaf
 from impostor_gen.mesh_builder import generate_blueprints, log_mesh, log_transforms

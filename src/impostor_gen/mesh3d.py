@@ -186,15 +186,13 @@ class Mesh3D(BaseModel):
             ),
         )
     
-    def to_rerun(self) -> rr.Mesh3D:
+    def to_rerun(self) -> rr.Asset3D:
         """Convert this Mesh3D instance to a rerun.Mesh3D instance."""
-        return rr.Mesh3D(
-            vertex_positions=self.vertex_positions,
-            vertex_normals=self.vertex_normals,
-            vertex_colors=self.vertex_colors,
-            triangle_indices=self.triangle_indices,
-            vertex_texcoords=self.vertex_texcoords,
-        )
+        mesh = self.to_trimesh()
+        exported_mesh: rr.datatypes.Blob = mesh.export(file_type='glb') # type: ignore
+        return rr.Asset3D(contents=exported_mesh)
+
+        
     
     def to_trimesh(self) -> trimesh.Trimesh:
         """Convert this Mesh3D instance to a trimesh.Trimesh instance."""

@@ -184,13 +184,13 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
             uv_grid = np.stack((u_grid, v_grid), axis=-1)
             for i in range(midrib_div):
                 vertex_grid[i, :sec_vein_div, :] = [
-                    t.position for t in blueprint.veins[i * 2].transforms
+                    t.position for t in blueprint.veins[i * 2].transforms[::-1]
                 ]
                 vertex_grid[i, sec_vein_div, :] = blueprint.midrib.transforms[
                     i
                 ].position
                 vertex_grid[i, sec_vein_div + 1 :, :] = [
-                    t.position for t in blueprint.veins[i * 2 + 1].transforms[::-1]
+                    t.position for t in blueprint.veins[i * 2 + 1].transforms
                 ]
             # Create faces
             faces = np.zeros(

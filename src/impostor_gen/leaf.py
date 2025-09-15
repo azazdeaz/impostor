@@ -15,17 +15,17 @@ def create_leaf() -> List[Symbol]:
     leaf: List[Symbol] = [Leaf()]
 
     for mr in range(midrib_division):
-        mr_t = mr / (midrib_division - 1)
-        
         # Create all symbols explicitly to help the type checker
         symbols: List[Symbol] = []
-        symbols.append(F())
+
+        length = 0 if mr == 0 else 0.5
+        symbols.append(F(length=length))
         symbols.append(BranchOpen())
         symbols.append(Yaw(angle=-75))
         
         # Add secondary vein on left side
         for _ in range(sec_vein_division):
-            symbols.append(F())
+            symbols.append(F(length=0.5))
         
         symbols.append(BranchClose())
         symbols.append(BranchOpen())
@@ -33,7 +33,7 @@ def create_leaf() -> List[Symbol]:
         
         # Add secondary vein on right side
         for _ in range(sec_vein_division):
-            symbols.append(F())
+            symbols.append(F(length=0.5))
         
         symbols.append(BranchClose())
         

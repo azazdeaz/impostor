@@ -34,8 +34,9 @@ def extrude_mesh2d_along_points(shape: Mesh2D, frames: list[Transform3D]) -> Mes
             triangle_indices.append([v2, v4, v3])
     
     # Build UVs
+    uv_y_repeat = 2
     for i in range(len(frames)):
-        v = i / (len(frames) - 1) if len(frames) > 1 else 0.0
+        v = i % uv_y_repeat / uv_y_repeat
         for j in range(vertex_per_level):
             u = j / (vertex_per_level - 1) if vertex_per_level > 1 else 0.0
             extruded_mesh.vertex_texcoords[i * vertex_per_level + j, :] = [u, v]
