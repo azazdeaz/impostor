@@ -1,13 +1,7 @@
 from collections.abc import Sequence
 from typing import Callable, Generic, List, Optional, Tuple, TypeVar
-from pydantic import BaseModel, Field
-import numpy as np
+from pydantic import BaseModel
 import rerun as rr
-from scipy.spatial.transform import Rotation
-from .transform_3d import Transform3D
-from .extrude import extrude_mesh2d_along_points
-from .mesh2d import Mesh2D
-from .mesh3d import Mesh3D
 
 
 # ---------------- Symbols ---------------- #

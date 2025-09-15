@@ -15,7 +15,8 @@ from impostor_gen.l_systems import (
     Writer,
 )
 from impostor_gen.leaf import create_leaf
-from impostor_gen.mesh_builder import generate_blueprints, log_mesh, log_transforms
+from impostor_gen.mesh_builder import generate_blueprints, generate_mesh, log_transforms
+from impostor_gen.mesh_utils import log_mesh
 
 
 class Crown(Symbol):
@@ -112,9 +113,8 @@ def main():
         # print(f"Iteration {i}: {','.join(str(s) for s in lsystem.world)}")
         blueprints = generate_blueprints(lsystem.world)
         log_transforms(blueprints)
-        mesh = log_mesh(blueprints)
-        if (i+1) % 10 == 0:
-            mesh.to_trimesh().export(f"strawberry_{i:03}.glb")
+        mesh = generate_mesh(blueprints)
+        log_mesh(mesh)
         lsystem.log_graph()
         lsystem.log_as_markdown()
     

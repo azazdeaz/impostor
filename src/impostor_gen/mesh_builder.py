@@ -1,12 +1,11 @@
-from collections import namedtuple
-from typing import List, NamedTuple, Optional, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 import rerun as rr
+import trimesh
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
-from . import l_systems as ls
 from .extrude import extrude_mesh2d_along_points
 from .l_systems import (
     BranchClose,
@@ -20,7 +19,7 @@ from .l_systems import (
     Yaw,
 )
 from .mesh2d import Mesh2D
-from .mesh3d import Mesh3D
+from .mesh_utils import merge_meshes, create_mesh_with_texture
 from .transform_3d import Transform3D
 from .leaf import Leaf
 
@@ -156,10 +155,10 @@ def generate_blueprints(
     return stack + closed_branches + finished_leaves
 
 
-def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
+def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> trimesh.Trimesh:
     profile = Mesh2D.circle(radius=0.4, segments=7)
 
-    mesh3d = Mesh3D.empty()
+    meshes: List[trimesh.Trimesh] = []
 
     for blueprint in blueprints:
         if isinstance(blueprint, StemBlueprint):
@@ -170,7 +169,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
                         "Number of radii must match number of transforms in a StemBlueprint."
                     )
                 stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)
-                mesh3d = mesh3d.merge(stem_mesh)
+                meshes.append(stem_mesh)
 
         else:  # LeafBlueprint
             # assert len(blueprint.midrib.transforms) == len(blueprint.veins) * 2, f"Midrib transforms: {len(blueprint.midrib.transforms)}, Veins: {len(blueprint.veins) * 2}"
@@ -205,21 +204,14 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
                     faces[(i * (horisontal_div - 1) + j) * 2 + 0, :] = [v0, v2, v1]
                     faces[(i * (horisontal_div - 1) + j) * 2 + 1, :] = [v1, v2, v3]
             #
-            leaf_mesh = Mesh3D(
-                vertex_positions=vertex_grid.reshape(-1, 3),
+            leaf_mesh = create_mesh_with_texture(
+                vertices=vertex_grid.reshape(-1, 3),
+                faces=faces,
                 vertex_texcoords=uv_grid.reshape(-1, 2),
-                triangle_indices=faces,
             )
-            mesh3d = mesh3d.merge(leaf_mesh)
+            meshes.append(leaf_mesh)
 
-    return mesh3d
-
-
-def log_mesh(blueprints: List[StemBlueprint | LeafBlueprint]):
-    mesh3d = generate_mesh(blueprints)
-    rr.log("extruded_mesh", mesh3d.to_rerun())
-    return mesh3d
-
+    return merge_meshes(meshes)
 
 def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
     arrows = rr.Arrows3D(

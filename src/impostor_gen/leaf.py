@@ -1,7 +1,5 @@
 from typing import List
-from . import l_systems as ls
-from .l_systems import Symbol, Rule, F, Yaw, Pitch, Roll, T, BranchOpen, BranchClose
-from .curve import BezierCurve2D
+from .l_systems import Symbol, F, Yaw, BranchOpen, BranchClose
 
 class Leaf(Symbol):
     def __str__(self) -> str:
