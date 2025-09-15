@@ -26,9 +26,11 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
+    { name = "pillow" },
     { name = "pydantic" },
     { name = "rerun-sdk" },
     { name = "scipy" },
+    { name = "trimesh" },
 ]
 
 [package.dev-dependencies]
@@ -39,9 +41,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=2.3.1" },
+    { name = "pillow", specifier = ">=11.3.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "rerun-sdk", specifier = ">=0.24.0" },
     { name = "scipy", specifier = ">=1.16.0" },
+    { name = "trimesh", specifier = ">=4.8.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -393,6 +397,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4b/19/a8461383f7328300e83c34f58bf38ccc05f57c2289c0e54e2bea757de83c/scipy_stubs-1.16.0.2.tar.gz", hash = "sha256:f83aacaf2e899d044de6483e6112bf7a1942d683304077bc9e78cf6f21353acd", size = 306747 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/30/b73418e6d3d8209fef684841d9a0e5b439d3528fa341a23b632fe47918dd/scipy_stubs-1.16.0.2-py3-none-any.whl", hash = "sha256:dc364d24a3accd1663e7576480bdb720533f94de8a05590354ff6d4a83d765c7", size = 491346 },
+]
+
+[[package]]
+name = "trimesh"
+version = "4.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4c/b9/abdb41e70acfb617b41596d1a90b05fff2886c6ebff60c0335763c72e081/trimesh-4.8.1.tar.gz", hash = "sha256:b6dcce47a177cbe8083aa453c872a38703cd3e4b6384e84ff1525a6916d642d3", size = 822414 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/2a/9c09a727c88d94bdda5c26036b965b0f4fae50b866327396227025138546/trimesh-4.8.1-py3-none-any.whl", hash = "sha256:62d01ddff05370614a2ac385dd2b41d0a11749663675d37ce54247fa380ce07c", size = 728453 },
 ]
 
 [[package]]

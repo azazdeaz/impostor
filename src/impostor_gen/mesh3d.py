@@ -3,6 +3,9 @@ import numpy as np
 from pydantic import BaseModel, Field, model_validator
 from .transform_3d import Transform3D
 import rerun as rr
+import trimesh
+import trimesh.visual.material
+from PIL import Image
 
 
 def concat_optional_arrays(
@@ -192,3 +195,27 @@ class Mesh3D(BaseModel):
             triangle_indices=self.triangle_indices,
             vertex_texcoords=self.vertex_texcoords,
         )
+    
+    def to_trimesh(self) -> trimesh.Trimesh:
+        """Convert this Mesh3D instance to a trimesh.Trimesh instance."""
+        mesh =  trimesh.Trimesh(
+            vertices=self.vertex_positions,
+            faces=self.triangle_indices,
+            vertex_normals=self.vertex_normals,
+            vertex_colors=self.vertex_colors,
+            process=False  # Disable automatic processing to preserve original data
+        )
+
+        if self.vertex_texcoords is not None:
+            print(f"UVs: {self.vertex_texcoords}")
+            material = trimesh.visual.material.PBRMaterial(
+                baseColorTexture=Image.open("uv1.png"),
+            )
+
+            visual = trimesh.visual.TextureVisuals(
+                uv=self.vertex_texcoords,
+                material=material
+            )
+            mesh.visual = visual
+
+        return mesh

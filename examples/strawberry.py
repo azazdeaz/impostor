@@ -107,16 +107,19 @@ def main():
     rr.init("rerun_example_my_data", spawn=True)
 
     # print(f"Initial: {','.join(str(s) for s in lsystem.world)}")
-    for i in range(50):
+    for i in range(10):
         rr.set_time("frame_idx", sequence=i)
         lsystem.iterate()
         print(f"Iteration {i}, world size: {len(lsystem.world)}")
         # print(f"Iteration {i}: {','.join(str(s) for s in lsystem.world)}")
         blueprints = generate_blueprints(lsystem.world)
         log_transforms(blueprints)
-        log_mesh(blueprints)
+        mesh = log_mesh(blueprints)
+        if (i+1) % 10 == 0:
+            mesh.to_trimesh().export(f"strawberry_{i:03}.glb")
         lsystem.log_graph()
         lsystem.log_as_markdown()
+    
 
 
 if __name__ == "__main__":

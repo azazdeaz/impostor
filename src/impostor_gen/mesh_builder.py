@@ -178,6 +178,10 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
             sec_vein_div = len(blueprint.veins[0].transforms)
             horisontal_div = sec_vein_div * 2 + 1
             vertex_grid = np.zeros((midrib_div, horisontal_div, 3))
+            u = np.linspace(0.0, 1.0, horisontal_div)
+            v = np.linspace(0.0, 1.0, midrib_div)
+            u_grid, v_grid = np.meshgrid(u, v)
+            uv_grid = np.stack((u_grid, v_grid), axis=-1)
             for i in range(midrib_div):
                 vertex_grid[i, :sec_vein_div, :] = [
                     t.position for t in blueprint.veins[i * 2].transforms
@@ -203,6 +207,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
             #
             leaf_mesh = Mesh3D(
                 vertex_positions=vertex_grid.reshape(-1, 3),
+                vertex_texcoords=uv_grid.reshape(-1, 2),
                 triangle_indices=faces,
             )
             mesh3d = mesh3d.merge(leaf_mesh)
@@ -213,6 +218,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
 def log_mesh(blueprints: List[StemBlueprint | LeafBlueprint]):
     mesh3d = generate_mesh(blueprints)
     rr.log("extruded_mesh", mesh3d.to_rerun())
+    return mesh3d
 
 
 def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):

@@ -1,3 +1,4 @@
+from typing import List
 import numpy as np
 
 from impostor_gen.mesh2d import Mesh2D
@@ -19,6 +20,9 @@ def extrude_mesh2d_along_points(shape: Mesh2D, frames: list[Transform3D]) -> Mes
         transformed_shape = shape3d.transform(frame)
         extruded_mesh = extruded_mesh.merge(transformed_shape)
 
+    triangle_indices: List[List[int]] = []
+    extruded_mesh.vertex_texcoords = np.zeros((len(extruded_mesh.vertex_positions), 2), dtype=np.float32)
+
     # Build the triangle indices for the extruded mesh
     for i in range(len(frames) - 1):
         for [a, b] in shape.line_indices:
@@ -26,12 +30,17 @@ def extrude_mesh2d_along_points(shape: Mesh2D, frames: list[Transform3D]) -> Mes
             v2 = i * vertex_per_level + b
             v3 = (i + 1) * vertex_per_level + a
             v4 = (i + 1) * vertex_per_level + b
-            new_triangle_indices = np.array([[v1, v2, v3], [v2, v4, v3]])
-            extruded_mesh.triangle_indices = (
-                np.vstack((extruded_mesh.triangle_indices, new_triangle_indices))
-                if extruded_mesh.triangle_indices is not None
-                else new_triangle_indices
-            )
+            triangle_indices.append([v1, v2, v3])
+            triangle_indices.append([v2, v4, v3])
+    
+    # Build UVs
+    for i in range(len(frames)):
+        v = i / (len(frames) - 1) if len(frames) > 1 else 0.0
+        for j in range(vertex_per_level):
+            u = j / (vertex_per_level - 1) if vertex_per_level > 1 else 0.0
+            extruded_mesh.vertex_texcoords[i * vertex_per_level + j, :] = [u, v]
+    
+    extruded_mesh.triangle_indices = np.array(triangle_indices, dtype=np.int32)
     
     extruded_mesh.line_indices = None
     return extruded_mesh
