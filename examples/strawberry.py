@@ -14,7 +14,7 @@ from impostor_gen.l_systems import (
     Tip,
     Writer,
 )
-from impostor_gen.leaf import create_leaf
+from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.mesh_builder import generate_blueprints, generate_mesh, log_transforms
 from impostor_gen.mesh_utils import log_mesh
 
@@ -22,7 +22,7 @@ from impostor_gen.mesh_utils import log_mesh
 class Crown(Symbol):
     age: int = 0
     shoot_period: int = 12  # How many iterations between new shoots
-    max_age: int = 26  # Maximum age before the crown stops producing new shoots
+    max_age: int = 226  # Maximum age before the crown stops producing new shoots
     angle_step: float = 137.5  # Angle step in degrees for new shoots
 
 
@@ -37,17 +37,18 @@ class IterateCrown(Rule):
 
         should_shoot = (age % crown.shoot_period == 0) and (age <= crown.max_age)
         if should_shoot:
-            angle = (age // crown.shoot_period) * crown.angle_step
+            roll = (age // crown.shoot_period) * crown.angle_step
+            pitch = -50 + age // crown.shoot_period * 6.0
             writer.write(
                 [
                     crown,
                     BranchOpen(),
-                    Roll(angle=angle),
-                    Pitch(angle=-20),
+                    Roll(angle=roll),
+                    Pitch(angle=pitch),
                     Stem(),
                     F(length=1.0, width=0.5),
-                    Tip(),
-                    *create_leaf(),
+                    Tip(max_length=7.2 + age * 0.2),
+                    *create_trifoliate_leaf(),
                     BranchClose(),
                 ]
             )
@@ -56,8 +57,6 @@ class IterateCrown(Rule):
 
 
 class GrowStem(Rule):
-    max_length: float = 12.0  # Limit the branching depth
-
     def apply(self, writer: "Writer"):
         tip = writer.peek(0)
         if not isinstance(tip, Tip):
@@ -78,9 +77,9 @@ class GrowStem(Rule):
         except IndexError:
             pass  # Reached the beginning of the world
 
-        if length_without_branch < self.max_length:
+        if length_without_branch < tip.max_length:
             # Default "grow" behavior
-            writer.write([Pitch(angle=-2), F(length=0.9, width=0.5), tip.model_copy()])
+            writer.write([Pitch(angle=-2), F(length=0.9, width=0.2), tip.model_copy()])
 
 
 def widen_stem(symbol: F) -> list[Symbol]:
@@ -105,18 +104,22 @@ def main():
 
     rr.init("rerun_example_my_data", spawn=True)
 
-    # print(f"Initial: {','.join(str(s) for s in lsystem.world)}")
-    for i in range(10):
+    iterations = 60
+    for i in range(iterations):
         rr.set_time("frame_idx", sequence=i)
         lsystem.iterate()
         print(f"Iteration {i}, world size: {len(lsystem.world)}")
-        # print(f"Iteration {i}: {','.join(str(s) for s in lsystem.world)}")
-        blueprints = generate_blueprints(lsystem.world)
-        log_transforms(blueprints)
-        mesh = generate_mesh(blueprints)
-        log_mesh(mesh)
-        lsystem.log_graph()
-        lsystem.log_as_markdown()
+        if i % 5 == 0 or i == iterations - 1:
+            blueprints = generate_blueprints(lsystem.world)
+            # log_transforms(blueprints)
+            mesh = generate_mesh(blueprints)
+            log_mesh(mesh)
+            # lsystem.log_graph()
+            # lsystem.log_as_markdown()
+
+            if i == iterations - 1:
+                mesh.export("strawberry_plant.glb")
+                mesh.export("strawberry_plant.obj")
     
 
 

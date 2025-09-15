@@ -83,6 +83,7 @@ def create_mesh_with_texture(
     if vertex_texcoords is not None and texture_path is not None:
         material = trimesh.visual.material.PBRMaterial(
             baseColorTexture=Image.open(texture_path),
+            doubleSided=True
         )
 
         visual = trimesh.visual.TextureVisuals(

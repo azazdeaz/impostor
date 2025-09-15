@@ -208,6 +208,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> trimesh.Tr
                 vertices=vertex_grid.reshape(-1, 3),
                 faces=faces,
                 vertex_texcoords=uv_grid.reshape(-1, 2),
+                texture_path="central_cropped3.png",
             )
             meshes.append(leaf_mesh)
 

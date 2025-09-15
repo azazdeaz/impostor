@@ -29,5 +29,7 @@ warn_unused_configs = true
 
 [dependency-groups]
 dev = [
+    "google-genai>=1.36.0",
+    "python-dotenv>=1.1.1",
     "scipy-stubs>=1.16.0.2",
 ]

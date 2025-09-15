@@ -68,6 +68,8 @@ class BranchClose(Symbol):
 
 class Tip(Symbol):
     order: int = 0 # Default to order 0 (main trunk)
+    max_length: float = 10.0  # Maximum length before stopping growth
+
     def __str__(self) -> str:
         return "Tip"
 
