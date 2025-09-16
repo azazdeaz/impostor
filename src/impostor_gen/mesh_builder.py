@@ -155,7 +155,7 @@ def generate_blueprints(
     return stack + closed_branches + finished_leaves
 
 
-def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> trimesh.Trimesh:
+def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> List[trimesh.Trimesh]:
     profile = Mesh2D.circle(radius=0.4, segments=7)
 
     meshes: List[trimesh.Trimesh] = []
@@ -208,11 +208,13 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> trimesh.Tr
                 vertices=vertex_grid.reshape(-1, 3),
                 faces=faces,
                 vertex_texcoords=uv_grid.reshape(-1, 2),
-                texture_path="central_cropped3.png",
+                texture_path="central_leaflet_color_cropped.png",
+                occlusion_path="central_leaflet_mask_cropped.png",
+                normal_path="central_leaflet_normal_cropped.png"
             )
             meshes.append(leaf_mesh)
 
-    return merge_meshes(meshes)
+    return meshes
 
 def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
     arrows = rr.Arrows3D(

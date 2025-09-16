@@ -1,3 +1,4 @@
+from pathlib import Path
 import rerun as rr
 
 from impostor_gen.l_systems import (
@@ -104,7 +105,7 @@ def main():
 
     rr.init("rerun_example_my_data", spawn=True)
 
-    iterations = 60
+    iterations = 10
     for i in range(iterations):
         rr.set_time("frame_idx", sequence=i)
         lsystem.iterate()
@@ -112,15 +113,16 @@ def main():
         if i % 5 == 0 or i == iterations - 1:
             blueprints = generate_blueprints(lsystem.world)
             # log_transforms(blueprints)
-            mesh = generate_mesh(blueprints)
-            log_mesh(mesh)
+            meshes = generate_mesh(blueprints)
+            log_mesh(meshes)
             # lsystem.log_graph()
             # lsystem.log_as_markdown()
 
             if i == iterations - 1:
-                mesh.export("strawberry_plant.glb")
-                mesh.export("strawberry_plant.obj")
-    
+                for j, mesh in enumerate(meshes):
+                    Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
+                    mesh.export(f"exports/strawberry_plant_{j}/model.glb")
+                    mesh.export(f"exports/strawberry_plant_{j}/model.obj")
 
 
 if __name__ == "__main__":

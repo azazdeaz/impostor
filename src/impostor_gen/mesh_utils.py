@@ -69,7 +69,9 @@ def create_mesh_with_texture(
     vertex_texcoords: Optional[np.ndarray] = None,
     vertex_normals: Optional[np.ndarray] = None,
     vertex_colors: Optional[np.ndarray] = None,
-    texture_path: Optional[str] = "uv1.png"
+    texture_path: Optional[str] = "uv1.png",
+    occlusion_path: Optional[str] = "uv1.png",
+    normal_path: Optional[str] = "uv1.png"
 ) -> trimesh.Trimesh:
     """Create a trimesh.Trimesh with optional texture coordinates and material."""
     mesh = trimesh.Trimesh(
@@ -83,7 +85,10 @@ def create_mesh_with_texture(
     if vertex_texcoords is not None and texture_path is not None:
         material = trimesh.visual.material.PBRMaterial(
             baseColorTexture=Image.open(texture_path),
-            doubleSided=True
+            occlusionTexture=Image.open(occlusion_path) if occlusion_path else None,
+            normalTexture=Image.open(normal_path) if normal_path else None,
+            doubleSided=True,
+            alphaMode='BLEND',
         )
 
         visual = trimesh.visual.TextureVisuals(
