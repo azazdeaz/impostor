@@ -1,7 +1,7 @@
 from typing import Optional
 import numpy as np
-import trimesh
 from pydantic import BaseModel, Field, model_validator
+from impostor_gen.mesh3d import Mesh3D
 
 
 class Mesh2D(BaseModel):
@@ -46,7 +46,7 @@ class Mesh2D(BaseModel):
     def __len__(self):
         return len(self.line_indices)
 
-    def as_mesh3d(self, z_height: float = 0.0) -> trimesh.Trimesh:
+    def as_mesh3d(self, z_height: float = 0.0) -> Mesh3D:
         """Convert this 2D mesh to a 3D mesh by extruding along the z-axis."""
         vertex_positions_3d = np.hstack(
             (
@@ -61,14 +61,10 @@ class Mesh2D(BaseModel):
         else:
             vertex_normals_3d = None
         
-        # For trimesh, we need faces, not line indices
-        # Since this is a 2D mesh being converted to 3D, we don't have faces yet
-        # This will be used in the extrusion process where faces are created
-        return trimesh.Trimesh(
-            vertices=vertex_positions_3d,
-            faces=np.empty((0, 3), dtype=np.int32),  # Empty faces array
+        return Mesh3D(
+            vertex_positions=vertex_positions_3d,
+            line_indices=self.line_indices,
             vertex_normals=vertex_normals_3d,
-            process=False  # Disable automatic processing
         )
 
     @classmethod

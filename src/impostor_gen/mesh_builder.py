@@ -1,8 +1,8 @@
+from pathlib import Path
 from typing import List, Optional, Sequence
 
 import numpy as np
 import rerun as rr
-import trimesh
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
@@ -19,7 +19,7 @@ from .l_systems import (
     Yaw,
 )
 from .mesh2d import Mesh2D
-from .mesh_utils import merge_meshes, create_mesh_with_texture
+from .mesh3d import Mesh3D
 from .transform_3d import Transform3D
 from .leaf import Leaf
 
@@ -155,10 +155,10 @@ def generate_blueprints(
     return stack + closed_branches + finished_leaves
 
 
-def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> List[trimesh.Trimesh]:
+def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
     profile = Mesh2D.circle(radius=0.4, segments=7)
 
-    meshes: List[trimesh.Trimesh] = []
+    mesh3d = Mesh3D.empty()
 
     for blueprint in blueprints:
         if isinstance(blueprint, StemBlueprint):
@@ -169,7 +169,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> List[trime
                         "Number of radii must match number of transforms in a StemBlueprint."
                     )
                 stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)
-                meshes.append(stem_mesh)
+                mesh3d = mesh3d.merge(stem_mesh)
 
         else:  # LeafBlueprint
             # assert len(blueprint.midrib.transforms) == len(blueprint.veins) * 2, f"Midrib transforms: {len(blueprint.midrib.transforms)}, Veins: {len(blueprint.veins) * 2}"
@@ -204,17 +204,23 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> List[trime
                     faces[(i * (horisontal_div - 1) + j) * 2 + 0, :] = [v0, v2, v1]
                     faces[(i * (horisontal_div - 1) + j) * 2 + 1, :] = [v1, v2, v3]
             #
-            leaf_mesh = create_mesh_with_texture(
-                vertices=vertex_grid.reshape(-1, 3),
-                faces=faces,
+            # leaf_mesh = create_mesh_with_texture(
+            #     vertices=vertex_grid.reshape(-1, 3),
+            #     faces=faces,
+            #     vertex_texcoords=uv_grid.reshape(-1, 2),
+            #     texture_path="central_leaflet_color_cropped.png",
+            #     occlusion_path="central_leaflet_mask_cropped.png",
+            #     normal_path="central_leaflet_normal_cropped.png"
+            # )
+            leaf_mesh = Mesh3D(
+                vertex_positions=vertex_grid.reshape(-1, 3),
                 vertex_texcoords=uv_grid.reshape(-1, 2),
-                texture_path="central_leaflet_color_cropped.png",
-                occlusion_path="central_leaflet_mask_cropped.png",
-                normal_path="central_leaflet_normal_cropped.png"
+                triangle_indices=faces,
+                texture_base_color=Path("central_leaflet_color_cropped.png"),
+                texture_normal_map=Path("central_leaflet_normal_cropped.png"),
             )
-            meshes.append(leaf_mesh)
-
-    return meshes
+            mesh3d = mesh3d.merge(leaf_mesh)
+    return mesh3d
 
 def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
     arrows = rr.Arrows3D(

@@ -20,6 +20,7 @@ from impostor_gen.mesh_builder import generate_blueprints, generate_mesh, log_tr
 from impostor_gen.mesh_utils import log_mesh
 
 
+
 class Crown(Symbol):
     age: int = 0
     shoot_period: int = 12  # How many iterations between new shoots
@@ -114,15 +115,16 @@ def main():
             blueprints = generate_blueprints(lsystem.world)
             # log_transforms(blueprints)
             meshes = generate_mesh(blueprints)
-            log_mesh(meshes)
+            print(f"Generated {len(meshes.vertex_positions)} meshes")
+            log_mesh(meshes.to_trimesh())
             # lsystem.log_graph()
             # lsystem.log_as_markdown()
 
-            if i == iterations - 1:
-                for j, mesh in enumerate(meshes):
-                    Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
-                    mesh.export(f"exports/strawberry_plant_{j}/model.glb")
-                    mesh.export(f"exports/strawberry_plant_{j}/model.obj")
+            # if i == iterations - 1:
+            #     for j, mesh in enumerate(meshes):
+            #         Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
+            #         mesh.to_trimesh()export(f"exports/strawberry_plant_{j}/model.glb")
+            #         mesh.export(f"exports/strawberry_plant_{j}/model.obj")
 
 
 if __name__ == "__main__":
