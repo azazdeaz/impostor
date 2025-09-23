@@ -120,10 +120,12 @@ def main():
             # lsystem.log_as_markdown()
 
             if i == iterations - 1:
+                meshes.to_usd().Save()
                 for j, mesh in enumerate(meshes.submeshes):
                     Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
                     mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.glb")
                     mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.obj")
+                    
 
 
 if __name__ == "__main__":

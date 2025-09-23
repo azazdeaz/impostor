@@ -19,7 +19,7 @@ from .l_systems import (
     Yaw,
 )
 from .mesh2d import Mesh2D
-from .mesh3d import Mesh3D
+from .mesh3d import Mesh3D, CompundMesh3D
 from .transform_3d import Transform3D
 from .leaf import Leaf
 
@@ -233,12 +233,4 @@ def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
         for j, t in enumerate(b.transforms):
             rr.log(f"stem/frames/{i}/{j}", t.to_rerun(), arrows)
 
-class CompundMesh3D(BaseModel):
-    submeshes: List[Mesh3D] = Field(default_factory=lambda: [])
 
-    def merge(self, other: "CompundMesh3D | Mesh3D") -> "CompundMesh3D":
-        if isinstance(other, Mesh3D):
-            return CompundMesh3D(submeshes=self.submeshes + [other])
-        else:
-            return CompundMesh3D(submeshes=self.submeshes + other.submeshes)
-    

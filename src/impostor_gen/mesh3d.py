@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Set
 
 import numpy as np
 import rerun as rr
@@ -9,6 +9,8 @@ from PIL import Image
 from pydantic import BaseModel, Field, model_validator
 
 from .transform_3d import Transform3D
+
+from pxr import Kind, Sdf, Usd, UsdGeom, UsdShade
 
 
 def concat_optional_arrays(
@@ -63,7 +65,23 @@ def concat_optional_arrays(
     )
 
 
+all_mesh_names: Set[str] = set()
+
+
+def _next_mesh_name(base_name: str = "mesh") -> str:
+    """Generate a unique mesh name based on the given base name."""
+    global all_mesh_names
+    new_name = base_name
+    suffix = 1
+    while new_name in all_mesh_names:
+        new_name = f"{base_name}_{suffix}"
+        suffix += 1
+    all_mesh_names.add(new_name)
+    return new_name
+
+
 class Mesh3D(BaseModel):
+    name: str = Field(default="mesh", description="Unique name for the mesh")
     vertex_positions: np.ndarray = Field(
         ..., description="Array of vertex positions with shape (n, 3)"
     )
@@ -98,6 +116,9 @@ class Mesh3D(BaseModel):
 
     @model_validator(mode="after")
     def validate_mesh(self) -> "Mesh3D":
+        # Make sure name is unique
+        self.name = _next_mesh_name(self.name)
+
         # Validate shapes
         if self.vertex_positions.ndim != 2 or self.vertex_positions.shape[1] != 3:
             raise ValueError("vertex_positions must be a 2D array with shape (n, 3)")
@@ -240,3 +261,50 @@ class Mesh3D(BaseModel):
             mesh.visual = visual
 
         return mesh
+
+    def to_usd(self, stage: Optional[Usd.Stage]) -> Usd.Stage:
+        if stage is None:
+            stage = Usd.Stage.CreateNew("simpleShading.usda")
+        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+
+        modelRoot = UsdGeom.Xform.Define(stage, f"/{self.name}")
+        Usd.ModelAPI(modelRoot).SetKind(Kind.Tokens.component)
+
+        mesh = UsdGeom.Mesh.Define(stage, f"/{self.name}/mesh")
+        # billboard.CreatePointsAttr([(-430, -145, 0), (430, -145, 0), (430, 145, 0), (-430, 145, 30)])
+        # billboard.CreateFaceVertexCountsAttr([4])
+        # billboard.CreateFaceVertexIndicesAttr([0,1,2,3])
+        # billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
+        mesh.CreatePointsAttr(self.vertex_positions.tolist())
+        if self.triangle_indices is not None:
+            face_vertex_counts = [3] * len(self.triangle_indices)
+            face_vertex_indices = self.triangle_indices.flatten().tolist()
+            mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
+            mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
+        # texCoords.Set([(0, 0), (1, 0), (1,1), (0, 1)])
+        if self.vertex_texcoords is not None:
+            texCoords = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
+                "st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying
+            )
+            texCoords.Set(self.vertex_texcoords.tolist())
+
+        return stage
+
+
+class CompundMesh3D(BaseModel):
+    submeshes: List[Mesh3D] = Field(default_factory=lambda: [])
+
+    def merge(self, other: "CompundMesh3D | Mesh3D") -> "CompundMesh3D":
+        if isinstance(other, Mesh3D):
+            return CompundMesh3D(submeshes=self.submeshes + [other])
+        else:
+            return CompundMesh3D(submeshes=self.submeshes + other.submeshes)
+
+    def to_usd(self, filename: str = "compound_mesh.usda") -> "Usd.Stage":
+        stage = Usd.Stage.CreateNew(filename)
+        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+
+        for mesh in self.submeshes:
+            mesh.to_usd(stage)
+
+        return stage
