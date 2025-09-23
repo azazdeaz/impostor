@@ -89,6 +89,9 @@ class Mesh3D(BaseModel):
     texture_normal_map: Optional[Path] = Field(
         default=None, description="Path to the texture normal map image"
     )
+    texture_occlusion_map: Optional[Path] = Field(
+        default=None, description="Path to the texture occlusion map image"
+    )
 
     class Config:
         arbitrary_types_allowed = True
@@ -216,9 +219,19 @@ class Mesh3D(BaseModel):
         )
 
         if self.vertex_texcoords is not None:
-            print(f"UVs: {self.vertex_texcoords}")
+            base_color = (
+                self.texture_base_color
+                if self.texture_base_color is not None
+                else Path("uv1.png")
+            )
             material = trimesh.visual.material.PBRMaterial(
-                baseColorTexture=Image.open("uv1.png"),
+                baseColorTexture=Image.open(base_color),
+                normalTexture=Image.open(self.texture_normal_map)
+                if self.texture_normal_map
+                else None,
+                occlusionTexture=Image.open(self.texture_occlusion_map)
+                if self.texture_occlusion_map
+                else None,
             )
 
             visual = trimesh.visual.TextureVisuals(

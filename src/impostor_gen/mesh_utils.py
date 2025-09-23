@@ -7,6 +7,9 @@ import trimesh.visual.material
 import rerun as rr
 from PIL import Image
 
+from impostor_gen.mesh3d import Mesh3D
+from impostor_gen.mesh_builder import CompundMesh3D
+
 from .transform_3d import Transform3D
 
 
@@ -53,13 +56,13 @@ def transform_mesh(mesh: trimesh.Trimesh, transform: Transform3D) -> trimesh.Tri
     return transformed_mesh
 
 
-def log_mesh(mesh: trimesh.Trimesh | List[trimesh.Trimesh]):
+def log_mesh(mesh: Mesh3D | CompundMesh3D):
     """Convert a trimesh.Trimesh instance to a rerun.Asset3D."""
-    if not isinstance(mesh, list):
-        mesh = [mesh]
+    if isinstance(mesh, Mesh3D):
+        mesh = CompundMesh3D(submeshes=[mesh])
     
-    for i, m in enumerate(mesh):
-        asset: rr.datatypes.Blob = m.export(file_type='glb')  # type: ignore
+    for i, m in enumerate(mesh.submeshes):
+        asset: rr.datatypes.Blob = m.to_trimesh().export(file_type='glb')  # type: ignore
         rr.log(f"mesh/part_{i}", rr.Asset3D(contents=asset))
 
 

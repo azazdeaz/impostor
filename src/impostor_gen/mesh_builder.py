@@ -155,10 +155,10 @@ def generate_blueprints(
     return stack + closed_branches + finished_leaves
 
 
-def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
+def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMesh3D":
     profile = Mesh2D.circle(radius=0.4, segments=7)
 
-    mesh3d = Mesh3D.empty()
+    mesh3d = CompundMesh3D()
 
     for blueprint in blueprints:
         if isinstance(blueprint, StemBlueprint):
@@ -218,6 +218,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> Mesh3D:
                 triangle_indices=faces,
                 texture_base_color=Path("central_leaflet_color_cropped.png"),
                 texture_normal_map=Path("central_leaflet_normal_cropped.png"),
+                texture_occlusion_map=Path("central_leaflet_mask_cropped.png"),
             )
             mesh3d = mesh3d.merge(leaf_mesh)
     return mesh3d
@@ -231,3 +232,13 @@ def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
     for i, b in enumerate(blueprints):
         for j, t in enumerate(b.transforms):
             rr.log(f"stem/frames/{i}/{j}", t.to_rerun(), arrows)
+
+class CompundMesh3D(BaseModel):
+    submeshes: List[Mesh3D] = Field(default_factory=lambda: [])
+
+    def merge(self, other: "CompundMesh3D | Mesh3D") -> "CompundMesh3D":
+        if isinstance(other, Mesh3D):
+            return CompundMesh3D(submeshes=self.submeshes + [other])
+        else:
+            return CompundMesh3D(submeshes=self.submeshes + other.submeshes)
+    

@@ -115,16 +115,15 @@ def main():
             blueprints = generate_blueprints(lsystem.world)
             # log_transforms(blueprints)
             meshes = generate_mesh(blueprints)
-            print(f"Generated {len(meshes.vertex_positions)} meshes")
-            log_mesh(meshes.to_trimesh())
+            log_mesh(meshes)
             # lsystem.log_graph()
             # lsystem.log_as_markdown()
 
-            # if i == iterations - 1:
-            #     for j, mesh in enumerate(meshes):
-            #         Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
-            #         mesh.to_trimesh()export(f"exports/strawberry_plant_{j}/model.glb")
-            #         mesh.export(f"exports/strawberry_plant_{j}/model.obj")
+            if i == iterations - 1:
+                for j, mesh in enumerate(meshes.submeshes):
+                    Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
+                    mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.glb")
+                    mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.obj")
 
 
 if __name__ == "__main__":
