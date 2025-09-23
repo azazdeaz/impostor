@@ -218,7 +218,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
                 triangle_indices=faces,
                 texture_base_color=Path("central_leaflet_color_cropped.png"),
                 texture_normal_map=Path("central_leaflet_normal_cropped.png"),
-                texture_occlusion_map=Path("central_leaflet_mask_cropped.png"),
+                texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
             )
             mesh3d = mesh3d.merge(leaf_mesh)
     return mesh3d

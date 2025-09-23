@@ -94,6 +94,9 @@ class Mesh3D(BaseModel):
     texture_normal_map: Optional[Path] = Field(
         default=None, description="Path to the texture normal map image"
     )
+    texture_opacity_map: Optional[Path] = Field(
+        default=None, description="Path to the texture opacity map image"
+    )
     texture_occlusion_map: Optional[Path] = Field(
         default=None, description="Path to the texture occlusion map image"
     )
@@ -236,8 +239,8 @@ class Mesh3D(BaseModel):
                 normalTexture=Image.open(self.texture_normal_map)
                 if self.texture_normal_map
                 else None,
-                occlusionTexture=Image.open(self.texture_occlusion_map)
-                if self.texture_occlusion_map
+                occlusionTexture=Image.open(self.texture_opacity_map)
+                if self.texture_opacity_map
                 else None,
             )
 
@@ -281,6 +284,8 @@ class Mesh3D(BaseModel):
             pbrShader.CreateIdAttr("UsdPreviewSurface")
             pbrShader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
             pbrShader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+            pbrShader.CreateInput("opacityMode", Sdf.ValueTypeNames.Token).Set("presence")
+            pbrShader.CreateInput("opacityThreshold", Sdf.ValueTypeNames.Float).Set(0.001)
 
             material.CreateSurfaceOutput().ConnectToSource(
                 pbrShader.ConnectableAPI(), "surface"
@@ -289,20 +294,54 @@ class Mesh3D(BaseModel):
             stReader = UsdShade.Shader.Define(stage, f"/{name}/mat/stReader")
             stReader.CreateIdAttr("UsdPrimvarReader_float2")
 
-            diffuseTextureSampler = UsdShade.Shader.Define(
-                stage, f"/{name}/mat/diffuseTexture"
-            )
-            diffuseTextureSampler.CreateIdAttr("UsdUVTexture")
-            diffuseTextureSampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(
-                str(self.texture_base_color)
-            )
-            diffuseTextureSampler.CreateInput(
-                "st", Sdf.ValueTypeNames.Float2
-            ).ConnectToSource(stReader.ConnectableAPI(), "result")
-            diffuseTextureSampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
-            pbrShader.CreateInput(
-                "diffuseColor", Sdf.ValueTypeNames.Color3f
-            ).ConnectToSource(diffuseTextureSampler.ConnectableAPI(), "rgb")
+            if self.texture_base_color:
+                diffuseTextureSampler = UsdShade.Shader.Define(
+                    stage, f"/{name}/mat/diffuseTexture"
+                )
+                diffuseTextureSampler.CreateIdAttr("UsdUVTexture")
+                diffuseTextureSampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(
+                    str(self.texture_base_color)
+                )
+                diffuseTextureSampler.CreateInput(
+                    "st", Sdf.ValueTypeNames.Float2
+                ).ConnectToSource(stReader.ConnectableAPI(), "result")
+                diffuseTextureSampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+                pbrShader.CreateInput(
+                    "diffuseColor", Sdf.ValueTypeNames.Color3f
+                ).ConnectToSource(diffuseTextureSampler.ConnectableAPI(), "rgb")
+
+            if self.texture_normal_map:
+                normalTextureSampler = UsdShade.Shader.Define(
+                    stage, f"/{name}/mat/normalTexture"
+                )
+                normalTextureSampler.CreateIdAttr("UsdUVTexture")
+                normalTextureSampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(
+                    str(self.texture_normal_map)
+                )
+                normalTextureSampler.CreateInput(
+                    "st", Sdf.ValueTypeNames.Float2
+                ).ConnectToSource(stReader.ConnectableAPI(), "result")
+                normalTextureSampler.CreateInput("sourceColorSpace", Sdf.ValueTypeNames.Token).Set("raw")
+                normalTextureSampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+                pbrShader.CreateInput(
+                    "normal", Sdf.ValueTypeNames.Normal3f
+                ).ConnectToSource(normalTextureSampler.ConnectableAPI(), "rgb")
+
+            if self.texture_opacity_map:
+                opacityTextureSampler = UsdShade.Shader.Define(
+                    stage, f"/{name}/mat/opacityTexture"
+                )
+                opacityTextureSampler.CreateIdAttr("UsdUVTexture")
+                opacityTextureSampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(
+                    str(self.texture_opacity_map)
+                )
+                opacityTextureSampler.CreateInput(
+                    "st", Sdf.ValueTypeNames.Float2
+                ).ConnectToSource(stReader.ConnectableAPI(), "result")
+                opacityTextureSampler.CreateOutput("r", Sdf.ValueTypeNames.Float)
+                pbrShader.CreateInput(
+                    "opacity", Sdf.ValueTypeNames.Float
+                ).ConnectToSource(opacityTextureSampler.ConnectableAPI(), "r")
 
             stInput = material.CreateInput(
                 "frame:stPrimvarName", Sdf.ValueTypeNames.Token
