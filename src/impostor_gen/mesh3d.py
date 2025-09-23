@@ -1,5 +1,7 @@
 from pathlib import Path
 from typing import List, Optional, Set
+import random
+import string
 
 import numpy as np
 import rerun as rr
@@ -65,21 +67,6 @@ def concat_optional_arrays(
     )
 
 
-all_mesh_names: Set[str] = set()
-
-
-def _next_mesh_name(base_name: str = "mesh") -> str:
-    """Generate a unique mesh name based on the given base name."""
-    global all_mesh_names
-    new_name = base_name
-    suffix = 1
-    while new_name in all_mesh_names:
-        new_name = f"{base_name}_{suffix}"
-        suffix += 1
-    all_mesh_names.add(new_name)
-    return new_name
-
-
 class Mesh3D(BaseModel):
     name: str = Field(default="mesh", description="Unique name for the mesh")
     vertex_positions: np.ndarray = Field(
@@ -117,7 +104,6 @@ class Mesh3D(BaseModel):
     @model_validator(mode="after")
     def validate_mesh(self) -> "Mesh3D":
         # Make sure name is unique
-        self.name = _next_mesh_name(self.name)
 
         # Validate shapes
         if self.vertex_positions.ndim != 2 or self.vertex_positions.shape[1] != 3:
@@ -265,28 +251,70 @@ class Mesh3D(BaseModel):
     def to_usd(self, stage: Optional[Usd.Stage]) -> Usd.Stage:
         if stage is None:
             stage = Usd.Stage.CreateNew("simpleShading.usda")
+
+        name = (
+            self.name
+            + "_"
+            + "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
+        )
+
         UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
 
-        modelRoot = UsdGeom.Xform.Define(stage, f"/{self.name}")
+        modelRoot = UsdGeom.Xform.Define(stage, f"/{name}")
         Usd.ModelAPI(modelRoot).SetKind(Kind.Tokens.component)
 
-        mesh = UsdGeom.Mesh.Define(stage, f"/{self.name}/mesh")
-        # billboard.CreatePointsAttr([(-430, -145, 0), (430, -145, 0), (430, 145, 0), (-430, 145, 30)])
-        # billboard.CreateFaceVertexCountsAttr([4])
-        # billboard.CreateFaceVertexIndicesAttr([0,1,2,3])
-        # billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
+        mesh = UsdGeom.Mesh.Define(stage, f"/{name}/mesh")
         mesh.CreatePointsAttr(self.vertex_positions.tolist())
         if self.triangle_indices is not None:
             face_vertex_counts = [3] * len(self.triangle_indices)
             face_vertex_indices = self.triangle_indices.flatten().tolist()
             mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
             mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
-        # texCoords.Set([(0, 0), (1, 0), (1,1), (0, 1)])
         if self.vertex_texcoords is not None:
             texCoords = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
                 "st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying
             )
             texCoords.Set(self.vertex_texcoords.tolist())
+
+            material = UsdShade.Material.Define(stage, f"/{name}/mat")
+            pbrShader = UsdShade.Shader.Define(stage, f"/{name}/mat/PBRShader")
+            pbrShader.CreateIdAttr("UsdPreviewSurface")
+            pbrShader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
+            pbrShader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
+
+            material.CreateSurfaceOutput().ConnectToSource(
+                pbrShader.ConnectableAPI(), "surface"
+            )
+
+            stReader = UsdShade.Shader.Define(stage, f"/{name}/mat/stReader")
+            stReader.CreateIdAttr("UsdPrimvarReader_float2")
+
+            diffuseTextureSampler = UsdShade.Shader.Define(
+                stage, f"/{name}/mat/diffuseTexture"
+            )
+            diffuseTextureSampler.CreateIdAttr("UsdUVTexture")
+            diffuseTextureSampler.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(
+                str(self.texture_base_color)
+            )
+            diffuseTextureSampler.CreateInput(
+                "st", Sdf.ValueTypeNames.Float2
+            ).ConnectToSource(stReader.ConnectableAPI(), "result")
+            diffuseTextureSampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
+            pbrShader.CreateInput(
+                "diffuseColor", Sdf.ValueTypeNames.Color3f
+            ).ConnectToSource(diffuseTextureSampler.ConnectableAPI(), "rgb")
+
+            stInput = material.CreateInput(
+                "frame:stPrimvarName", Sdf.ValueTypeNames.Token
+            )
+            stInput.Set("st")
+
+            stReader.CreateInput("varname", Sdf.ValueTypeNames.Token).ConnectToSource(
+                stInput
+            )
+
+            mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
+            UsdShade.MaterialBindingAPI(mesh).Bind(material)
 
         return stage
 
