@@ -14,6 +14,7 @@ dependencies = [
     "rerun-sdk>=0.24.0",
     "scipy>=1.16.0",
     "trimesh>=4.8.1",
+    "usd-core>=25.8",
 ]
 
 [build-system]
@@ -32,4 +33,5 @@ dev = [
     "google-genai>=1.36.0",
     "python-dotenv>=1.1.1",
     "scipy-stubs>=1.16.0.2",
+    "types-usd>=24.5.2",
 ]

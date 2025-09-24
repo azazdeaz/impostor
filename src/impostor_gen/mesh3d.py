@@ -1,18 +1,17 @@
-from pathlib import Path
-from typing import List, Optional, Set
 import random
 import string
+from pathlib import Path
+from typing import List, Optional
 
 import numpy as np
 import rerun as rr
 import trimesh
 import trimesh.visual.material
 from PIL import Image
+from pxr import Kind, Sdf, Usd, UsdGeom, UsdShade
 from pydantic import BaseModel, Field, model_validator
 
 from .transform_3d import Transform3D
-
-from pxr import Kind, Sdf, Usd, UsdGeom, UsdShade
 
 
 def concat_optional_arrays(
@@ -99,6 +98,9 @@ class Mesh3D(BaseModel):
     )
     texture_occlusion_map: Optional[Path] = Field(
         default=None, description="Path to the texture occlusion map image"
+    )
+    texture_displacement_map: Optional[Path] = Field(
+        default=None, description="Path to the texture displacement map image"
     )
 
     class Config:
@@ -284,8 +286,12 @@ class Mesh3D(BaseModel):
             pbrShader.CreateIdAttr("UsdPreviewSurface")
             pbrShader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
             pbrShader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
-            pbrShader.CreateInput("opacityMode", Sdf.ValueTypeNames.Token).Set("presence")
-            pbrShader.CreateInput("opacityThreshold", Sdf.ValueTypeNames.Float).Set(0.001)
+            pbrShader.CreateInput("opacityMode", Sdf.ValueTypeNames.Token).Set(
+                "presence"
+            )
+            pbrShader.CreateInput("opacityThreshold", Sdf.ValueTypeNames.Float).Set(
+                0.001
+            )
 
             material.CreateSurfaceOutput().ConnectToSource(
                 pbrShader.ConnectableAPI(), "surface"
@@ -321,7 +327,9 @@ class Mesh3D(BaseModel):
                 normalTextureSampler.CreateInput(
                     "st", Sdf.ValueTypeNames.Float2
                 ).ConnectToSource(stReader.ConnectableAPI(), "result")
-                normalTextureSampler.CreateInput("sourceColorSpace", Sdf.ValueTypeNames.Token).Set("raw")
+                normalTextureSampler.CreateInput(
+                    "sourceColorSpace", Sdf.ValueTypeNames.Token
+                ).Set("raw")
                 normalTextureSampler.CreateOutput("rgb", Sdf.ValueTypeNames.Float3)
                 pbrShader.CreateInput(
                     "normal", Sdf.ValueTypeNames.Normal3f
@@ -343,6 +351,25 @@ class Mesh3D(BaseModel):
                     "opacity", Sdf.ValueTypeNames.Float
                 ).ConnectToSource(opacityTextureSampler.ConnectableAPI(), "r")
 
+            if self.texture_displacement_map:
+                displacementTextureSampler = UsdShade.Shader.Define(
+                    stage, f"/{name}/mat/displacementTexture"
+                )
+                displacementTextureSampler.CreateIdAttr("UsdUVTexture")
+                displacementTextureSampler.CreateInput(
+                    "file", Sdf.ValueTypeNames.Asset
+                ).Set(str(self.texture_displacement_map))
+                displacementTextureSampler.CreateInput(
+                    "sourceColorSpace", Sdf.ValueTypeNames.Token
+                ).Set("raw")
+                displacementTextureSampler.CreateInput(
+                    "st", Sdf.ValueTypeNames.Float2
+                ).ConnectToSource(stReader.ConnectableAPI(), "result")
+                displacementTextureSampler.CreateOutput("r", Sdf.ValueTypeNames.Float)
+                pbrShader.CreateInput(
+                    "displacement", Sdf.ValueTypeNames.Float
+                ).ConnectToSource(displacementTextureSampler.ConnectableAPI(), "r")
+
             stInput = material.CreateInput(
                 "frame:stPrimvarName", Sdf.ValueTypeNames.Token
             )
@@ -352,7 +379,7 @@ class Mesh3D(BaseModel):
                 stInput
             )
 
-            mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)
+            mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)  # type: ignore
             UsdShade.MaterialBindingAPI(mesh).Bind(material)
 
         return stage
