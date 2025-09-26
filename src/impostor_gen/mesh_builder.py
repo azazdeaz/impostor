@@ -6,6 +6,8 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
+from .material import Material
+
 from .branch_symbols import BranchClose, BranchOpen
 
 from .symbol import Symbol
@@ -217,10 +219,12 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
                 vertex_positions=vertex_grid.reshape(-1, 3),
                 vertex_texcoords=uv_grid.reshape(-1, 2),
                 triangle_indices=faces,
-                texture_base_color=Path("central_leaflet_color_cropped.png"),
-                texture_normal_map=Path("central_leaflet_normal_cropped.png"),
-                texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
-                texture_displacement_map=Path("central_leaflet_bump_cropped.png"),
+                material=Material(
+                    texture_base_color=Path("central_leaflet_color_cropped.png"),
+                    texture_normal_map=Path("central_leaflet_normal_cropped.png"),
+                    texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
+                    texture_displacement_map=Path("central_leaflet_bump_cropped.png"),
+                )
             )
             mesh3d = mesh3d.merge(leaf_mesh)
     return mesh3d
