@@ -1,126 +1,15 @@
 from collections.abc import Sequence
-from typing import Callable, Generic, List, Optional, Tuple, TypeVar
+from typing import List, Tuple
 from pydantic import BaseModel
 import rerun as rr
 
-
-# ---------------- Symbols ---------------- #
-
-
-class Symbol(BaseModel):
-    pass
-
-
-class Stem(Symbol):
-    cross_sections: int = 3
-    divisions: int = 5
-
-    def __str__(self) -> str:
-        return f"Stem({self.cross_sections}, {self.divisions})"
+from impostor_gen.branch_symbols import BranchOpen
+from impostor_gen.symbol import Symbol
+from impostor_gen.branch_symbols import BranchClose
+from impostor_gen.context import Context
+from impostor_gen.rule import Rule, Writer
 
 
-class F(Symbol):
-    length: float = 1.0
-    width: float = 1.0
-
-    def __str__(self) -> str:
-        return f"F({self.length:.2f}, {self.width:.2f})"
-
-
-class Tropism(Symbol):
-    """Tropism: lean toward a global (gravity) vector each time encountered."""
-
-    gravity: float = 5.0  # degrees per application (max lean this step)
-
-    def __str__(self) -> str:
-        return f"T({self.gravity:.1f})"
-
-
-class Yaw(Symbol):
-    angle: float = 25.0  # degrees (positive = left, negative = right)
-
-    def __str__(self) -> str:
-        return f"Yaw({self.angle:.1f})"
-
-
-class Pitch(Symbol):
-    angle: float = 25.0  # degrees (positive = down, negative = up)
-
-    def __str__(self) -> str:
-        return f"Pitch({self.angle:.1f})"
-
-
-class Roll(Symbol):
-    angle: float = 25.0  # degrees (positive = CCW looking forward, negative = CW)
-
-    def __str__(self) -> str:
-        return f"Roll({self.angle:.1f})"
-
-
-class BranchOpen(Symbol):
-    def __str__(self) -> str:
-        return "BranchOpen"
-
-
-class BranchClose(Symbol):
-    def __str__(self) -> str:
-        return "BranchClose"
-
-class Tip(Symbol):
-    order: int = 0 # Default to order 0 (main trunk)
-    max_length: float = 10.0  # Maximum length before stopping growth
-
-    def __str__(self) -> str:
-        return "Tip"
-
-# ---------------- Rewriting Infra ---------------- #
-
-
-class Writer(BaseModel):
-    world: Sequence[Symbol]
-    pointer: int
-    window: int = 1
-    replacement: Optional[Sequence[Symbol]] = None
-
-    def extend_window(self):
-        self.window += 1
-
-    def write(self, replacement: Sequence[Symbol]):
-        self.replacement = replacement
-
-    def peek(self, offset: int) -> Symbol:
-        index = self.pointer + offset
-        if index < 0 or index >= len(self.world):
-            raise IndexError(
-                f"Peek index {index} out of bounds for world of size {len(self.world)}"
-            )
-        return self.world[index]
-
-
-
-
-class Rule(BaseModel):
-    def apply(self, writer: Writer):
-        pass
-
-
-T = TypeVar('T', bound=Symbol)
-
-class BasicRule(Rule, Generic[T]):
-    left: type[T]  # This ensures left is a subclass of Symbol
-    right: List[Symbol] | Callable[[T], List[Symbol]]  # This ensures the callable accepts an instance of the specific subclass
-
-    def apply(self, writer: Writer):
-        current = writer.peek(0)
-        if isinstance(current, self.left):
-            if callable(self.right):
-                # The type checker now understands that current is of type T
-                writer.write(self.right(current))  
-            else:
-                writer.write(self.right)
-
-
-# ---------------- L-System ---------------- #
 
 
 class LSystem(BaseModel):
@@ -131,13 +20,15 @@ class LSystem(BaseModel):
         arbitrary_types_allowed = True
 
     def iterate(self, n: int = 1):
+        context = Context()
         for _ in range(n):
             pointer = 0
             new_world: List[Symbol] = []
             while pointer < len(self.world):
+                context.feed_node(self.world[pointer])
                 for rule in self.rules:
                     writer = Writer(world=self.world, pointer=pointer)
-                    rule.apply(writer)
+                    rule.apply(writer, context)
                     if writer.replacement is not None:
                         new_world.extend(writer.replacement)
                         pointer += writer.window

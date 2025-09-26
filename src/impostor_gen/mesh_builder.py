@@ -6,22 +6,23 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
+from .branch_symbols import BranchClose, BranchOpen
+
+from .symbol import Symbol
+
 from .extrude import extrude_mesh2d_along_points
-from .l_systems import (
-    BranchClose,
-    BranchOpen,
+from .context import LeafContext
+from .mesh2d import Mesh2D
+from .mesh3d import CompundMesh3D, Mesh3D
+from .core_symbols import (
     F,
     Pitch,
     Roll,
     Stem,
     Tropism,
-    Symbol,
     Yaw,
 )
-from .mesh2d import Mesh2D
-from .mesh3d import Mesh3D, CompundMesh3D
 from .transform_3d import Transform3D
-from .leaf import Leaf
 
 FORWARD = np.array([0.0, 0.0, 1.0])
 
@@ -132,7 +133,7 @@ def generate_blueprints(
             blueprint.transforms.append(turtle.model_copy())
             blueprint.radii.append(1.0)  # TODO start with the parent width
 
-        elif isinstance(symbol, Leaf):
+        elif isinstance(symbol, LeafContext):
             if current_leaf is not None:
                 raise ValueError("Nested leaves are not supported.")
             current_leaf = LeafBlueprint(midrib=stack[-1])

@@ -1,23 +1,22 @@
 from pathlib import Path
 import rerun as rr
 
-from impostor_gen.l_systems import (
-    BasicRule,
-    BranchClose,
-    BranchOpen,
+from impostor_gen.branch_symbols import BranchClose, BranchOpen
+from impostor_gen.symbol import Symbol
+from impostor_gen.context import Context
+from impostor_gen.rule import BasicRule, Rule, Writer
+from impostor_gen.core_symbols import (
     F,
-    LSystem,
     Pitch,
     Roll,
-    Rule,
     Stem,
-    Symbol,
     Tip,
-    Writer,
 )
-from impostor_gen.leaf import create_trifoliate_leaf
+from impostor_gen.l_systems import LSystem
+from impostor_gen.leaf import create_trifoliate_leaf, BendLeaf, AgeLeaf
 from impostor_gen.mesh_builder import generate_blueprints, generate_mesh, log_transforms
 from impostor_gen.mesh_utils import log_mesh
+from impostor_gen.interpolate import InterpolateRule
 
 
 
@@ -28,8 +27,9 @@ class Crown(Symbol):
     angle_step: float = 137.5  # Angle step in degrees for new shoots
 
 
+
 class IterateCrown(Rule):
-    def apply(self, writer: "Writer"):
+    def apply(self, writer: "Writer", context: "Context"):
         crown = writer.peek(0).model_copy()
         if not isinstance(crown, Crown):
             return
@@ -59,7 +59,7 @@ class IterateCrown(Rule):
 
 
 class GrowStem(Rule):
-    def apply(self, writer: "Writer"):
+    def apply(self, writer: "Writer", context: "Context"):
         tip = writer.peek(0)
         if not isinstance(tip, Tip):
             return
@@ -98,9 +98,12 @@ def main():
     lsystem = LSystem(
         world=[Crown()],
         rules=[
+            InterpolateRule(),
             GrowStem(),
             IterateCrown(),
-            widen_stem_rule
+            widen_stem_rule,
+            BendLeaf(),
+            AgeLeaf(),
         ],
     )
 
@@ -111,20 +114,20 @@ def main():
         rr.set_time("frame_idx", sequence=i)
         lsystem.iterate()
         print(f"Iteration {i}, world size: {len(lsystem.world)}")
-        if i % 5 == 0 or i == iterations - 1:
-            blueprints = generate_blueprints(lsystem.world)
-            # log_transforms(blueprints)
-            meshes = generate_mesh(blueprints)
-            log_mesh(meshes)
-            # lsystem.log_graph()
-            # lsystem.log_as_markdown()
+        # if i % 5 == 0 or i == iterations - 1:
+        blueprints = generate_blueprints(lsystem.world)
+        # log_transforms(blueprints)
+        meshes = generate_mesh(blueprints)
+        log_mesh(meshes)
+        # lsystem.log_graph()
+        # lsystem.log_as_markdown()
 
-            if i == iterations - 1:
-                meshes.to_usd().Save()
-                for j, mesh in enumerate(meshes.submeshes):
-                    Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
-                    mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.glb")
-                    mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.obj")
+        if i == iterations - 1:
+            meshes.to_usd().Save()
+            for j, mesh in enumerate(meshes.submeshes):
+                Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
+                mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.glb") # type: ignore
+                mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.obj") # type: ignore
                     
 
 

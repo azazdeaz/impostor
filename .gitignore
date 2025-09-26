@@ -1,1 +1,23 @@
 __pycache__/
+exports/
+.env
+
+# Ignore image and 3d asset files
+*.png
+*.jpg
+*.jpeg
+*.obj
+*.mtl
+*.fbx
+*.gltf
+*.glb
+*.usd
+*.usda
+*.usdc
+*.usdZ
+*.usdz
+*.hdr
+*.tiff
+*.tif
+*.exr
+*.bin
