@@ -2,7 +2,7 @@ from typing import Any, List
 
 from .branch_symbols import BranchClose, BranchOpen
 from .context import Context, LeafContext
-from .core_symbols import F, Pitch, Yaw
+from .core_symbols import F, MaterialKey, Pitch, Yaw
 from .rule import Rule, Writer
 from .symbol import Symbol
 
@@ -51,7 +51,7 @@ def create_leaf() -> List[Symbol]:
     sec_vein_division = 3
     step_size = 0.6
 
-    leaf: List[Symbol] = [LeafContext()]
+    leaf: List[Symbol] = [LeafContext(), MaterialKey(key="leaf")]
 
     # Create midrib with secondary veins
     for mr in range(midrib_division):

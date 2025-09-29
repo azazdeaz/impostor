@@ -1,4 +1,5 @@
-from typing import List, Optional
+from collections import defaultdict
+from typing import Dict, List, Optional
 import numpy as np
 import trimesh
 import trimesh.util
@@ -7,6 +8,7 @@ import trimesh.visual.material
 import rerun as rr
 from PIL import Image
 
+from impostor_gen.material import MaterialRegistry
 from impostor_gen.mesh3d import Mesh3D
 from impostor_gen.mesh_builder import CompundMesh3D
 
@@ -56,14 +58,26 @@ def transform_mesh(mesh: trimesh.Trimesh, transform: Transform3D) -> trimesh.Tri
     return transformed_mesh
 
 
-def log_mesh(mesh: Mesh3D | CompundMesh3D):
+def log_mesh(mesh: Mesh3D | CompundMesh3D, materials: MaterialRegistry):
     """Convert a trimesh.Trimesh instance to a rerun.Asset3D."""
     if isinstance(mesh, Mesh3D):
         mesh = CompundMesh3D(submeshes=[mesh])
-    
-    for i, m in enumerate(mesh.submeshes):
-        asset: rr.datatypes.Blob = m.to_trimesh().export(file_type='glb')  # type: ignore
-        rr.log(f"mesh/part_{i}", rr.Asset3D(contents=asset))
+
+    # Group meshes by material key
+    material_groups: Dict[str, List[Mesh3D]] = defaultdict(list)
+    for m in mesh.submeshes:
+        material_groups[m.material_key or "__default"].append(m)
+
+    # for i, m in enumerate(mesh.submeshes):
+    #     asset: rr.datatypes.Blob = m.to_trimesh(materials).export(file_type='glb')  # type: ignore
+    #     rr.log(f"mesh/part_{i}", rr.Asset3D(contents=asset))
+    for material_key, meshes in material_groups.items():
+        # Merge meshes with the same material key
+        meshes = [m.to_trimesh(materials) for m in meshes]
+        merged_mesh = trimesh.util.concatenate(meshes)  # type: ignore
+        asset: rr.datatypes.Blob = merged_mesh.export(file_type='glb')  # type: ignore
+        rr.log(f"mesh/material_{material_key}", rr.Asset3D(contents=asset))  # type
+
 
 
 def create_mesh_with_texture(

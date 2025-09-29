@@ -131,3 +131,15 @@ class Material(BaseModel):
         )
 
         return material
+
+
+
+
+class MaterialRegistry(BaseModel):
+    materials: dict[str, Material] = Field(default_factory=lambda: {})
+
+    def get(self, key: str) -> Optional[Material]:
+        return self.materials.get(key, None)
+
+    def register(self, key: str, material: Material):
+        self.materials[key] = material

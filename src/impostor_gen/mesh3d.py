@@ -8,7 +8,7 @@ import trimesh
 from pxr import Kind, Sdf, Usd, UsdGeom, UsdShade
 from pydantic import BaseModel, Field, model_validator
 
-from impostor_gen.material import Material
+from impostor_gen.material import MaterialRegistry
 
 from .transform_3d import Transform3D
 
@@ -86,8 +86,8 @@ class Mesh3D(BaseModel):
         default=None,
         description="Array of vertex texture (UV) coordinates with shape (n, 2)",
     )
-    material: Optional[Material] = Field(
-        default=None, description="Material information for the mesh"
+    material_key: Optional[str] = Field(
+        default=None, description="Key to look up the material in a material dictionary"
     )
 
     class Config:
@@ -207,7 +207,7 @@ class Mesh3D(BaseModel):
             vertex_texcoords=self.vertex_texcoords,
         )
 
-    def to_trimesh(self) -> trimesh.Trimesh:
+    def to_trimesh(self, materials: MaterialRegistry) -> trimesh.Trimesh:
         """Convert this Mesh3D instance to a trimesh.Trimesh instance."""
         mesh = trimesh.Trimesh(
             vertices=self.vertex_positions,
@@ -217,17 +217,21 @@ class Mesh3D(BaseModel):
             process=False,  # Disable automatic processing to preserve original data
         )
 
-        if self.vertex_texcoords is not None:
-            material = self.material.to_trimesh() if self.material else None
+        material = materials.get(self.material_key) if self.material_key else None
 
-            visual = trimesh.visual.TextureVisuals(
-                uv=self.vertex_texcoords, material=material
+        if self.vertex_texcoords is not None and material is not None:
+            tm_material = material.to_trimesh() if material else None
+
+            visual = trimesh.visual.TextureVisuals(  # type: ignore
+                uv=self.vertex_texcoords, material=tm_material
             )
             mesh.visual = visual
 
         return mesh
 
-    def to_usd(self, stage: Optional[Usd.Stage]) -> Usd.Stage:
+    def to_usd(
+        self, stage: Optional[Usd.Stage], materials: MaterialRegistry
+    ) -> Usd.Stage:
         if stage is None:
             stage = Usd.Stage.CreateNew("simpleShading.usda")
 
@@ -236,6 +240,8 @@ class Mesh3D(BaseModel):
             + "_"
             + "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
         )
+
+        material = materials.get(self.material_key) if self.material_key else None
 
         UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
 
@@ -249,16 +255,16 @@ class Mesh3D(BaseModel):
             face_vertex_indices = self.triangle_indices.flatten().tolist()
             mesh.CreateFaceVertexCountsAttr(face_vertex_counts)
             mesh.CreateFaceVertexIndicesAttr(face_vertex_indices)
-        if self.vertex_texcoords is not None and self.material is not None:
+        if self.vertex_texcoords is not None and material is not None:
             texCoords = UsdGeom.PrimvarsAPI(mesh).CreatePrimvar(
                 "st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying
             )
             texCoords.Set(self.vertex_texcoords.tolist())
 
-            material = self.material.to_usd(stage, f"/{name}/material")
+            usd_material = material.to_usd(stage, f"/{name}/material")
 
             mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)  # type: ignore
-            UsdShade.MaterialBindingAPI(mesh).Bind(material)
+            UsdShade.MaterialBindingAPI(mesh).Bind(usd_material)
 
         return stage
 
@@ -272,11 +278,13 @@ class CompundMesh3D(BaseModel):
         else:
             return CompundMesh3D(submeshes=self.submeshes + other.submeshes)
 
-    def to_usd(self, filename: str = "compound_mesh.usda") -> "Usd.Stage":
+    def to_usd(
+        self, materials: MaterialRegistry, filename: str = "compound_mesh.usda"
+    ) -> "Usd.Stage":
         stage = Usd.Stage.CreateNew(filename)
         UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
 
         for mesh in self.submeshes:
-            mesh.to_usd(stage)
+            mesh.to_usd(stage, materials)
 
         return stage

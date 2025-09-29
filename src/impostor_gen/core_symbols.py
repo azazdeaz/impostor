@@ -59,3 +59,10 @@ class Tip(Symbol):
 
     def __str__(self) -> str:
         return "Tip"
+    
+
+class MaterialKey(Symbol):
+    key: str
+
+    def __str__(self) -> str:
+        return f"MaterialKey({self.key})"

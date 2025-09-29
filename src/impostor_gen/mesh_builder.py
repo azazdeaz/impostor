@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import List, Optional, Sequence
 
 import numpy as np
@@ -6,24 +5,21 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
-from .material import Material
-
 from .branch_symbols import BranchClose, BranchOpen
-
-from .symbol import Symbol
-
-from .extrude import extrude_mesh2d_along_points
 from .context import LeafContext
-from .mesh2d import Mesh2D
-from .mesh3d import CompundMesh3D, Mesh3D
 from .core_symbols import (
     F,
+    MaterialKey,
     Pitch,
     Roll,
     Stem,
     Tropism,
     Yaw,
 )
+from .extrude import extrude_mesh2d_along_points
+from .mesh2d import Mesh2D
+from .mesh3d import CompundMesh3D, Mesh3D
+from .symbol import Symbol
 from .transform_3d import Transform3D
 
 FORWARD = np.array([0.0, 0.0, 1.0])
@@ -34,15 +30,19 @@ class StemBlueprint(BaseModel):
     radii: List[float] = Field(default_factory=lambda: [])
     cross_sections: int = 0
     divisions: int = 6
+    material_key: Optional[str] = None
 
 
 class LeafBlueprint(BaseModel):
     midrib: StemBlueprint
     veins: List[StemBlueprint] = Field(default_factory=lambda: [])
+    material_key: Optional[str] = None
 
-    @property   
+    @property
     def transforms(self) -> List[Transform3D]:
-        return self.midrib.transforms + [t for vein in self.veins for t in vein.transforms]
+        return self.midrib.transforms + [
+            t for vein in self.veins for t in vein.transforms
+        ]
 
 
 def local_euler(rotation: Rotation, axis: str, degrees: float) -> Rotation:
@@ -155,6 +155,12 @@ def generate_blueprints(
         elif isinstance(symbol, Tropism):
             turtle.rotation = apply_tropism(turtle.rotation, symbol.gravity, FORWARD)
 
+        elif isinstance(symbol, MaterialKey):
+            blueprint = stack[-1]
+            blueprint.material_key = symbol.key
+            if current_leaf is not None:
+                current_leaf.material_key = symbol.key
+
     return stack + closed_branches + finished_leaves
 
 
@@ -172,6 +178,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
                         "Number of radii must match number of transforms in a StemBlueprint."
                     )
                 stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)
+                stem_mesh.material_key = blueprint.material_key
                 mesh3d = mesh3d.merge(stem_mesh)
 
         else:  # LeafBlueprint
@@ -206,28 +213,16 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
                     v3 = v2 + 1
                     faces[(i * (horisontal_div - 1) + j) * 2 + 0, :] = [v0, v2, v1]
                     faces[(i * (horisontal_div - 1) + j) * 2 + 1, :] = [v1, v2, v3]
-            #
-            # leaf_mesh = create_mesh_with_texture(
-            #     vertices=vertex_grid.reshape(-1, 3),
-            #     faces=faces,
-            #     vertex_texcoords=uv_grid.reshape(-1, 2),
-            #     texture_path="central_leaflet_color_cropped.png",
-            #     occlusion_path="central_leaflet_mask_cropped.png",
-            #     normal_path="central_leaflet_normal_cropped.png"
-            # )
+
             leaf_mesh = Mesh3D(
                 vertex_positions=vertex_grid.reshape(-1, 3),
                 vertex_texcoords=uv_grid.reshape(-1, 2),
                 triangle_indices=faces,
-                material=Material(
-                    texture_base_color=Path("central_leaflet_color_cropped.png"),
-                    texture_normal_map=Path("central_leaflet_normal_cropped.png"),
-                    texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
-                    texture_displacement_map=Path("central_leaflet_bump_cropped.png"),
-                )
+                material_key=blueprint.material_key,
             )
             mesh3d = mesh3d.merge(leaf_mesh)
     return mesh3d
+
 
 def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
     arrows = rr.Arrows3D(
@@ -238,5 +233,3 @@ def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
     for i, b in enumerate(blueprints):
         for j, t in enumerate(b.transforms):
             rr.log(f"stem/frames/{i}/{j}", t.to_rerun(), arrows)
-
-

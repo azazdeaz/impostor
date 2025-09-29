@@ -2,6 +2,7 @@ from pathlib import Path
 import rerun as rr
 
 from impostor_gen.branch_symbols import BranchClose, BranchOpen
+from impostor_gen.material import Material, MaterialRegistry
 from impostor_gen.symbol import Symbol
 from impostor_gen.context import Context
 from impostor_gen.rule import BasicRule, Rule, Writer
@@ -19,13 +20,11 @@ from impostor_gen.mesh_utils import log_mesh
 from impostor_gen.interpolate import InterpolateRule
 
 
-
 class Crown(Symbol):
     age: int = 0
     shoot_period: int = 12  # How many iterations between new shoots
     max_age: int = 226  # Maximum age before the crown stops producing new shoots
     angle_step: float = 137.5  # Angle step in degrees for new shoots
-
 
 
 class IterateCrown(Rule):
@@ -94,6 +93,17 @@ widen_stem_rule = BasicRule(left=F, right=widen_stem)
 
 
 def main():
+    materials = MaterialRegistry()
+    materials.register(
+        "leaf",
+        Material(
+            texture_base_color=Path("central_leaflet_color_cropped.png"),
+            texture_normal_map=Path("central_leaflet_normal_cropped.png"),
+            texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
+            texture_displacement_map=Path("central_leaflet_bump_cropped.png"),
+        ),
+    )
+
     # Define an L-system
     lsystem = LSystem(
         world=[Crown()],
@@ -118,17 +128,16 @@ def main():
         blueprints = generate_blueprints(lsystem.world)
         # log_transforms(blueprints)
         meshes = generate_mesh(blueprints)
-        log_mesh(meshes)
+        log_mesh(meshes, materials)
         # lsystem.log_graph()
         # lsystem.log_as_markdown()
 
         if i == iterations - 1:
-            meshes.to_usd().Save()
+            meshes.to_usd(materials).Save()
             for j, mesh in enumerate(meshes.submeshes):
                 Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
-                mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.glb") # type: ignore
-                mesh.to_trimesh().export(f"exports/strawberry_plant_{j}/model.obj") # type: ignore
-                    
+                mesh.to_trimesh(materials).export(f"exports/strawberry_plant_{j}/model.glb")  # type: ignore
+                mesh.to_trimesh(materials).export(f"exports/strawberry_plant_{j}/model.obj")  # type: ignore
 
 
 if __name__ == "__main__":
