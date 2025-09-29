@@ -14,13 +14,21 @@ class Stem(Symbol):
 
 class F(Symbol, Interpolate):
     length: float = 1.0
-    width: float = 1.0
 
     def __str__(self) -> str:
-        return f"F({self.length:.2f}, {self.width:.2f})"
+        return f"F({self.length:.2f})"
     
     def set_interpolated_value(self, value: float) -> None:
         self.length = value
+
+class Diameter(Symbol, Interpolate):
+    diameter: float = 1.0
+
+    def __str__(self) -> str:
+        return f"D({self.diameter:.2f})"
+    
+    def set_interpolated_value(self, value: float) -> None:
+        self.diameter = value
 
 
 class Tropism(Symbol):

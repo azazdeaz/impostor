@@ -9,6 +9,7 @@ from .branch_symbols import BranchClose, BranchOpen
 from .context import LeafContext
 from .core_symbols import (
     F,
+    Diameter,
     MaterialKey,
     Pitch,
     Roll,
@@ -27,7 +28,6 @@ FORWARD = np.array([0.0, 0.0, 1.0])
 
 class StemBlueprint(BaseModel):
     transforms: List[Transform3D] = Field(default_factory=lambda: [])
-    radii: List[float] = Field(default_factory=lambda: [])
     cross_sections: int = 0
     divisions: int = 6
     material_key: Optional[str] = None
@@ -104,10 +104,12 @@ def generate_blueprints(
             # Move forward
             direction = turtle.rotation.apply(FORWARD)
             turtle.position = turtle.position + direction * symbol.length
-            turtle.set_scale(symbol.width)
+            
             blueprint = stack[-1]
             blueprint.transforms.append(turtle.model_copy())
-            blueprint.radii.append(symbol.width)
+        
+        if isinstance(symbol, Diameter):
+            turtle.set_scale(symbol.diameter)
 
         elif isinstance(symbol, BranchOpen):
             transform_stack.append(turtle.model_copy())
@@ -133,7 +135,6 @@ def generate_blueprints(
             blueprint.cross_sections = symbol.cross_sections
             blueprint.divisions = symbol.divisions
             blueprint.transforms.append(turtle.model_copy())
-            blueprint.radii.append(1.0)  # TODO start with the parent width
 
         elif isinstance(symbol, LeafContext):
             if current_leaf is not None:
@@ -171,12 +172,8 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
 
     for blueprint in blueprints:
         if isinstance(blueprint, StemBlueprint):
+            # Ensure we have at least two transforms
             if len(blueprint.transforms) >= 2:
-                # Ensure we have at least two transforms and two radii to create a stem
-                if len(blueprint.radii) != len(blueprint.transforms):
-                    raise ValueError(
-                        "Number of radii must match number of transforms in a StemBlueprint."
-                    )
                 stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)
                 stem_mesh.material_key = blueprint.material_key
                 mesh3d = mesh3d.merge(stem_mesh)

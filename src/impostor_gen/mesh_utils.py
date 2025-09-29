@@ -76,7 +76,7 @@ def log_mesh(mesh: Mesh3D | CompundMesh3D, materials: MaterialRegistry):
         meshes = [m.to_trimesh(materials) for m in meshes]
         merged_mesh = trimesh.util.concatenate(meshes)  # type: ignore
         asset: rr.datatypes.Blob = merged_mesh.export(file_type='glb')  # type: ignore
-        rr.log(f"mesh/material_{material_key}", rr.Asset3D(contents=asset))  # type
+        rr.log(f"mesh/material_{material_key}", rr.Asset3D(contents=asset))  # type: ignore
 
 
 

@@ -8,6 +8,7 @@ from impostor_gen.context import Context
 from impostor_gen.rule import BasicRule, Rule, Writer
 from impostor_gen.core_symbols import (
     F,
+    Diameter,
     Pitch,
     Roll,
     Stem,
@@ -44,10 +45,11 @@ class IterateCrown(Rule):
                 [
                     crown,
                     BranchOpen(),
+                    Diameter(diameter=0.21),
+                    F(length=0.0),
                     Roll(angle=roll),
                     Pitch(angle=pitch),
                     Stem(),
-                    F(length=1.0, width=0.5),
                     Tip(max_length=7.2 + age * 0.2),
                     *create_trifoliate_leaf(),
                     BranchClose(),
@@ -80,16 +82,14 @@ class GrowStem(Rule):
 
         if length_without_branch < tip.max_length:
             # Default "grow" behavior
-            writer.write([Pitch(angle=-2), F(length=0.9, width=0.2), tip.model_copy()])
-
-
-def widen_stem(symbol: F) -> list[Symbol]:
-    f = symbol.model_copy()
-    f.width *= 1.001
-    return [f]
-
-
-widen_stem_rule = BasicRule(left=F, right=widen_stem)
+            writer.write(
+                [
+                    Pitch(angle=-2),
+                    Diameter(diameter=0.2),
+                    F(length=0.9),
+                    tip.model_copy(),
+                ]
+            )
 
 
 def main():
@@ -111,7 +111,6 @@ def main():
             InterpolateRule(),
             GrowStem(),
             IterateCrown(),
-            widen_stem_rule,
             BendLeaf(),
             AgeLeaf(),
         ],
@@ -129,15 +128,19 @@ def main():
         # log_transforms(blueprints)
         meshes = generate_mesh(blueprints)
         log_mesh(meshes, materials)
-        # lsystem.log_graph()
-        # lsystem.log_as_markdown()
+        lsystem.log_graph()
+        lsystem.log_as_markdown()
 
         if i == iterations - 1:
             meshes.to_usd(materials).Save()
             for j, mesh in enumerate(meshes.submeshes):
                 Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
-                mesh.to_trimesh(materials).export(f"exports/strawberry_plant_{j}/model.glb")  # type: ignore
-                mesh.to_trimesh(materials).export(f"exports/strawberry_plant_{j}/model.obj")  # type: ignore
+                mesh.to_trimesh(materials).export(
+                    f"exports/strawberry_plant_{j}/model.glb"
+                )  # type: ignore
+                mesh.to_trimesh(materials).export(
+                    f"exports/strawberry_plant_{j}/model.obj"
+                )  # type: ignore
 
 
 if __name__ == "__main__":
