@@ -24,16 +24,16 @@ class LSystem(BaseModel):
             new_world: List[Symbol] = []
             while pointer < len(self.world):
                 context.feed_node(self.world[pointer])
+
+                writer = Writer(world=self.world, pointer=pointer)
                 for rule in self.rules:
-                    writer = Writer(world=self.world, pointer=pointer)
                     rule.apply(writer, context)
-                    if writer.replacement is not None:
-                        new_world.extend(writer.replacement)
-                        pointer += writer.window
-                        break
+
+                if writer.replacement is not None:
+                    new_world.extend(writer.replacement)
                 else:
                     new_world.append(self.world[pointer])
-                    pointer += 1
+                pointer += 1
             self.world = new_world
 
     def log_graph(self):

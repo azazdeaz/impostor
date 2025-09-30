@@ -5,22 +5,23 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
-from .engine import BranchClose, BranchOpen
-from .engine import LeafContext
 from .engine import (
-    F,
+    BranchClose,
+    BranchOpen,
     Diameter,
+    F,
     MaterialKey,
     Pitch,
     Roll,
     Stem,
+    Symbol,
     Tropism,
     Yaw,
 )
 from .extrude import extrude_mesh2d_along_points
+from .leaf import LeafContext
 from .mesh2d import Mesh2D
 from .mesh3d import CompundMesh3D, Mesh3D
-from .engine import Symbol
 from .transform_3d import Transform3D
 
 FORWARD = np.array([0.0, 0.0, 1.0])

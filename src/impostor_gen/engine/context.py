@@ -31,10 +31,3 @@ class Context(BaseModel):
 
     def get(self, cls: type[T_Context]) -> Optional[T_Context]:
         return self._context_stack[-1].get(cls)
-
-
-class LeafContext(ContextSymbol):
-    age: int = 0
-
-    def __str__(self) -> str:
-        return "Leaf"

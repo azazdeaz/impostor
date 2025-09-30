@@ -1,6 +1,7 @@
 from collections.abc import Sequence
+from typing import TYPE_CHECKING, Callable, Generic, List, Optional, TypeVar
+
 from pydantic import BaseModel
-from typing import Callable, Generic, List, Optional, TypeVar, TYPE_CHECKING
 
 from .symbol import Symbol
 
@@ -10,15 +11,12 @@ if TYPE_CHECKING:
 
 from abc import ABC, abstractmethod
 
-
+# TODO: Enable editing multiple symbols?
+# TODO: Unit test Writer
 class Writer(BaseModel):
     world: Sequence[Symbol]
     pointer: int
-    window: int = 1
     replacement: Optional[Sequence[Symbol]] = None
-
-    def extend_window(self):
-        self.window += 1
 
     def write(self, replacement: Sequence[Symbol]):
         self.replacement = replacement
@@ -29,6 +27,15 @@ class Writer(BaseModel):
             raise IndexError(
                 f"Peek index {index} out of bounds for world of size {len(self.world)}"
             )
+
+        # Show the replacement symbols if they exist
+        if self.replacement and index >= self.pointer:
+            if index < self.pointer + len(self.replacement):
+                return self.replacement[index - self.pointer]
+            else:
+                # Shift the index to continue with the next symbols in the original world
+                index -= len(self.replacement) - 1
+
         return self.world[index]
 
 

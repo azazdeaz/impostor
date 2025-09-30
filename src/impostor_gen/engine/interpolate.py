@@ -3,7 +3,8 @@ from typing import Any, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
-from .context import Context, LeafContext
+from .context import Context
+from .ageing import Ageing
 from .rule import Rule, Writer
 
 
@@ -18,7 +19,7 @@ class Interpolate(BaseModel):
     age_se: Optional[Tuple[int, int]] = Field(
         default=None, description="Age range (start, end)"
     )
-    age_context_type: Optional[type[LeafContext]] = Field(
+    age_context_type: Optional[type[Ageing]] = Field(
         default=None, description="Context type to get age from"
     )
 

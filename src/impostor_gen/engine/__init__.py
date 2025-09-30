@@ -1,6 +1,6 @@
 from .symbol import Symbol
 from .branch_symbols import BranchOpen, BranchClose
-from .context import Context, ContextSymbol, LeafContext
+from .context import Context, ContextSymbol
 from .core_symbols import (
     Stem,
     F,
@@ -13,6 +13,7 @@ from .core_symbols import (
     MaterialKey,
 )
 from .interpolate import Interpolate, InterpolateRule
+from .ageing import Ageing, AgeingRule
 from .rule import Rule, Writer, BasicRule
 from .l_systems import LSystem
 
@@ -22,7 +23,6 @@ __all__ = [
     "BranchClose",
     "Context",
     "ContextSymbol",
-    "LeafContext",
     "Rule",
     "Writer",
     "BasicRule",
@@ -38,4 +38,6 @@ __all__ = [
     "MaterialKey",
     "Interpolate",
     "InterpolateRule",
+    "Ageing",
+    "AgeingRule",
 ]

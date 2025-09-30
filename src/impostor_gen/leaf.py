@@ -1,19 +1,20 @@
 from typing import List
 
-from .engine import BranchClose, BranchOpen
-from .engine import Context, LeafContext
-from .engine import F, MaterialKey, Pitch, Yaw
-from .engine import Rule, Writer
-from .engine import Symbol
+from .engine import (
+    Ageing,
+    BranchClose,
+    BranchOpen,
+    F,
+    MaterialKey,
+    Pitch,
+    Symbol,
+    Yaw,
+)
 
 
-class AgeLeaf(Rule):
-    def apply(self, writer: Writer, context: Context):
-        leaf = writer.peek(0)
-        if not isinstance(leaf, LeafContext):
-            return
-        leaf.age += 1
-        writer.write([leaf])
+class LeafContext(Ageing):
+    def __str__(self) -> str:
+        return "Leaf"
 
 
 def create_leaf() -> List[Symbol]:

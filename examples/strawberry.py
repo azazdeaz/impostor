@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import BaseModel
 import rerun as rr
 
 from impostor_gen.engine import (
@@ -13,35 +14,40 @@ from impostor_gen.engine import (
     Roll,
     Rule,
     Stem,
-    Symbol,
     Tip,
     Writer,
-    InterpolateRule
+    InterpolateRule,
+    AgeingRule,
+    Ageing,
 )
-from impostor_gen.leaf import AgeLeaf, create_trifoliate_leaf
+from impostor_gen.engine.symbol import Symbol
+from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material, MaterialRegistry
 from impostor_gen.mesh_builder import generate_blueprints, generate_mesh
 from impostor_gen.mesh_utils import log_mesh
+import numpy as np
 
-
-class Crown(Symbol):
-    age: int = 0
+class Crown(Ageing):
     shoot_period: int = 12  # How many iterations between new shoots
-    max_age: int = 226  # Maximum age before the crown stops producing new shoots
+    max_shoots: int = 3  # Maximum age before the crown stops producing new shoots
     angle_step: float = 137.5  # Angle step in degrees for new shoots
 
 
-class IterateCrown(Rule):
+class IterateCrown(Rule, BaseModel):
+    shoots: int = 0
+
     def apply(self, writer: "Writer", context: "Context"):
         crown = writer.peek(0).model_copy()
         if not isinstance(crown, Crown):
             return
-
+        
         age = crown.age
-        crown.age += 1
 
-        should_shoot = (age % crown.shoot_period == 0) and (age <= crown.max_age)
-        if should_shoot:
+        shoot_count = np.minimum(1 + age // crown.shoot_period, crown.max_shoots)
+
+        if shoot_count > self.shoots:
+            self.shoots += 1
+
             roll = (age // crown.shoot_period) * crown.angle_step
             pitch = -50 + age // crown.shoot_period * 6.0
             writer.write(
@@ -58,8 +64,6 @@ class IterateCrown(Rule):
                     BranchClose(),
                 ]
             )
-        else:
-            writer.write([crown])
 
 
 class GrowStem(Rule):
@@ -93,34 +97,36 @@ class GrowStem(Rule):
                     tip.model_copy(),
                 ]
             )
-
+class XY(Symbol):
+    x: float = 0.0
+    y: float = 0.0
 
 def main():
     materials = MaterialRegistry()
-    materials.register(
-        "leaf",
-        Material(
-            texture_base_color=Path("central_leaflet_color_cropped.png"),
-            texture_normal_map=Path("central_leaflet_normal_cropped.png"),
-            texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
-            texture_displacement_map=Path("central_leaflet_bump_cropped.png"),
-        ),
-    )
+    # materials.register(
+    #     "leaf",
+    #     Material(
+    #         texture_base_color=Path("central_leaflet_color_cropped.png"),
+    #         texture_normal_map=Path("central_leaflet_normal_cropped.png"),
+    #         texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
+    #         texture_displacement_map=Path("central_leaflet_bump_cropped.png"),
+    #     ),
+    # )
 
     # Define an L-system
     lsystem = LSystem(
-        world=[Crown()],
+        world=[Crown(), XY()],
         rules=[
             InterpolateRule(),
             GrowStem(),
+            AgeingRule(),
             IterateCrown(),
-            AgeLeaf(),
         ],
     )
 
     rr.init("rerun_example_my_data", spawn=True)
 
-    iterations = 10
+    iterations = 100
     for i in range(iterations):
         rr.set_time("frame_idx", sequence=i)
         lsystem.iterate()
@@ -137,12 +143,12 @@ def main():
             meshes.to_usd(materials).Save()
             for j, mesh in enumerate(meshes.submeshes):
                 Path(f"exports/strawberry_plant_{j}").mkdir(parents=True, exist_ok=True)
-                mesh.to_trimesh(materials).export(
+                mesh.to_trimesh(materials).export( # type: ignore
                     f"exports/strawberry_plant_{j}/model.glb"
-                )  # type: ignore
-                mesh.to_trimesh(materials).export(
+                )  
+                mesh.to_trimesh(materials).export( # type: ignore
                     f"exports/strawberry_plant_{j}/model.obj"
-                )  # type: ignore
+                )  
 
 
 if __name__ == "__main__":
