@@ -40,25 +40,34 @@ class Tropism(Symbol):
         return f"T({self.gravity:.1f})"
 
 
-class Yaw(Symbol):
+class Yaw(Symbol, Interpolate):
     angle: float = 25.0  # degrees (positive = left, negative = right)
 
     def __str__(self) -> str:
         return f"Yaw({self.angle:.1f})"
+    
+    def set_interpolated_value(self, value: float) -> None:
+        self.angle = value
 
 
-class Pitch(Symbol):
+class Pitch(Symbol, Interpolate):
     angle: float = 25.0  # degrees (positive = down, negative = up)
 
     def __str__(self) -> str:
         return f"Pitch({self.angle:.1f})"
+    
+    def set_interpolated_value(self, value: float) -> None:
+        self.angle = value
 
 
-class Roll(Symbol):
+class Roll(Symbol, Interpolate):
     angle: float = 25.0  # degrees (positive = CCW looking forward, negative = CW)
 
     def __str__(self) -> str:
         return f"Roll({self.angle:.1f})"
+
+    def set_interpolated_value(self, value: float) -> None:
+        self.angle = value
 
 
 class Tip(Symbol):

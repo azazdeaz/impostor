@@ -15,7 +15,7 @@ from impostor_gen.core_symbols import (
     Tip,
 )
 from impostor_gen.l_systems import LSystem
-from impostor_gen.leaf import create_trifoliate_leaf, BendLeaf, AgeLeaf
+from impostor_gen.leaf import create_trifoliate_leaf, AgeLeaf
 from impostor_gen.mesh_builder import generate_blueprints, generate_mesh
 from impostor_gen.mesh_utils import log_mesh
 from impostor_gen.interpolate import InterpolateRule
@@ -111,7 +111,6 @@ def main():
             InterpolateRule(),
             GrowStem(),
             IterateCrown(),
-            BendLeaf(),
             AgeLeaf(),
         ],
     )
