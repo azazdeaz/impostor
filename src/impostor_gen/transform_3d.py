@@ -3,6 +3,7 @@ import numpy as np
 import rerun as rr
 from scipy.spatial.transform import Rotation
 
+
 class Transform3D(BaseModel):
     position: np.ndarray = Field(default_factory=lambda: np.zeros(3))
     rotation: Rotation = Field(default_factory=Rotation.identity)
@@ -13,7 +14,7 @@ class Transform3D(BaseModel):
 
     def set_scale(self, scale: float):
         self.scale = np.array([scale, scale, scale])
-    
+
     def as_matrix(self) -> np.ndarray:
         """Return the transform as a 4x4 transformation matrix."""
         matrix = np.identity(4)
@@ -26,7 +27,5 @@ class Transform3D(BaseModel):
         return rr.Transform3D(
             translation=self.position,
             rotation=rr.Quaternion(xyzw=self.rotation.as_quat()),
-            scale=self.scale
+            scale=self.scale,
         )
-
-    

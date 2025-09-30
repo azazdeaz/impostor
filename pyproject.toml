@@ -32,6 +32,7 @@ warn_unused_configs = true
 dev = [
     "google-genai>=1.36.0",
     "python-dotenv>=1.1.1",
+    "ruff>=0.13.2",
     "scipy-stubs>=1.16.0.2",
     "types-usd>=24.5.2",
 ]

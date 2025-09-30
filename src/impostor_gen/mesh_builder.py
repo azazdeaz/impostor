@@ -5,9 +5,9 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
-from .branch_symbols import BranchClose, BranchOpen
-from .context import LeafContext
-from .core_symbols import (
+from .engine import BranchClose, BranchOpen
+from .engine import LeafContext
+from .engine import (
     F,
     Diameter,
     MaterialKey,
@@ -20,7 +20,7 @@ from .core_symbols import (
 from .extrude import extrude_mesh2d_along_points
 from .mesh2d import Mesh2D
 from .mesh3d import CompundMesh3D, Mesh3D
-from .symbol import Symbol
+from .engine import Symbol
 from .transform_3d import Transform3D
 
 FORWARD = np.array([0.0, 0.0, 1.0])
@@ -104,10 +104,10 @@ def generate_blueprints(
             # Move forward
             direction = turtle.rotation.apply(FORWARD)
             turtle.position = turtle.position + direction * symbol.length
-            
+
             blueprint = stack[-1]
             blueprint.transforms.append(turtle.model_copy())
-        
+
         if isinstance(symbol, Diameter):
             turtle.set_scale(symbol.diameter)
 

@@ -2,9 +2,10 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 from typing import Callable, Generic, List, Optional, TypeVar, TYPE_CHECKING
 
-from impostor_gen.symbol import Symbol
+from .symbol import Symbol
+
 if TYPE_CHECKING:
-    from impostor_gen.context import Context
+    from .context import Context
 
 
 from abc import ABC, abstractmethod
@@ -36,11 +37,15 @@ class Rule(ABC):
     def apply(self, writer: Writer, context: "Context") -> None:
         pass
 
-T = TypeVar('T', bound=Symbol)
+
+T = TypeVar("T", bound=Symbol)
+
 
 class BasicRule(BaseModel, Rule, Generic[T]):
     left: type[T]  # This ensures left is a subclass of Symbol
-    right: List[Symbol] | Callable[[T], List[Symbol]]  # This ensures the callable accepts an instance of the specific subclass
+    right: (
+        List[Symbol] | Callable[[T], List[Symbol]]
+    )  # This ensures the callable accepts an instance of the specific subclass
 
     def apply(self, writer: Writer, context: "Context"):
         current = writer.peek(0)

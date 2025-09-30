@@ -60,7 +60,7 @@ class Mesh2D(BaseModel):
             )
         else:
             vertex_normals_3d = None
-        
+
         return Mesh3D(
             vertex_positions=vertex_positions_3d,
             line_indices=self.line_indices,

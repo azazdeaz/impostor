@@ -22,9 +22,10 @@ def extrude_mesh2d_along_points(shape: Mesh2D, frames: list[Transform3D]) -> Mes
 
     # Build the triangle indices for the extruded mesh
     triangle_indices: List[List[int]] = []
-    extruded_mesh.vertex_texcoords = np.zeros((len(extruded_mesh.vertex_positions), 2), dtype=np.float32)
-    
-    
+    extruded_mesh.vertex_texcoords = np.zeros(
+        (len(extruded_mesh.vertex_positions), 2), dtype=np.float32
+    )
+
     for i in range(len(frames) - 1):
         for [a, b] in shape.line_indices:
             v1 = i * vertex_per_level + a
@@ -33,7 +34,7 @@ def extrude_mesh2d_along_points(shape: Mesh2D, frames: list[Transform3D]) -> Mes
             v4 = (i + 1) * vertex_per_level + b
             triangle_indices.append([v1, v2, v3])
             triangle_indices.append([v2, v4, v3])
-    
+
     # Build UVs
     uv_y_repeat = 2
     for i in range(len(frames)):
@@ -41,9 +42,9 @@ def extrude_mesh2d_along_points(shape: Mesh2D, frames: list[Transform3D]) -> Mes
         for j in range(vertex_per_level):
             u = j / (vertex_per_level - 1) if vertex_per_level > 1 else 0.0
             extruded_mesh.vertex_texcoords[i * vertex_per_level + j, :] = [u, v]
-    
+
     # Create the final extruded mesh with proper faces and UVs
     extruded_mesh.triangle_indices = np.array(triangle_indices, dtype=np.int32)
-    
+
     extruded_mesh.line_indices = None
     return extruded_mesh

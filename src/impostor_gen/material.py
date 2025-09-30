@@ -133,8 +133,6 @@ class Material(BaseModel):
         return material
 
 
-
-
 class MaterialRegistry(BaseModel):
     materials: dict[str, Material] = Field(default_factory=lambda: {})
 

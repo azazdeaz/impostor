@@ -1,7 +1,5 @@
-
-from impostor_gen.symbol import Symbol
-
 from .interpolate import Interpolate
+from .symbol import Symbol
 
 
 class Stem(Symbol):
@@ -17,16 +15,17 @@ class F(Symbol, Interpolate):
 
     def __str__(self) -> str:
         return f"F({self.length:.2f})"
-    
+
     def set_interpolated_value(self, value: float) -> None:
         self.length = value
+
 
 class Diameter(Symbol, Interpolate):
     diameter: float = 1.0
 
     def __str__(self) -> str:
         return f"D({self.diameter:.2f})"
-    
+
     def set_interpolated_value(self, value: float) -> None:
         self.diameter = value
 
@@ -45,7 +44,7 @@ class Yaw(Symbol, Interpolate):
 
     def __str__(self) -> str:
         return f"Yaw({self.angle:.1f})"
-    
+
     def set_interpolated_value(self, value: float) -> None:
         self.angle = value
 
@@ -55,7 +54,7 @@ class Pitch(Symbol, Interpolate):
 
     def __str__(self) -> str:
         return f"Pitch({self.angle:.1f})"
-    
+
     def set_interpolated_value(self, value: float) -> None:
         self.angle = value
 
@@ -71,12 +70,12 @@ class Roll(Symbol, Interpolate):
 
 
 class Tip(Symbol):
-    order: int = 0 # Default to order 0 (main trunk)
+    order: int = 0  # Default to order 0 (main trunk)
     max_length: float = 10.0  # Maximum length before stopping growth
 
     def __str__(self) -> str:
         return "Tip"
-    
+
 
 class MaterialKey(Symbol):
     key: str

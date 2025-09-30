@@ -3,13 +3,11 @@ from typing import List, Tuple
 from pydantic import BaseModel
 import rerun as rr
 
-from impostor_gen.branch_symbols import BranchOpen
-from impostor_gen.symbol import Symbol
-from impostor_gen.branch_symbols import BranchClose
-from impostor_gen.context import Context
-from impostor_gen.rule import Rule, Writer
-
-
+from .branch_symbols import BranchOpen
+from .symbol import Symbol
+from .branch_symbols import BranchClose
+from .context import Context
+from .rule import Rule, Writer
 
 
 class LSystem(BaseModel):
@@ -36,7 +34,7 @@ class LSystem(BaseModel):
                 else:
                     new_world.append(self.world[pointer])
                     pointer += 1
-            self.world = new_world    
+            self.world = new_world
 
     def log_graph(self):
         node_ids = [str(i) for i in range(len(self.world))]

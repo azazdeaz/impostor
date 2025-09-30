@@ -3,8 +3,8 @@ from typing import Any, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
-from impostor_gen.context import Context, LeafContext
-from impostor_gen.rule import Rule, Writer
+from .context import Context, LeafContext
+from .rule import Rule, Writer
 
 
 class Interpolate(BaseModel):

@@ -1,4 +1,4 @@
-from impostor_gen.symbol import Symbol
+from .symbol import Symbol
 
 
 class BranchOpen(Symbol):

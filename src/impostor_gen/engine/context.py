@@ -2,9 +2,9 @@ from typing import Any, Optional, TypeVar
 
 from pydantic import BaseModel
 
-from impostor_gen.branch_symbols import BranchOpen
-from impostor_gen.symbol import Symbol
-from impostor_gen.branch_symbols import BranchClose
+from .branch_symbols import BranchOpen
+from .symbol import Symbol
+from .branch_symbols import BranchClose
 
 
 class ContextSymbol(Symbol):
@@ -35,5 +35,6 @@ class Context(BaseModel):
 
 class LeafContext(ContextSymbol):
     age: int = 0
+
     def __str__(self) -> str:
         return "Leaf"
