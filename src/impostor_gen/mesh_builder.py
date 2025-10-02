@@ -13,7 +13,7 @@ from .engine import (
     MaterialKey,
     Pitch,
     Roll,
-    Stem,
+    StemContext,
     Symbol,
     Tropism,
     Yaw,
@@ -29,8 +29,6 @@ FORWARD = np.array([0.0, 0.0, 1.0])
 
 class StemBlueprint(BaseModel):
     transforms: List[Transform3D] = Field(default_factory=lambda: [])
-    cross_sections: int = 0
-    divisions: int = 6
     material_key: Optional[str] = None
 
 
@@ -131,10 +129,8 @@ def generate_blueprints(
             else:
                 raise ValueError("Unmatched BranchClose symbol encountered.")
 
-        elif isinstance(symbol, Stem):
+        elif isinstance(symbol, StemContext):
             blueprint = stack[-1]
-            blueprint.cross_sections = symbol.cross_sections
-            blueprint.divisions = symbol.divisions
             blueprint.transforms.append(turtle.model_copy())
 
         elif isinstance(symbol, LeafContext):

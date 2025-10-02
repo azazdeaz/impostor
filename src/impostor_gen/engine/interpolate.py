@@ -1,31 +1,41 @@
 from abc import abstractmethod
 from typing import Any, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .context import Context
-from .ageing import Ageing
+from .ageing import AgeingContext
 from .rule import Rule, Writer
 
 
 class Interpolate(BaseModel):
     start_value: Optional[float] = None
     end_value: Optional[float] = None
-    start_age: Optional[int] = None
-    end_age: Optional[int] = None
+    start_age: Optional[float] = None
+    end_age: Optional[float] = None
     value_se: Optional[Tuple[float, float]] = Field(
         default=None, description="Interpolated value range (start, end)"
     )
-    age_se: Optional[Tuple[int, int]] = Field(
+    age_se: Optional[Tuple[float, float]] = Field(
         default=None, description="Age range (start, end)"
     )
-    age_context_type: Optional[type[Ageing]] = Field(
+    age_context_type: Optional[type[AgeingContext]] = Field(
         default=None, description="Context type to get age from"
     )
 
     @abstractmethod
     def set_interpolated_value(self, value: Any):
         pass
+
+    @model_validator(mode='after')
+    def init(self):
+        # Get the start value from either start_value or value_se
+        start_value = self.start_value or (
+            self.value_se[0] if self.value_se else None
+        )
+        if start_value is not None:
+            self.set_interpolated_value(start_value)
+        return self
 
 
 class InterpolateRule(Rule):

@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 
 # TODO: Enable editing multiple symbols?
 # TODO: Unit test Writer
+# TODO: Implement to jump over branch structures when peeking
 class Writer(BaseModel):
     world: Sequence[Symbol]
     pointer: int

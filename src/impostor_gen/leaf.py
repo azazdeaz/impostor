@@ -1,7 +1,7 @@
 from typing import List
 
 from .engine import (
-    Ageing,
+    AgeingContext,
     BranchClose,
     BranchOpen,
     F,
@@ -12,7 +12,7 @@ from .engine import (
 )
 
 
-class LeafContext(Ageing):
+class LeafContext(AgeingContext):
     def __str__(self) -> str:
         return "Leaf"
 
@@ -24,6 +24,8 @@ def create_leaf() -> List[Symbol]:
 
     leaf: List[Symbol] = [LeafContext(), MaterialKey(key="leaf")]
 
+    growth_end_age = 8
+
     # Create midrib with secondary veins
     for mr in range(midrib_division):
         symbols: List[Symbol] = []
@@ -32,13 +34,13 @@ def create_leaf() -> List[Symbol]:
         symbols.append(
             F(
                 value_se=(0.01, length),
-                age_se=(0, 8),
+                age_se=(0, growth_end_age),
                 age_context_type=LeafContext,
             )
         )
 
         symbols.append(
-            Pitch(value_se=(48, -2), age_se=(2, 8), age_context_type=LeafContext)
+            Pitch(value_se=(48, -2), age_se=(2, growth_end_age), age_context_type=LeafContext)
         )
 
         symbols.append(BranchOpen())
@@ -49,12 +51,12 @@ def create_leaf() -> List[Symbol]:
             symbols.append(
                 F(
                     value_se=(0.01, step_size),
-                    age_se=(0, 8),
+                    age_se=(0, growth_end_age),
                     age_context_type=LeafContext,
                 )
             )
             symbols.append(
-                Pitch(value_se=(48, -2), age_se=(2, 8), age_context_type=LeafContext)
+                Pitch(value_se=(48, -2), age_se=(2, growth_end_age), age_context_type=LeafContext)
             )
 
         symbols.append(BranchClose())
@@ -66,12 +68,12 @@ def create_leaf() -> List[Symbol]:
             symbols.append(
                 F(
                     value_se=(0.01, step_size),
-                    age_se=(0, 8),
+                    age_se=(0, growth_end_age),
                     age_context_type=LeafContext,
                 )
             )
             symbols.append(
-                Pitch(value_se=(48, 6), age_se=(2, 8), age_context_type=LeafContext)
+                Pitch(value_se=(48, 6), age_se=(2, growth_end_age), age_context_type=LeafContext)
             )
 
         symbols.append(BranchClose())

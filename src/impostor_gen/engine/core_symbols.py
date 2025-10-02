@@ -2,13 +2,6 @@ from .interpolate import Interpolate
 from .symbol import Symbol
 
 
-class Stem(Symbol):
-    cross_sections: int = 3
-    divisions: int = 5
-
-    def __str__(self) -> str:
-        return f"Stem({self.cross_sections}, {self.divisions})"
-
 
 class F(Symbol, Interpolate):
     length: float = 1.0
@@ -68,7 +61,7 @@ class Roll(Symbol, Interpolate):
     def set_interpolated_value(self, value: float) -> None:
         self.angle = value
 
-
+# TODO: Deprecate in favor of StemTip?
 class Tip(Symbol):
     order: int = 0  # Default to order 0 (main trunk)
     max_length: float = 10.0  # Maximum length before stopping growth

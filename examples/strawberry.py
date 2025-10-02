@@ -13,12 +13,13 @@ from impostor_gen.engine import (
     Pitch,
     Roll,
     Rule,
-    Stem,
-    Tip,
     Writer,
     InterpolateRule,
     AgeingRule,
-    Ageing,
+    AgeingContext,
+    StemContext,
+    StemGrowthRule,
+    StemTip,
 )
 from impostor_gen.engine.symbol import Symbol
 from impostor_gen.leaf import create_trifoliate_leaf
@@ -27,7 +28,7 @@ from impostor_gen.mesh_builder import generate_blueprints, generate_mesh
 from impostor_gen.mesh_utils import log_mesh
 import numpy as np
 
-class Crown(Ageing):
+class Crown(AgeingContext):
     shoot_period: int = 12  # How many iterations between new shoots
     max_shoots: int = 3  # Maximum age before the crown stops producing new shoots
     angle_step: float = 137.5  # Angle step in degrees for new shoots
@@ -58,8 +59,8 @@ class IterateCrown(Rule, BaseModel):
                     F(length=0.0),
                     Roll(angle=roll),
                     Pitch(angle=pitch),
-                    Stem(),
-                    Tip(max_length=7.2 + age * 0.2),
+                    StemContext(target_length=5.2 + age * 0.02, growth_speed=0.2, section_length=0.8),
+                    StemTip(),
                     *create_trifoliate_leaf(),
                     BranchClose(),
                 ]
@@ -118,7 +119,7 @@ def main():
         world=[Crown(), XY()],
         rules=[
             InterpolateRule(),
-            GrowStem(),
+            StemGrowthRule(),
             AgeingRule(),
             IterateCrown(),
         ],

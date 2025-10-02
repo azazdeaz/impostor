@@ -2,7 +2,6 @@ from .symbol import Symbol
 from .branch_symbols import BranchOpen, BranchClose
 from .context import Context, ContextSymbol
 from .core_symbols import (
-    Stem,
     F,
     Diameter,
     Tropism,
@@ -13,9 +12,10 @@ from .core_symbols import (
     MaterialKey,
 )
 from .interpolate import Interpolate, InterpolateRule
-from .ageing import Ageing, AgeingRule
+from .ageing import AgeingContext, AgeingRule
 from .rule import Rule, Writer, BasicRule
 from .l_systems import LSystem
+from .stem import StemContext, StemGrowthRule, StemTip
 
 __all__ = [
     "Symbol",
@@ -27,7 +27,6 @@ __all__ = [
     "Writer",
     "BasicRule",
     "LSystem",
-    "Stem",
     "F",
     "Diameter",
     "Tropism",
@@ -38,6 +37,9 @@ __all__ = [
     "MaterialKey",
     "Interpolate",
     "InterpolateRule",
-    "Ageing",
+    "AgeingContext",
     "AgeingRule",
+    "StemContext",
+    "StemGrowthRule",
+    "StemTip",
 ]

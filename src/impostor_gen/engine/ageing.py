@@ -4,7 +4,7 @@ from .context import Context, ContextSymbol
 from .rule import Rule, Writer
 
 
-class Ageing(ContextSymbol):
+class AgeingContext(ContextSymbol):
     age: float = Field(default=0.0, description="Current age of the context")
 
 
@@ -15,7 +15,7 @@ class AgeingRule(Rule, BaseModel):
 
     def apply(self, writer: Writer, context: Context):
         aging = writer.peek(0)
-        if not isinstance(aging, Ageing):
+        if not isinstance(aging, AgeingContext):
             return
 
         aging.age += self.aging_per_iteration
