@@ -230,7 +230,10 @@ class Mesh3D(BaseModel):
         return mesh
 
     def to_usd(
-        self, stage: Optional[Usd.Stage], materials: MaterialRegistry
+        self,
+        stage: Optional[Usd.Stage],
+        materials: MaterialRegistry,
+        parent: Optional[str] = None,
     ) -> Usd.Stage:
         if stage is None:
             stage = Usd.Stage.CreateNew("simpleShading.usda")
@@ -240,15 +243,19 @@ class Mesh3D(BaseModel):
             + "_"
             + "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
         )
+        if parent is not None:
+            name = f"{parent}/{name}"
+        if not name.startswith("/"):
+            name = f"/{name}"
 
         material = materials.get(self.material_key) if self.material_key else None
 
         UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
 
-        modelRoot = UsdGeom.Xform.Define(stage, f"/{name}")
+        modelRoot = UsdGeom.Xform.Define(stage, f"{name}")
         Usd.ModelAPI(modelRoot).SetKind(Kind.Tokens.component)
 
-        mesh = UsdGeom.Mesh.Define(stage, f"/{name}/mesh")
+        mesh = UsdGeom.Mesh.Define(stage, f"{name}/mesh")
         mesh.CreatePointsAttr(self.vertex_positions.tolist())
         if self.triangle_indices is not None:
             face_vertex_counts = [3] * len(self.triangle_indices)
@@ -261,7 +268,7 @@ class Mesh3D(BaseModel):
             )
             texCoords.Set(self.vertex_texcoords.tolist())
 
-            usd_material = material.to_usd(stage, f"/{name}/material")
+            usd_material = material.to_usd(stage, f"{name}/material")
 
             mesh.GetPrim().ApplyAPI(UsdShade.MaterialBindingAPI)  # type: ignore
             UsdShade.MaterialBindingAPI(mesh).Bind(usd_material)
@@ -282,7 +289,7 @@ class CompundMesh3D(BaseModel):
         self, materials: MaterialRegistry, filename: str = "compound_mesh.usda"
     ) -> "Usd.Stage":
         stage = Usd.Stage.CreateNew(filename)
-        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
 
         for mesh in self.submeshes:
             mesh.to_usd(stage, materials)
