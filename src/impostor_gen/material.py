@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class Material(BaseModel):
+    key: str = Field(..., description="Unique identifier for the material")
     texture_base_color: Optional[Path] = Field(
         default=None, description="Path to the texture base color image"
     )
@@ -139,5 +140,5 @@ class MaterialRegistry(BaseModel):
     def get(self, key: str) -> Optional[Material]:
         return self.materials.get(key, None)
 
-    def register(self, key: str, material: Material):
-        self.materials[key] = material
+    def register(self, material: Material):
+        self.materials[material.key] = material

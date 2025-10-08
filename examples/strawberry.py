@@ -30,6 +30,21 @@ from impostor_gen.mesh_utils import log_mesh
 from impostor_gen.usd_animation import UsdAnimation
 import numpy as np
 
+leaf_material = Material(
+    key="leaf",
+    texture_base_color=Path("textures/central_leaflet_color_cropped.png"),
+    texture_normal_map=Path("textures/central_leaflet_normal_cropped.png"),
+    texture_opacity_map=Path("textures/central_leaflet_mask_cropped.png"),
+    texture_displacement_map=Path("textures/central_leaflet_bump_cropped.png"),
+)
+stem_material = Material(
+    key="stem",
+    texture_base_color=Path("textures/stem_color_cropped.png"),
+    texture_normal_map=Path("textures/stem_normal_cropped.png"),
+    # texture_opacity_map=Path("textures/stem_mask_cropped.png"),
+    # texture_displacement_map=Path("textures/stem_bump_cropped.png"),
+)
+
 
 class Crown(AgeingContext):
     shoot_period: int = 12  # How many iterations between new shoots
@@ -69,41 +84,8 @@ class IterateCrown(Rule, BaseModel):
                         section_length=0.8,
                     ),
                     StemTip(),
-                    *create_trifoliate_leaf(),
+                    *create_trifoliate_leaf(leaf_material),
                     BranchClose(),
-                ]
-            )
-
-
-class GrowStem(Rule):
-    def apply(self, writer: "Writer", context: "Context"):
-        tip = writer.peek(0)
-        if not isinstance(tip, Tip):
-            return
-
-        length_without_branch = 0.0
-
-        # Look backwards to see how much "F" length we have without a branch
-        pointer = -1
-        try:
-            while True:
-                symbol = writer.peek(pointer)
-                if isinstance(symbol, F):
-                    length_without_branch += symbol.length
-                elif isinstance(symbol, BranchClose) or isinstance(symbol, Stem):
-                    break
-                pointer -= 1
-        except IndexError:
-            pass  # Reached the beginning of the world
-
-        if length_without_branch < tip.max_length:
-            # Default "grow" behavior
-            writer.write(
-                [
-                    Pitch(angle=-2),
-                    Diameter(diameter=0.2),
-                    F(length=0.9),
-                    tip.model_copy(),
                 ]
             )
 
@@ -115,24 +97,8 @@ class XY(Symbol):
 
 def main():
     materials = MaterialRegistry()
-    materials.register(
-        "leaf",
-        Material(
-            texture_base_color=Path("central_leaflet_color_cropped.png"),
-            texture_normal_map=Path("central_leaflet_normal_cropped.png"),
-            texture_opacity_map=Path("central_leaflet_mask_cropped.png"),
-            texture_displacement_map=Path("central_leaflet_bump_cropped.png"),
-        ),
-    )
-    materials.register(
-        "stem",
-        Material(
-            texture_base_color=Path("textures/stem_color_cropped.png"),
-            texture_normal_map=Path("textures/stem_normal_cropped.png"),
-            # texture_opacity_map=Path("textures/stem_mask_cropped.png"),
-            # texture_displacement_map=Path("textures/stem_bump_cropped.png"),
-        ),
-    )
+    materials.register(leaf_material)
+    materials.register(stem_material)
 
     # Define an L-system
     lsystem = LSystem(
@@ -158,11 +124,11 @@ def main():
         blueprints = generate_blueprints(lsystem.world)
         # log_transforms(blueprints)
         meshes = generate_mesh(blueprints)
-        # log_mesh(meshes, materials)
+        log_mesh(meshes, materials)
         lsystem.log_graph()
         lsystem.log_as_markdown()
 
-        anim.add_next_frame(meshes)
+        # anim.add_next_frame(meshes)
 
         # if i == iterations - 1:
         #     meshes.to_usd(materials).Save()
@@ -175,7 +141,7 @@ def main():
         #             f"exports/strawberry_plant_{j}/model.obj"
         #         )
 
-    anim.save("strawberry_plant_animation.usd")
+    # anim.save("strawberry_plant_animation.usd")
 
 
 if __name__ == "__main__":

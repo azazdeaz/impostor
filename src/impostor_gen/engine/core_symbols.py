@@ -22,6 +22,13 @@ class Diameter(Symbol, Interpolate):
     def set_interpolated_value(self, value: float) -> None:
         self.diameter = value
 
+class UV(Symbol):
+    u: float = 0.0
+    v: float = 0.0
+
+    def __str__(self) -> str:
+        return f"UV({self.u:.2f}, {self.v:.2f})"
+
 
 class Tropism(Symbol):
     """Tropism: lean toward a global (gravity) vector each time encountered."""

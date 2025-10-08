@@ -5,6 +5,8 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
+from impostor_gen.engine.core_symbols import UV
+
 from .engine import (
     BranchClose,
     BranchOpen,
@@ -27,8 +29,11 @@ from .transform_3d import Transform3D
 FORWARD = np.array([0.0, 0.0, 1.0])
 
 
+class Turtle(Transform3D):
+    uv: UV = Field(default_factory=lambda: UV())
+
 class StemBlueprint(BaseModel):
-    transforms: List[Transform3D] = Field(default_factory=lambda: [])
+    transforms: List[Turtle] = Field(default_factory=lambda: [])
     material_key: Optional[str] = None
 
 
@@ -38,7 +43,7 @@ class LeafBlueprint(BaseModel):
     material_key: Optional[str] = None
 
     @property
-    def transforms(self) -> List[Transform3D]:
+    def transforms(self) -> List[Turtle]:
         return self.midrib.transforms + [
             t for vein in self.veins for t in vein.transforms
         ]
@@ -88,11 +93,13 @@ def apply_tropism(
     return rot_world * rotation
 
 
+
+
 def generate_blueprints(
     symbols: Sequence[Symbol],
 ) -> List[StemBlueprint | LeafBlueprint]:
-    turtle = Transform3D()
-    transform_stack: List[Transform3D] = []
+    turtle: Turtle = Turtle()
+    transform_stack: List[Turtle] = []
     closed_branches: List[StemBlueprint] = []
     stack: List[StemBlueprint] = [StemBlueprint()]
     finished_leaves: List[LeafBlueprint] = []
@@ -107,8 +114,11 @@ def generate_blueprints(
             blueprint = stack[-1]
             blueprint.transforms.append(turtle.model_copy())
 
-        if isinstance(symbol, Diameter):
+        elif isinstance(symbol, Diameter):
             turtle.set_scale(symbol.diameter)
+
+        elif isinstance(symbol, UV):
+            turtle.uv = symbol.model_copy()
 
         elif isinstance(symbol, BranchOpen):
             transform_stack.append(turtle.model_copy())
@@ -176,7 +186,7 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
                 mesh3d = mesh3d.merge(stem_mesh)
 
         else:  # LeafBlueprint
-            # assert len(blueprint.midrib.transforms) == len(blueprint.veins) * 2, f"Midrib transforms: {len(blueprint.midrib.transforms)}, Veins: {len(blueprint.veins) * 2}"
+            # This expects that all the lateral veins have the same number of transforms
             midrib_div = len(blueprint.midrib.transforms)
             sec_vein_div = len(blueprint.veins[0].transforms)
             horisontal_div = sec_vein_div * 2 + 1
@@ -195,6 +205,24 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
                 vertex_grid[i, sec_vein_div + 1 :, :] = [
                     t.position for t in blueprint.veins[i * 2 + 1].transforms
                 ]
+                # Interpolate UVs
+                uv_grid[i, sec_vein_div, :] = [
+                    blueprint.midrib.transforms[i].uv.u,
+                    blueprint.midrib.transforms[i].uv.v,
+                ]
+                for j in range(sec_vein_div):
+                    uv_grid[i, j, :] = [
+                        blueprint.veins[i * 2]
+                        .transforms[sec_vein_div - 1 - j]
+                        .uv.u,
+                        blueprint.veins[i * 2]
+                        .transforms[sec_vein_div - 1 - j]
+                        .uv.v,
+                    ]
+                    uv_grid[i, sec_vein_div + 1 + j, :] = [
+                        blueprint.veins[i * 2 + 1].transforms[j].uv.u,
+                        blueprint.veins[i * 2 + 1].transforms[j].uv.v,
+                    ]
             # Create faces
             faces = np.zeros(
                 ((midrib_div - 1) * (horisontal_div - 1) * 2, 3), dtype=np.int32
