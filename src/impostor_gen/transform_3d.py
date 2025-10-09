@@ -1,13 +1,19 @@
-from pydantic import BaseModel, Field
+from typing import Annotated
+
 import numpy as np
 import rerun as rr
+from numpy.typing import NDArray
+from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
+
+# Specify both dtype and shape
+Vector3 = Annotated[NDArray[np.float64], (3,)]
 
 
 class Transform3D(BaseModel):
-    position: np.ndarray = Field(default_factory=lambda: np.zeros(3))
+    position: Vector3 = Field(default_factory=lambda: np.zeros(3))
     rotation: Rotation = Field(default_factory=Rotation.identity)
-    scale: np.ndarray = Field(default_factory=lambda: np.ones(3))
+    scale: Vector3 = Field(default_factory=lambda: np.ones(3))
 
     class Config:
         arbitrary_types_allowed = True

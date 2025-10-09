@@ -24,13 +24,14 @@ from .extrude import extrude_mesh2d_along_points
 from .leaf import LeafContext
 from .mesh2d import Mesh2D
 from .mesh3d import CompundMesh3D, Mesh3D
-from .transform_3d import Transform3D
+from .transform_3d import Transform3D, Vector3
 
 FORWARD = np.array([0.0, 0.0, 1.0])
 
 
 class Turtle(Transform3D):
     uv: UV = Field(default_factory=lambda: UV())
+
 
 class StemBlueprint(BaseModel):
     transforms: List[Turtle] = Field(default_factory=lambda: [])
@@ -91,8 +92,6 @@ def apply_tropism(
     rot_world = Rotation.from_rotvec(axis * lean_rad)
     # World-axis rotation -> pre-multiply
     return rot_world * rotation
-
-
 
 
 def generate_blueprints(
@@ -188,58 +187,69 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
         else:  # LeafBlueprint
             # This expects that all the lateral veins have the same number of transforms
             midrib_div = len(blueprint.midrib.transforms)
-            sec_vein_div = len(blueprint.veins[0].transforms)
-            horisontal_div = sec_vein_div * 2 + 1
-            vertex_grid = np.zeros((midrib_div, horisontal_div, 3))
-            u = np.linspace(0.0, 1.0, horisontal_div)
-            v = np.linspace(0.0, 1.0, midrib_div)
-            u_grid, v_grid = np.meshgrid(u, v)
-            uv_grid = np.stack((u_grid, v_grid), axis=-1)
-            for i in range(midrib_div):
-                vertex_grid[i, :sec_vein_div, :] = [
-                    t.position for t in blueprint.veins[i * 2].transforms[::-1]
-                ]
-                vertex_grid[i, sec_vein_div, :] = blueprint.midrib.transforms[
-                    i
-                ].position
-                vertex_grid[i, sec_vein_div + 1 :, :] = [
-                    t.position for t in blueprint.veins[i * 2 + 1].transforms
-                ]
-                # Interpolate UVs
-                uv_grid[i, sec_vein_div, :] = [
-                    blueprint.midrib.transforms[i].uv.u,
-                    blueprint.midrib.transforms[i].uv.v,
-                ]
-                for j in range(sec_vein_div):
-                    uv_grid[i, j, :] = [
-                        blueprint.veins[i * 2]
-                        .transforms[sec_vein_div - 1 - j]
-                        .uv.u,
-                        blueprint.veins[i * 2]
-                        .transforms[sec_vein_div - 1 - j]
-                        .uv.v,
-                    ]
-                    uv_grid[i, sec_vein_div + 1 + j, :] = [
-                        blueprint.veins[i * 2 + 1].transforms[j].uv.u,
-                        blueprint.veins[i * 2 + 1].transforms[j].uv.v,
-                    ]
-            # Create faces
-            faces = np.zeros(
-                ((midrib_div - 1) * (horisontal_div - 1) * 2, 3), dtype=np.int32
+
+            layers: List[List[np.ndarray]] = []
+
+            assert len(blueprint.veins) == (midrib_div - 1) * 2, (
+                f"Each midrib section must have two secondary veins except the tip. Found {len(blueprint.veins)} veins for {midrib_div} midrib sections."
             )
-            for i in range(midrib_div - 1):
-                for j in range(horisontal_div - 1):
-                    v0 = i * horisontal_div + j
-                    v1 = v0 + 1
-                    v2 = v0 + horisontal_div
-                    v3 = v2 + 1
-                    faces[(i * (horisontal_div - 1) + j) * 2 + 0, :] = [v0, v2, v1]
-                    faces[(i * (horisontal_div - 1) + j) * 2 + 1, :] = [v1, v2, v3]
+
+            for i in range(midrib_div):
+                if i == midrib_div - 1:
+                    layers.append([blueprint.midrib.transforms[i].position])
+                else:
+                    layers.append(
+                        [t.position for t in blueprint.veins[i * 2].transforms[::-1]]
+                        + [blueprint.midrib.transforms[i].position]
+                        + [t.position for t in blueprint.veins[i * 2 + 1].transforms]
+                    )
+
+            vertices = np.concatenate(layers)
+            one_start = 0
+            faces: List[List[int]] = []
+            is_closed = False
+            winding_clockwise = True
+
+            for i in range(len(layers) - 1):
+                two_start = one_start + len(layers[i])
+                one_id = 0
+                two_id = 0
+                one_size = len(layers[i])
+                two_size = len(layers[i + 1])
+
+                id_margin = 0 if is_closed else 1
+                while one_id < one_size - id_margin or two_id < two_size - id_margin:
+                    id1 = one_start + one_id % one_size
+                    id2 = two_start + two_id % two_size
+                    id1_next = one_start + (one_id + 1) % one_size
+                    id2_next = two_start + (two_id + 1) % two_size
+
+                    # the positions of the vertices on the layer from 0 to 1
+                    up_progress = one_id / one_size
+                    down_progress = two_id / two_size
+
+                    if up_progress > down_progress:
+                        if winding_clockwise:
+                            new_face = [id1, id2_next, id2]
+                        else:
+                            new_face = [id1, id2, id2_next]
+                        two_id += 1
+                    else:
+                        if winding_clockwise:
+                            new_face = [id1, id1_next, id2]
+                        else:
+                            new_face = [id1, id2, id1_next]
+                        one_id += 1
+
+                    # Add the face to the list of faces
+                    faces.append(new_face)
+
+                one_start = two_start
 
             leaf_mesh = Mesh3D(
-                vertex_positions=vertex_grid.reshape(-1, 3),
-                vertex_texcoords=uv_grid.reshape(-1, 2),
-                triangle_indices=faces,
+                vertex_positions=vertices,
+                # vertex_texcoords=uv_grid.reshape(-1, 2),
+                triangle_indices=np.array(faces),
                 material_key=blueprint.material_key,
             )
             mesh3d = mesh3d.merge(leaf_mesh)

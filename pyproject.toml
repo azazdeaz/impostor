@@ -31,6 +31,8 @@ warn_unused_configs = true
 [dependency-groups]
 dev = [
     "google-genai>=1.36.0",
+    "matplotlib>=3.10.7",
+    "pyqt6>=6.9.1",
     "python-dotenv>=1.1.1",
     "ruff>=0.13.2",
     "scipy-stubs>=1.16.0.2",

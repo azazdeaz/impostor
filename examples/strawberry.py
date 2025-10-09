@@ -25,7 +25,7 @@ from impostor_gen.engine import (
 from impostor_gen.engine.symbol import Symbol
 from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material, MaterialRegistry
-from impostor_gen.mesh_builder import generate_blueprints, generate_mesh
+from impostor_gen.mesh_builder import generate_blueprints, generate_mesh, log_transforms
 from impostor_gen.mesh_utils import log_mesh
 from impostor_gen.usd_animation import UsdAnimation
 import numpy as np
@@ -97,8 +97,8 @@ class XY(Symbol):
 
 def main():
     materials = MaterialRegistry()
-    materials.register(leaf_material)
-    materials.register(stem_material)
+    # materials.register(leaf_material)
+    # materials.register(stem_material)
 
     # Define an L-system
     lsystem = LSystem(
@@ -115,14 +115,14 @@ def main():
 
     anim = UsdAnimation(materials_registry=materials, fps=10.0)
 
-    iterations = 10
+    iterations = 50
     for i in range(iterations):
         rr.set_time("frame_idx", sequence=i)
         lsystem.iterate()
         print(f"Iteration {i}, world size: {len(lsystem.world)}")
         # if i % 5 == 0 or i == iterations - 1:
         blueprints = generate_blueprints(lsystem.world)
-        # log_transforms(blueprints)
+        log_transforms(blueprints)
         meshes = generate_mesh(blueprints)
         log_mesh(meshes, materials)
         lsystem.log_graph()

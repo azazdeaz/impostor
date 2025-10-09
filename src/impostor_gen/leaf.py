@@ -2,8 +2,7 @@ from typing import List
 
 from impostor_gen.engine.core_symbols import UV
 from impostor_gen.material import Material
-from PIL import Image
-import numpy as np
+from impostor_gen.curve import BezierCurve2D
 
 from .engine import (
     AgeingContext,
@@ -31,52 +30,24 @@ def create_leaf(material: Material) -> List[Symbol]:
 
     growth_end_age = 8
 
-    # calculate lateral length based on the opacity map
-    if material.texture_opacity_map is not None:
-        alpha_mask = Image.open(material.texture_opacity_map)
-        mask_width, mask_height = alpha_mask.size
-        # Convert the image to gray scale
-        gray_image = alpha_mask.convert("L")
+    lateral_scales = BezierCurve2D([(0, .4), (0.2, 1.1), (0.3, 1.0), (0.4, 0.4), (1.0, 0.0)])
+    lateral_scales = lateral_scales.sample_y_evenly(midrib_division)
 
-        # Fold the image by taking the maximum of the right half and the mirrored left half
-        right_half = gray_image.crop((mask_width // 2, 0, mask_width, mask_height))
-        left_half = gray_image.crop((0, 0, mask_width // 2, mask_height))
-        left_half_mirrored = left_half.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-        folded_image = np.maximum(np.array(right_half), np.array(left_half_mirrored))
+    initial_lateral_yaws = BezierCurve2D([(0, 20), (0.3, 50), (1.0, 70)])
+    initial_lateral_yaws = initial_lateral_yaws.sample_y_evenly(midrib_division)
 
-        # Get the max x index where the alpha value is above a threshold
-        threshold = 10
-        mask = folded_image > threshold
-        max_mask_widths = np.argmin(mask, axis=1)
-
-        # For rows where the mask is all True, argmin returns 0. Correct this to the max width.
-        all_true_rows = np.all(mask, axis=1)
-        max_mask_widths[all_true_rows] = folded_image.shape[1] - 1
-
-        # Split into sections and get the max width in each section
-        section_mask_widths = np.array(
-            [np.median(p) for p in np.array_split(max_mask_widths, midrib_division)]
-        )
-        # # Add a zero width at the base
-        # section_mask_widths = np.concatenate(([0], section_mask_widths))
-
-        # Calculate lateral scales based on the section widths
-        lateral_scales = section_mask_widths / (folded_image.shape[1]) * 1.02
-        lateral_scales = np.clip(lateral_scales, 0.2, 1.0)
-    else:
-        lateral_scales = np.ones(midrib_division)
+    lateral_yaws = BezierCurve2D([(0, -4), (0.3, 7), (1.0, 9)])
+    lateral_yaws = lateral_yaws.sample_y_evenly(sec_vein_division)
 
     def lateral_vein(section_idx: int, is_left: bool) -> List[Symbol]:
-        symbols: List[Symbol] = []
+        symbols: List[Symbol] = [
+            Yaw(angle=initial_lateral_yaws[section_idx] if is_left else -initial_lateral_yaws[section_idx])
+        ]
         scale = lateral_scales[section_idx]
 
         for i in range(sec_vein_division):
-            progress_v = section_idx / (midrib_division - 1)
-            progress_u = (i+1) / (sec_vein_division)
-            u = -progress_u if is_left else progress_u
-            u = 0.5 + u * scale / 2.0
             symbols.append(
-                UV(u=u, v=progress_v)
+                Yaw(angle=lateral_yaws[i] if is_left else -lateral_yaws[i])
             )
             symbols.append(
                     F(
@@ -100,9 +71,7 @@ def create_leaf(material: Material) -> List[Symbol]:
         symbols: List[Symbol] = []
 
         length = 0 if mr == 0 else 0.5
-        symbols.append(
-            UV(u=0.5, v=mr / (midrib_division - 1))
-        )
+
         symbols.append(
             F(
                 value_se=(0.01, length),
@@ -113,26 +82,28 @@ def create_leaf(material: Material) -> List[Symbol]:
 
         symbols.append(
             Pitch(
-                value_se=(48, -2),
+                value_se=(48, 7),
                 age_se=(2, growth_end_age),
                 age_context_type=LeafContext,
             )
         )
 
-        symbols.append(BranchOpen())
-        symbols.append(Yaw(angle=-90))
+        # Dont add lateral veins on the tip
+        if mr < midrib_division - 1:
+            symbols.append(BranchOpen())
+            symbols.append(Yaw(angle=-90))
 
-        # Add secondary vein on left side
-        symbols.extend(lateral_vein(mr, is_left=True))
+            # Add secondary vein on left side
+            symbols.extend(lateral_vein(mr, is_left=True))
 
-        symbols.append(BranchClose())
-        symbols.append(BranchOpen())
-        symbols.append(Yaw(angle=90))
+            symbols.append(BranchClose())
+            symbols.append(BranchOpen())
+            symbols.append(Yaw(angle=90))
 
-        # Add secondary vein on right side
-        symbols.extend(lateral_vein(mr, is_left=False))
+            # Add secondary vein on right side
+            symbols.extend(lateral_vein(mr, is_left=False))
 
-        symbols.append(BranchClose())
+            symbols.append(BranchClose())
 
         leaf.extend(symbols)
 
