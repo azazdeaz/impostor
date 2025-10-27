@@ -296,16 +296,20 @@ def add_bones_to_mesh(
 
     joints: List[str] = ["root_bone"]
     bindTransforms: List[Gf.Matrix4d] = [
-        Gf.Matrix4d().SetTranslate(Gf.Vec3d(root_position[0], root_position[1], 0.0))
+        Gf.Matrix4d().SetTranslate(
+            Gf.Vec3d(root_position[0] * mesh_size, root_position[1] * mesh_size, 0.0)
+        )
     ]
 
     for i in range(len(midrib_bones)):
         joints.append(f"{joints[-1]}/mr{i}")
-        bindTransforms.append(
-            Gf.Matrix4d()
-            .SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), midrib_bones[i][0]))
-            .SetTranslateOnly(Gf.Vec3d(0, midrib_bones[i][1] * mesh_size, 0.0))
-        )
+        # Build translation then rotation, then compose as (R * T)
+        trans = Gf.Matrix4d()
+        trans.SetTranslateOnly(Gf.Vec3d(0, midrib_bones[i][1] * mesh_size, 0.0))
+        rot = Gf.Matrix4d()
+        rot.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), midrib_bones[i][0]))
+        # Multiply so the resulting matrix applies translation first, then rotation:
+        bindTransforms.append(trans * rot)
 
     for i in range(len(secondary_bones)):
         path_left = [joints[i]]
@@ -316,36 +320,109 @@ def add_bones_to_mesh(
             joints.append("/".join(path_left))
             joints.append("/".join(path_right))
 
-            bindTransforms.append(
-                Gf.Matrix4d()
-                .SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), secondary_bones[i][j][0]))
-                .SetTranslateOnly(
-                    Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0)
-                )
-            )
-            bindTransforms.append(
-                Gf.Matrix4d()
-                .SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), -secondary_bones[i][j][0]))
-                .SetTranslateOnly(
-                    Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0)
-                )
-            )
-    restTransforms = bindTransforms.copy()
-    joint_indices_primvar = mesh_binding.CreateJointIndicesPrimvar(
-        constant=False, elementSize=4
-    )
-    all_indices = list(range(len(joints)))
-    indices = [np.random.choice(all_indices, 4).tolist() for _ in range(len(vertices))]
-    indices = np.array(indices).flatten().tolist()
-    print("Joint indices per vertex:", indices)
-    joint_indices_primvar.Set(indices)
-    joint_weights_primvar = mesh_binding.CreateJointWeightsPrimvar(
-        constant=False, elementSize=4
-    )
-    joint_weights_primvar.Set([1.0, 0.0, 0.0, 0.0] * len(vertices))
+            # left bone: translate then rotate (compose as R * T)
+            trans_l = Gf.Matrix4d()
+            trans_l.SetTranslateOnly(Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0))
+            rot_l = Gf.Matrix4d()
+            rot_l.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), secondary_bones[i][j][0]))
+            bindTransforms.append(trans_l * rot_l)
 
-    mesh_binding.CreateGeomBindTransformAttr().Set(Gf.Matrix4d().SetIdentity())
+            # right bone: translate then rotate with mirrored yaw (compose as R * T)
+            trans_r = Gf.Matrix4d()
+            trans_r.SetTranslateOnly(Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0))
+            rot_r = Gf.Matrix4d()
+            rot_r.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), -secondary_bones[i][j][0]))
+            bindTransforms.append(trans_r * rot_r)
+    restTransforms = bindTransforms.copy()
 
     skel.CreateJointsAttr(joints)
     skel.CreateBindTransformsAttr(bindTransforms)
     skel.CreateRestTransformsAttr(restTransforms)
+
+    # Compute skinning weights based on distance to joints
+
+    skelCache = UsdSkel.Cache()
+    skelQuery = skelCache.GetSkelQuery(skel)
+    localSpaceXforms = skelQuery.ComputeJointLocalTransforms(0)
+    print("Local Space Xforms:", localSpaceXforms)
+    skelSpaceXforms = skelQuery.ComputeJointSkelTransforms(0)
+    print("Skel Space Xforms:", skelSpaceXforms)
+    transforms = [xform.ExtractTranslation() for xform in skelSpaceXforms]
+
+    bones_2d = np.array([(t[0], t[1]) for t in transforms])
+    for i, pos in enumerate(bones_2d):
+        print(f"Joint {joints[i]} position: {pos}")
+
+    joint_per_vertex = 4
+
+    vertices_2d = np.array([(v[0], v[1]) for v in vertices])
+    # The distance of each vertex to each joint
+    print("vertices_2d shape:", vertices_2d.shape)
+    print("positions_2d shape:", bones_2d.shape)
+    distance_matrix = np.linalg.norm(
+        vertices_2d[:, np.newaxis, :] - bones_2d[np.newaxis, :, :], axis=2
+    )
+    # Find the two closest joints for each vertex
+    closest_joints = np.argsort(distance_matrix, axis=1)[:, :joint_per_vertex]
+    # Map the distances for the closest joints
+    distance_to_closests = np.take_along_axis(distance_matrix, closest_joints, axis=1)
+    # Compute the weight of the joints based on inverse distance
+    weights = 1.0 - (
+        distance_to_closests
+        / (np.sum(distance_to_closests, axis=1, keepdims=True) + 1e-8)
+    )
+
+    joint_indices_primvar = mesh_binding.CreateJointIndicesPrimvar(
+        constant=False, elementSize=joint_per_vertex
+    )
+    joint_indices_primvar.Set(closest_joints.flatten().tolist())
+
+    joint_weights_primvar = mesh_binding.CreateJointWeightsPrimvar(
+        constant=False, elementSize=joint_per_vertex
+    )
+    joint_weights_primvar.Set(weights.flatten().tolist())
+
+    mesh_binding.CreateGeomBindTransformAttr().Set(Gf.Matrix4d().SetIdentity())
+
+    # Debug plot
+    if debug:
+        plt.figure(figsize=(10, 10))
+        ax = plt.gca()
+        ax.set_aspect("equal", adjustable="box")
+
+        # Plot mesh triangles
+        triangles = np.array(mesh.GetFaceVertexIndicesAttr().Get()).reshape(-1, 3)
+        plt.triplot(
+            vertices_2d[:, 0],
+            vertices_2d[:, 1],
+            triangles,
+            "go-",
+            label="Mesh",
+            linewidth=0.5,
+            markersize=0,
+        )
+
+        # Plot bones
+        plt.scatter(bones_2d[:, 0], bones_2d[:, 1], c="r", s=20, label="Joints")
+
+        # Plot joint names
+        for i, name in enumerate(joints):
+            plt.text(bones_2d[i, 0], bones_2d[i, 1], name.split("/")[-1], fontsize=8)
+
+        # Plot bone connections
+        joint_indices = {name: i for i, name in enumerate(joints)}
+        for i, joint_name in enumerate(joints):
+            if "/" in joint_name:
+                parent_name = "/".join(joint_name.split("/")[:-1])
+                if parent_name in joint_indices:
+                    parent_idx = joint_indices[parent_name]
+                    p1 = bones_2d[parent_idx]
+                    p2 = bones_2d[i]
+                    plt.plot([p1[0], p2[0]], [p1[1], p2[1]], "r-", linewidth=2)
+
+        plt.title("Mesh with Bones")
+        plt.xlabel("X")
+        plt.ylabel("Y")
+        plt.legend()
+        plt.grid()
+        plt.show()
