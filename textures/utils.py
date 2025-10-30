@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Sequence, Tuple
 from PIL import Image
 
 
@@ -289,10 +289,11 @@ def add_bones_to_mesh(
     mesh_size = max(v[1] for v in vertices) - min(v[1] for v in vertices)
 
     mesh_binding = UsdSkel.BindingAPI.Apply(mesh.GetPrim())
-    UsdSkel.BindingAPI.Apply(root.GetPrim())
+    root_mesh_binding = UsdSkel.BindingAPI.Apply(root.GetPrim())
     UsdSkel.BindingAPI.Apply(skel.GetPrim())
 
-    mesh_binding.CreateSkeletonRel().AddTarget(skel.GetPath())
+    # Use a relative path for the relation, otherwise Isaac Sim wont be able to work with instances (but it would work in usdview)
+    root_mesh_binding.CreateSkeletonRel().AddTarget(skel.GetPath().MakeRelativePath(root_mesh_binding.GetPrim().GetPath()))
 
     joints: List[str] = ["root_bone"]
     bindTransforms: List[Gf.Matrix4d] = [
@@ -322,14 +323,18 @@ def add_bones_to_mesh(
 
             # left bone: translate then rotate (compose as R * T)
             trans_l = Gf.Matrix4d()
-            trans_l.SetTranslateOnly(Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0))
+            trans_l.SetTranslateOnly(
+                Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0)
+            )
             rot_l = Gf.Matrix4d()
             rot_l.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), secondary_bones[i][j][0]))
             bindTransforms.append(trans_l * rot_l)
 
             # right bone: translate then rotate with mirrored yaw (compose as R * T)
             trans_r = Gf.Matrix4d()
-            trans_r.SetTranslateOnly(Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0))
+            trans_r.SetTranslateOnly(
+                Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0)
+            )
             rot_r = Gf.Matrix4d()
             rot_r.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), -secondary_bones[i][j][0]))
             bindTransforms.append(trans_r * rot_r)
@@ -341,46 +346,28 @@ def add_bones_to_mesh(
 
     # Compute skinning weights based on distance to joints
 
+    joint_per_vertex = 4
+
     skelCache = UsdSkel.Cache()
     skelQuery = skelCache.GetSkelQuery(skel)
     localSpaceXforms = skelQuery.ComputeJointLocalTransforms(0)
     print("Local Space Xforms:", localSpaceXforms)
     skelSpaceXforms = skelQuery.ComputeJointSkelTransforms(0)
     print("Skel Space Xforms:", skelSpaceXforms)
-    transforms = [xform.ExtractTranslation() for xform in skelSpaceXforms]
-
-    bones_2d = np.array([(t[0], t[1]) for t in transforms])
-    for i, pos in enumerate(bones_2d):
-        print(f"Joint {joints[i]} position: {pos}")
-
-    joint_per_vertex = 4
-
-    vertices_2d = np.array([(v[0], v[1]) for v in vertices])
-    # The distance of each vertex to each joint
-    print("vertices_2d shape:", vertices_2d.shape)
-    print("positions_2d shape:", bones_2d.shape)
-    distance_matrix = np.linalg.norm(
-        vertices_2d[:, np.newaxis, :] - bones_2d[np.newaxis, :, :], axis=2
-    )
-    # Find the two closest joints for each vertex
-    closest_joints = np.argsort(distance_matrix, axis=1)[:, :joint_per_vertex]
-    # Map the distances for the closest joints
-    distance_to_closests = np.take_along_axis(distance_matrix, closest_joints, axis=1)
-    # Compute the weight of the joints based on inverse distance
-    weights = 1.0 - (
-        distance_to_closests
-        / (np.sum(distance_to_closests, axis=1, keepdims=True) + 1e-8)
+    bone_translations = [xform.ExtractTranslation() for xform in skelSpaceXforms]
+    joint_indices_list, weights_list = compute_skinning(
+        bone_translations, vertices, joint_per_vertex=joint_per_vertex
     )
 
     joint_indices_primvar = mesh_binding.CreateJointIndicesPrimvar(
         constant=False, elementSize=joint_per_vertex
     )
-    joint_indices_primvar.Set(closest_joints.flatten().tolist())
+    joint_indices_primvar.Set(joint_indices_list)
 
     joint_weights_primvar = mesh_binding.CreateJointWeightsPrimvar(
         constant=False, elementSize=joint_per_vertex
     )
-    joint_weights_primvar.Set(weights.flatten().tolist())
+    joint_weights_primvar.Set(weights_list)
 
     mesh_binding.CreateGeomBindTransformAttr().Set(Gf.Matrix4d().SetIdentity())
 
@@ -389,6 +376,9 @@ def add_bones_to_mesh(
         plt.figure(figsize=(10, 10))
         ax = plt.gca()
         ax.set_aspect("equal", adjustable="box")
+
+        vertices_2d = np.array([(v[0], v[1]) for v in vertices])
+        bones_2d = np.array([(t[0], t[1]) for t in bone_translations])
 
         # Plot mesh triangles
         triangles = np.array(mesh.GetFaceVertexIndicesAttr().Get()).reshape(-1, 3)
@@ -426,3 +416,58 @@ def add_bones_to_mesh(
         plt.legend()
         plt.grid()
         plt.show()
+
+
+def compute_skinning(
+    bone_translations: Sequence[Gf.Vec3d | tuple[float, float, float]],
+    vertices: Sequence[Gf.Vec3d | tuple[float, float, float]],
+    joint_per_vertex: int = 2,
+) -> tuple[list[int], list[float]]:
+    """Compute skinning weights based on distance to joints.
+
+    Args:
+        bone_translations: List of Gf.Vec3d representing joint positions.
+        vertices: List of Gf.Vec3d representing mesh vertices.
+        joint_per_vertex: Number of joints influencing each vertex.
+
+    Returns:
+        Tuple of (joint_indices, weights) for skinning.
+    """
+    bones_2d = np.array([(t[0], t[1]) for t in bone_translations])
+    vertices_2d = np.array([(v[0], v[1]) for v in vertices])
+
+    # The distance of each vertex to each joint
+    distance_matrix = np.linalg.norm(
+        vertices_2d[:, np.newaxis, :] - bones_2d[np.newaxis, :, :], axis=2
+    )
+    # Find the closest joints for each vertex
+    closest_joints = np.argsort(distance_matrix, axis=1)[:, :joint_per_vertex]
+    print("closest_joints:", closest_joints, closest_joints.shape)
+    # Map the distances for the closest joints
+    distance_to_closests = np.take_along_axis(distance_matrix, closest_joints, axis=1)
+    print("distance_to_closests:", distance_to_closests, distance_to_closests.shape)
+    # Compute the weight of the joints based on inverse distance
+    distance_sums = np.sum(distance_to_closests, axis=1) + 1e-8
+    print("distance_sums:", distance_sums, distance_sums.shape)
+    print(
+        "distance_sums[:,np.newaxis]:",
+        distance_sums[:, np.newaxis],
+        distance_sums[:, np.newaxis].shape,
+    )
+    weights = np.ones_like(distance_to_closests)
+    weights[distance_sums > 0, :] = (
+        1 - distance_to_closests / distance_sums[:, np.newaxis]
+    )
+    print("Initial weights:", weights, weights.shape)
+
+    return closest_joints.flatten().tolist(), weights.flatten().tolist()
+
+
+if __name__ == "__main__":
+    vertices = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0)]
+    bone_translations = [(0, 0, 0), (1, 1, 0)]
+    joint_indices, weights = compute_skinning(
+        bone_translations, vertices, joint_per_vertex=2
+    )
+    print("Joint Indices:", joint_indices)
+    print("Weights:", weights)
