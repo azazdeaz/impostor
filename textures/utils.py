@@ -172,6 +172,8 @@ def triangulate_mask(
     stage: Usd.Stage,
     epsilon: float = 1.2,
     max_area: float = 1000,
+    leaf_size: float = 0.7,
+    anchor: Tuple[float, float] = (0.0, 0.0),
     debug: bool = False,
 ):
     """
@@ -245,8 +247,18 @@ def triangulate_mask(
     triangulation["vertices"][:, 0] -= center_x
     triangulation["vertices"][:, 1] -= center_y
 
+    # Shift the center to the anchor point
+    triangulation["vertices"][:, 0] += anchor[0] * w
+    triangulation["vertices"][:, 1] += anchor[1] * h
+
+    # Scale the leaf to the desired size
+    current_size = max(w, h)
+    scale_factor = leaf_size / current_size
+    triangulation["vertices"] *= scale_factor
+
     name = "/triangulated_mesh"
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    UsdGeom.SetStageMetersPerUnit(stage, 1.0)
     modelRoot = UsdGeom.Xform.Define(stage, f"{name}")
     Usd.ModelAPI(modelRoot).SetKind(Kind.Tokens.component)
     mesh = UsdGeom.Mesh.Define(stage, f"{name}/mesh")
@@ -338,7 +350,7 @@ def add_bones_to_mesh(
             rot_r = Gf.Matrix4d()
             rot_r.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), -secondary_bones[i][j][0]))
             bindTransforms.append(trans_r * rot_r)
-    restTransforms = bindTransforms.copy()
+    restTransforms = [Gf.Matrix4d().SetIdentity() for _ in joints]
 
     skel.CreateJointsAttr(joints)
     skel.CreateBindTransformsAttr(bindTransforms)
