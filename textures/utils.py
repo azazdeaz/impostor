@@ -247,6 +247,9 @@ def triangulate_mask(
     triangulation["vertices"][:, 0] -= center_x
     triangulation["vertices"][:, 1] -= center_y
 
+    # Flip back both axes
+    triangulation["vertices"] *= [-1, -1]
+
     # Shift the center to the anchor point
     triangulation["vertices"][:, 0] += anchor[0] * w
     triangulation["vertices"][:, 1] += anchor[1] * h
@@ -274,7 +277,6 @@ def triangulate_mask(
 def add_bones_to_mesh(
     stage: Usd.Stage,
     mesh_path: str,
-    root_position: Tuple[float, float],
     midrib_bones: List[Tuple[float, float]],
     secondary_bones: List[List[Tuple[float, float]]],
     debug: bool = False,
@@ -305,24 +307,27 @@ def add_bones_to_mesh(
     UsdSkel.BindingAPI.Apply(skel.GetPrim())
 
     # Use a relative path for the relation, otherwise Isaac Sim wont be able to work with instances (but it would work in usdview)
-    root_mesh_binding.CreateSkeletonRel().AddTarget(skel.GetPath().MakeRelativePath(root_mesh_binding.GetPrim().GetPath()))
+    root_mesh_binding.CreateSkeletonRel().AddTarget(
+        skel.GetPath().MakeRelativePath(root_mesh_binding.GetPrim().GetPath())
+    )
 
     joints: List[str] = ["root_bone"]
-    bindTransforms: List[Gf.Matrix4d] = [
-        Gf.Matrix4d().SetTranslate(
-            Gf.Vec3d(root_position[0] * mesh_size, root_position[1] * mesh_size, 0.0)
-        )
-    ]
+
+    # Local space default joint transforms
+    restTransforms: List[Gf.Matrix4d] = [Gf.Matrix4d().SetIdentity()]
+
+    def compose_transform(yaw: float, forward: float) -> Gf.Matrix4d:
+        trans = Gf.Matrix4d().SetTranslateOnly(Gf.Vec3d(0, forward, 0))
+        rot = Gf.Matrix4d().SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), yaw))
+        return rot * trans
 
     for i in range(len(midrib_bones)):
         joints.append(f"{joints[-1]}/mr{i}")
-        # Build translation then rotation, then compose as (R * T)
-        trans = Gf.Matrix4d()
-        trans.SetTranslateOnly(Gf.Vec3d(0, midrib_bones[i][1] * mesh_size, 0.0))
-        rot = Gf.Matrix4d()
-        rot.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), midrib_bones[i][0]))
-        # Multiply so the resulting matrix applies translation first, then rotation:
-        bindTransforms.append(trans * rot)
+        yaw = midrib_bones[i][0]
+        forward = midrib_bones[i][1] * mesh_size
+        restTransforms.append(
+            compose_transform(yaw, forward)
+        )
 
     for i in range(len(secondary_bones)):
         path_left = [joints[i]]
@@ -332,25 +337,23 @@ def add_bones_to_mesh(
             path_right.append(f"sb{i}_{j}r")
             joints.append("/".join(path_left))
             joints.append("/".join(path_right))
+            yaw = secondary_bones[i][j][0]
+            forward = secondary_bones[i][j][1] * mesh_size
+            restTransforms.append(compose_transform(yaw, forward))
+            restTransforms.append(compose_transform(-yaw, forward))
 
-            # left bone: translate then rotate (compose as R * T)
-            trans_l = Gf.Matrix4d()
-            trans_l.SetTranslateOnly(
-                Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0)
-            )
-            rot_l = Gf.Matrix4d()
-            rot_l.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), secondary_bones[i][j][0]))
-            bindTransforms.append(trans_l * rot_l)
-
-            # right bone: translate then rotate with mirrored yaw (compose as R * T)
-            trans_r = Gf.Matrix4d()
-            trans_r.SetTranslateOnly(
-                Gf.Vec3d(0, secondary_bones[i][j][1] * mesh_size, 0.0)
-            )
-            rot_r = Gf.Matrix4d()
-            rot_r.SetRotate(Gf.Rotation(Gf.Vec3d(0, 0, 1), -secondary_bones[i][j][0]))
-            bindTransforms.append(trans_r * rot_r)
-    restTransforms = [Gf.Matrix4d().SetIdentity() for _ in joints]
+    # World space joint transforms at bind time
+    bindTransforms: List[Gf.Matrix4d] = []
+    # Compute world space bind transforms
+    for joint, rest_transform in zip(joints, restTransforms):
+        parent_path = "/".join(joint.split("/")[:-1])
+        if parent_path:
+            parent_index = joints.index(parent_path)
+            parent_bind_transform = bindTransforms[parent_index]
+            bind_transform = rest_transform * parent_bind_transform
+        else:
+            bind_transform = rest_transform
+        bindTransforms.append(bind_transform)
 
     skel.CreateJointsAttr(joints)
     skel.CreateBindTransformsAttr(bindTransforms)
@@ -362,10 +365,7 @@ def add_bones_to_mesh(
 
     skelCache = UsdSkel.Cache()
     skelQuery = skelCache.GetSkelQuery(skel)
-    localSpaceXforms = skelQuery.ComputeJointLocalTransforms(0)
-    print("Local Space Xforms:", localSpaceXforms)
     skelSpaceXforms = skelQuery.ComputeJointSkelTransforms(0)
-    print("Skel Space Xforms:", skelSpaceXforms)
     bone_translations = [xform.ExtractTranslation() for xform in skelSpaceXforms]
     joint_indices_list, weights_list = compute_skinning(
         bone_translations, vertices, joint_per_vertex=joint_per_vertex
@@ -454,23 +454,15 @@ def compute_skinning(
     )
     # Find the closest joints for each vertex
     closest_joints = np.argsort(distance_matrix, axis=1)[:, :joint_per_vertex]
-    print("closest_joints:", closest_joints, closest_joints.shape)
     # Map the distances for the closest joints
     distance_to_closests = np.take_along_axis(distance_matrix, closest_joints, axis=1)
-    print("distance_to_closests:", distance_to_closests, distance_to_closests.shape)
     # Compute the weight of the joints based on inverse distance
     distance_sums = np.sum(distance_to_closests, axis=1) + 1e-8
-    print("distance_sums:", distance_sums, distance_sums.shape)
-    print(
-        "distance_sums[:,np.newaxis]:",
-        distance_sums[:, np.newaxis],
-        distance_sums[:, np.newaxis].shape,
-    )
+
     weights = np.ones_like(distance_to_closests)
     weights[distance_sums > 0, :] = (
         1 - distance_to_closests / distance_sums[:, np.newaxis]
     )
-    print("Initial weights:", weights, weights.shape)
 
     return closest_joints.flatten().tolist(), weights.flatten().tolist()
 
