@@ -8,6 +8,8 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "imgui-bundle==1.92.0",
+    "newton[examples]>=0.2.0",
     "numpy>=2.3.1",
     "opencv-python>=4.11.0.86",
     "pillow>=11.3.0",
@@ -38,5 +40,6 @@ dev = [
     "python-dotenv>=1.1.1",
     "ruff>=0.13.2",
     "scipy-stubs>=1.16.0.2",
+    "ty>=0.0.21",
     "types-usd>=24.5.2",
 ]

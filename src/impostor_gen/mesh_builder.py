@@ -1,4 +1,6 @@
-from typing import List, Optional, Sequence
+from __future__ import annotations
+
+from typing import List, Optional, Sequence, Union
 
 import numpy as np
 import rerun as rr
@@ -33,10 +35,14 @@ class Turtle(Transform3D):
     uv: UV = Field(default_factory=lambda: UV())
 
 
+
+class NodeBlueprint(BaseModel):
+    transform_index: int
+    blueprint: Union[StemBlueprint, LeafBlueprint]
 class StemBlueprint(BaseModel):
     transforms: List[Turtle] = Field(default_factory=lambda: [])
+    nodes: List[NodeBlueprint] = Field(default_factory=lambda: [])
     material_key: Optional[str] = None
-
 
 class LeafBlueprint(BaseModel):
     midrib: StemBlueprint
@@ -94,14 +100,13 @@ def apply_tropism(
     return rot_world * rotation
 
 
-def generate_blueprints(
+def generate_blueprint(
     symbols: Sequence[Symbol],
-) -> List[StemBlueprint | LeafBlueprint]:
+) -> StemBlueprint:
     turtle: Turtle = Turtle()
     transform_stack: List[Turtle] = []
-    closed_branches: List[StemBlueprint] = []
+    branch_point_stack: List[int] = []
     stack: List[StemBlueprint] = [StemBlueprint()]
-    finished_leaves: List[LeafBlueprint] = []
     current_leaf: Optional[LeafBlueprint] = None
 
     for symbol in symbols:
@@ -121,19 +126,28 @@ def generate_blueprints(
 
         elif isinstance(symbol, BranchOpen):
             transform_stack.append(turtle.model_copy())
+            parent = stack[-1]
+            branch_point_stack.append(max(0, len(parent.transforms) - 1))
             stack.append(StemBlueprint())
 
         elif isinstance(symbol, BranchClose):
             if len(stack) > 1:
                 complete_stem = stack.pop()
+                branch_idx = branch_point_stack.pop()
                 if current_leaf is not None:
                     if complete_stem is current_leaf.midrib:  # Leaf is done
-                        finished_leaves.append(current_leaf)
+                        stack[-1].nodes.append(NodeBlueprint(
+                            transform_index=branch_idx,
+                            blueprint=current_leaf,
+                        ))
                         current_leaf = None
                     else:
                         current_leaf.veins.append(complete_stem)
                 else:
-                    closed_branches.append(complete_stem)
+                    stack[-1].nodes.append(NodeBlueprint(
+                        transform_index=branch_idx,
+                        blueprint=complete_stem,
+                    ))
                 turtle = transform_stack.pop()
             else:
                 raise ValueError("Unmatched BranchClose symbol encountered.")
@@ -148,15 +162,12 @@ def generate_blueprints(
             current_leaf = LeafBlueprint(midrib=stack[-1])
 
         elif isinstance(symbol, Yaw):
-            # Positive angle = left turn; user semantic +(a)=right so you'd create Yaw(angle=-a) for '+'
             turtle.rotation = local_euler(turtle.rotation, "y", symbol.angle)
 
         elif isinstance(symbol, Pitch):
-            # Positive angle = pitch down
             turtle.rotation = local_euler(turtle.rotation, "x", symbol.angle)
 
         elif isinstance(symbol, Roll):
-            # Positive angle = counter-clockwise looking forward
             turtle.rotation = local_euler(turtle.rotation, "z", symbol.angle)
 
         elif isinstance(symbol, Tropism):
@@ -168,7 +179,23 @@ def generate_blueprints(
             if current_leaf is not None:
                 current_leaf.material_key = symbol.key
 
-    return stack + closed_branches + finished_leaves
+    return stack[0]
+
+
+def flatten_blueprint(root: StemBlueprint) -> List[StemBlueprint | LeafBlueprint]:
+    """Flatten the blueprint tree into a list (backward compat for generate_mesh/log_transforms)."""
+    result: List[StemBlueprint | LeafBlueprint] = [root]
+    for node in root.nodes:
+        if isinstance(node.blueprint, StemBlueprint):
+            result.extend(flatten_blueprint(node.blueprint))
+        else:
+            result.append(node.blueprint)
+    return result
+
+
+def generate_blueprints(symbols: Sequence[Symbol]) -> List[StemBlueprint | LeafBlueprint]:
+    """Generate blueprints and return a flat list (backward compat wrapper)."""
+    return flatten_blueprint(generate_blueprint(symbols))
 
 
 def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMesh3D":

@@ -8,8 +8,10 @@ from .core_symbols import F, Diameter, Pitch, Symbol
 
 import numpy as np
 
+
 class StemTip(Symbol):
     """Marker symbol for the tip of the stem."""
+
     num_sections: int = 0
 
     def __str__(self) -> str:
@@ -22,6 +24,12 @@ class StemContext(AgeingContext):
     section_length: float = Field(
         default=0.2, description="Length of each stem section segment"
     )
+    diameter_start: float = Field(
+        default=0.4, description="Diameter at the base of the stem"
+    )
+    diameter_end: float = Field(
+        default=0.15, description="Diameter at the tip of the stem"
+    )
 
     def section_growth_time(self) -> float:
         return self.section_length / self.growth_speed
@@ -31,16 +39,27 @@ class StemContext(AgeingContext):
         start_age = section_index * self.section_growth_time()
         end_age = start_age + self.section_growth_time()
         return (start_age, end_age)
-    
-    def create_next_section(self, created_section_count:int) -> Optional[F]:
-        target_length = np.minimum(self.target_length, 
-                                  self.growth_speed * self.age)
+
+    def create_next_section(
+        self, created_section_count: int
+    ) -> Optional[tuple[Diameter, F]]:
+        target_length = np.minimum(self.target_length, self.growth_speed * self.age)
         target_section_count = int(np.ceil(target_length / self.section_length))
         if target_section_count > created_section_count:
-            return F(
-                value_se=(0.0, self.section_length),
-                age_se=self.section_growth_schedule(created_section_count),
-                age_context_type=StemContext,
+            target_diameter = self.diameter_end + (
+                self.diameter_start - self.diameter_end
+            ) * (1 - created_section_count / target_section_count)
+            return (
+                Diameter(
+                    value_se=(0.0, target_diameter),
+                    age_se=self.section_growth_schedule(created_section_count),
+                    age_context_type=StemContext,
+                ),
+                F(
+                    value_se=(0.0, self.section_length),
+                    age_se=self.section_growth_schedule(created_section_count),
+                    age_context_type=StemContext,
+                ),
             )
 
 
@@ -54,15 +73,13 @@ class StemGrowthRule(Rule):
         if stem_context is None:
             return
 
-
         # Extend the stem
         next_section = stem_context.create_next_section(tip.num_sections)
         if next_section is not None:
             writer.write(
                 [
                     Pitch(angle=-2),
-                    Diameter(diameter=0.2),
-                    next_section,
+                    *next_section,
                     StemTip(num_sections=tip.num_sections + 1),
                 ]
             )
