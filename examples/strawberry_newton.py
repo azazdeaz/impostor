@@ -40,7 +40,7 @@ stem_material = Material(key="stem", diffuse_color=(0.4, 0.3, 0.1))
 # ── L-system rules ─────────────────────────────────────────────────────
 class Crown(AgeingContext):
     shoot_period: int = 12
-    max_shoots: int = 1
+    max_shoots: int = 3
     angle_step: float = 137.5
 
 
@@ -99,10 +99,10 @@ def grow_plant(iterations: int = 50):
 # ── Newton simulation example ──────────────────────────────────────────
 class Example:
     def __init__(self, viewer, args=None):
-        self.fps = 60
+        self.fps = 20
         self.frame_dt = 1.0 / self.fps
         self.sim_time = 0.0
-        self.sim_substeps = 10
+        self.sim_substeps = 20
         self.sim_dt = self.frame_dt / self.sim_substeps
 
         self.viewer = viewer
@@ -116,13 +116,19 @@ class Example:
             include_veins=True,
             rod_radius=0.2,
             bend_stiffness=1.0e5,
-            bend_damping=1.0e2,
+            bend_damping=1.0e-1,
         )
 
         # Ground plane
         builder.add_ground_plane(
             cfg=newton.ModelBuilder.ShapeConfig(ke=1e6, kd=1e1, mu=0.5)
         )
+
+        # SPHERE
+        self.sphere_pos = wp.vec3(0.0, -0.5, 0.8)
+        body_sphere = builder.add_body(xform=wp.transform(p=self.sphere_pos, q=wp.quat_identity()), label="sphere")
+        builder.add_shape_sphere(body_sphere, radius=0.55)
+
         builder.color()
 
         # Finalize
@@ -133,7 +139,7 @@ class Example:
 
         self.solver = newton.solvers.SolverVBD(
             self.model,
-            iterations=5,
+            iterations=30,
             friction_epsilon=0.1,
             rigid_enable_dahl_friction=False,
         )
@@ -162,9 +168,9 @@ class Example:
         for substep in range(self.sim_substeps):
             self.state_0.clear_forces()
             self.viewer.apply_forces(self.state_0)
-            if substep % 6 == 0:
+            if substep % 16 == 0:
                 self.collision_pipeline.collide(self.state_0, self.contacts)
-            self.solver.set_rigid_history_update(substep % 6 == 0)
+            self.solver.set_rigid_history_update(substep % 16 == 0)
             self.solver.step(
                 self.state_0, self.state_1, self.control, self.contacts, self.sim_dt
             )
@@ -175,6 +181,8 @@ class Example:
             wp.capture_launch(self.graph)
         else:
             self.simulate()
+        num_rigid = self.contacts.rigid_contact_count.numpy()[0]
+        print(f"Collisions: {num_rigid} rigid contacts")
         self.sim_time += self.frame_dt
 
     def render(self):

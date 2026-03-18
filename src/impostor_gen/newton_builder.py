@@ -173,6 +173,7 @@ def _add_plant_rods(
             xform=wp.transform(wp.vec3(0.0, 0.0, half), wp.quat_identity()),
             radius=r,
             half_height=half,
+            cfg=newton.ModelBuilder.ShapeConfig(collision_group=-1)
         )
 
         edge_u.append(u)
