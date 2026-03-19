@@ -30,7 +30,11 @@ from impostor_gen.engine.symbol import Symbol
 from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material
 from impostor_gen.mesh_builder import generate_blueprint
-from impostor_gen.newton_builder import build_newton_model
+from impostor_gen.newton_builder import (
+    bind_particles_to_bodies,
+    build_newton_model,
+    compute_cloth_local_offsets,
+)
 
 # ── Materials (only keys matter for physics) ────────────────────────────
 leaf_material = Material(key="leaf", diffuse_color=(0.2, 0.6, 0.1))
@@ -109,15 +113,19 @@ class Example:
 
         # Grow the plant and build as rod/cable structure
         blueprints = grow_plant(iterations=50)
-        builder = build_newton_model(
+        result = build_newton_model(
             blueprints,
             include_stems=True,
             include_midrib=True,
             include_veins=True,
+            include_cloth=True,
             rod_radius=0.2,
             bend_stiffness=1.0e5,
             bend_damping=1.0e-1,
         )
+        builder = result.builder
+        self.cloth_bindings = result.cloth_bindings
+        self.num_bindings = len(self.cloth_bindings.bind_particle_ids)
 
         # Ground plane
         builder.add_ground_plane(
@@ -127,9 +135,9 @@ class Example:
         # SPHERE
         self.sphere_pos = wp.vec3(0.0, -0.5, 0.8)
         body_sphere = builder.add_body(xform=wp.transform(p=self.sphere_pos, q=wp.quat_identity()), label="sphere")
-        builder.add_shape_sphere(body_sphere, radius=0.55)
+        builder.add_shape_sphere(body_sphere, radius=0.85)
 
-        builder.color()
+        builder.color(include_bending=True)
 
         # Finalize
         self.model = builder.finalize()
@@ -146,6 +154,14 @@ class Example:
         self.state_0 = self.model.state()
         self.state_1 = self.model.state()
         self.control = self.model.control()
+
+        # Compute cloth particle → body local offsets
+        if self.num_bindings > 0:
+            device = self.solver.device
+            self.bind_body_ids_wp, self.bind_particle_ids_wp, self.bind_local_offsets_wp = (
+                compute_cloth_local_offsets(self.state_0, self.cloth_bindings, device=device)
+            )
+
         self.collision_pipeline = newton.CollisionPipeline(
             self.model,
             broad_phase="nxn",
@@ -168,6 +184,24 @@ class Example:
         for substep in range(self.sim_substeps):
             self.state_0.clear_forces()
             self.viewer.apply_forces(self.state_0)
+
+            # Bind cloth particles to rod body transforms
+            if self.num_bindings > 0:
+                wp.launch(
+                    kernel=bind_particles_to_bodies,
+                    dim=self.num_bindings,
+                    inputs=[
+                        self.state_0.body_q,
+                        self.bind_body_ids_wp,
+                        self.bind_particle_ids_wp,
+                        self.bind_local_offsets_wp,
+                    ],
+                    outputs=[
+                        self.state_0.particle_q,
+                        self.state_1.particle_q,
+                    ],
+                )
+
             if substep % 16 == 0:
                 self.collision_pipeline.collide(self.state_0, self.contacts)
             self.solver.set_rigid_history_update(substep % 16 == 0)
