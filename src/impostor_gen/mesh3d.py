@@ -236,7 +236,7 @@ class Mesh3D(BaseModel):
         parent: Optional[str] = None,
     ) -> Usd.Stage:
         if stage is None:
-            stage = Usd.Stage.CreateNew("simpleShading.usda")
+            stage = Usd.Stage.CreateNew("mesh.usda")
 
         name = (
             self.name
