@@ -78,7 +78,7 @@ class StemGrowthRule(Rule):
         if next_section is not None:
             writer.write(
                 [
-                    Pitch(angle=-2),
+                    Pitch(angle=-4),
                     *next_section,
                     StemTip(num_sections=tip.num_sections + 1),
                 ]

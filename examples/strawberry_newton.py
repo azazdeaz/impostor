@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import numpy as np
+import rerun as rr
 import warp as wp
 from pydantic import BaseModel
 
@@ -28,8 +28,14 @@ from impostor_gen.engine import (
 )
 from impostor_gen.engine.symbol import Symbol
 from impostor_gen.leaf import create_trifoliate_leaf
-from impostor_gen.material import Material
-from impostor_gen.mesh_builder import generate_blueprint
+from impostor_gen.material import Material, MaterialRegistry
+from impostor_gen.mesh_builder import (
+    generate_blueprint,
+    generate_blueprints,
+    generate_mesh,
+    log_transforms,
+)
+from impostor_gen.mesh_utils import log_mesh
 from impostor_gen.newton_builder import (
     bind_particles_to_bodies,
     build_newton_model,
@@ -60,43 +66,52 @@ class IterateCrown(Rule, BaseModel):
         if shoot_count > self.shoots:
             self.shoots += 1
             roll = (age // crown.shoot_period) * crown.angle_step
-            pitch = -50 + age // crown.shoot_period * 6.0
+            pitch = -30 + age // crown.shoot_period * 6.0
             writer.write(
                 [
                     crown,
                     BranchOpen(),
                     MaterialKey(key="stem"),
-                    Diameter(diameter=0.41),
+                    Diameter(diameter=0.005),
                     F(length=0.0),
                     Roll(angle=roll),
                     Pitch(angle=pitch),
                     StemContext(
-                        target_length=5.2 + age * 0.02,
-                        growth_speed=0.2,
-                        section_length=0.8,
-                        diameter_start=0.4,
-                        diameter_end=0.25,
+                        target_length=0.26 + age * 0.001,
+                        growth_speed=0.01,
+                        section_length=0.04,
+                        diameter_start=0.005,
+                        diameter_end=0.00625,
                     ),
                     StemTip(),
-                    *create_trifoliate_leaf(leaf_material),
+                    *create_trifoliate_leaf(leaf_material, size_scale=0.05),
                     BranchClose(),
                 ]
             )
 
 
-class XY(Symbol):
-    x: float = 0.0
-    y: float = 0.0
-
 
 # ── Generate plant blueprints via L-system ──────────────────────────────
-def grow_plant(iterations: int = 50):
+def grow_plant(iterations: int = 50, visualize: bool = False):
+    if visualize:
+        rr.init("strawberry_newton_growth", spawn=True)
+        materials = MaterialRegistry()
+        materials.register(leaf_material)
+        materials.register(stem_material)
+
     lsystem = LSystem(
-        world=[Crown(), XY()],
+        world=[Crown()],
         rules=[InterpolateRule(), StemGrowthRule(), AgeingRule(), IterateCrown()],
     )
-    for _ in range(iterations):
+    for i in range(iterations):
         lsystem.iterate()
+        if visualize:
+            rr.set_time("iteration", sequence=i)
+            blueprints = generate_blueprints(lsystem.world)
+            log_transforms(blueprints)
+            meshes = generate_mesh(blueprints)
+            log_mesh(meshes, materials)
+
     return generate_blueprint(lsystem.world)
 
 
@@ -112,16 +127,19 @@ class Example:
         self.viewer = viewer
 
         # Grow the plant and build as rod/cable structure
-        blueprints = grow_plant(iterations=50)
+        # set visualize=True to view the growth process in rerun
+        blueprints = grow_plant(iterations=50, visualize=False)
         result = build_newton_model(
             blueprints,
             include_stems=True,
             include_midrib=True,
             include_veins=True,
             include_cloth=True,
-            rod_radius=0.2,
-            bend_stiffness=1.0e5,
-            bend_damping=1.0e-1,
+            rod_radius=1.0,
+            bend_stiffness_modulus=1.0e9,
+            stretch_stiffness_modulus=1.0e7,
+            bend_damping_modulus=1.0e6,
+            stretch_damping_modulus=1.0e1,
         )
         builder = result.builder
         self.cloth_bindings = result.cloth_bindings
@@ -133,9 +151,9 @@ class Example:
         )
 
         # SPHERE
-        self.sphere_pos = wp.vec3(0.0, -0.5, 0.8)
+        self.sphere_pos = wp.vec3(0.2, -0.225, 0.04)
         body_sphere = builder.add_body(xform=wp.transform(p=self.sphere_pos, q=wp.quat_identity()), label="sphere")
-        builder.add_shape_sphere(body_sphere, radius=0.85)
+        builder.add_shape_sphere(body_sphere, radius=0.04)
 
         builder.color(include_bending=True)
 

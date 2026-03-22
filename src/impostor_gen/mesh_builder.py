@@ -35,14 +35,16 @@ class Turtle(Transform3D):
     uv: UV = Field(default_factory=lambda: UV())
 
 
-
 class NodeBlueprint(BaseModel):
-    transform_index: int
+    parent_index: int
     blueprint: Union[StemBlueprint, LeafBlueprint]
+
+
 class StemBlueprint(BaseModel):
     transforms: List[Turtle] = Field(default_factory=lambda: [])
     nodes: List[NodeBlueprint] = Field(default_factory=lambda: [])
     material_key: Optional[str] = None
+
 
 class LeafBlueprint(BaseModel):
     midrib: StemBlueprint
@@ -136,18 +138,22 @@ def generate_blueprint(
                 branch_idx = branch_point_stack.pop()
                 if current_leaf is not None:
                     if complete_stem is current_leaf.midrib:  # Leaf is done
-                        stack[-1].nodes.append(NodeBlueprint(
-                            transform_index=branch_idx,
-                            blueprint=current_leaf,
-                        ))
+                        stack[-1].nodes.append(
+                            NodeBlueprint(
+                                parent_index=branch_idx,
+                                blueprint=current_leaf,
+                            )
+                        )
                         current_leaf = None
                     else:
                         current_leaf.veins.append(complete_stem)
                 else:
-                    stack[-1].nodes.append(NodeBlueprint(
-                        transform_index=branch_idx,
-                        blueprint=complete_stem,
-                    ))
+                    stack[-1].nodes.append(
+                        NodeBlueprint(
+                            parent_index=branch_idx,
+                            blueprint=complete_stem,
+                        )
+                    )
                 turtle = transform_stack.pop()
             else:
                 raise ValueError("Unmatched BranchClose symbol encountered.")
@@ -193,18 +199,19 @@ def flatten_blueprint(root: StemBlueprint) -> List[StemBlueprint | LeafBlueprint
     return result
 
 
-def generate_blueprints(symbols: Sequence[Symbol]) -> List[StemBlueprint | LeafBlueprint]:
+def generate_blueprints(
+    symbols: Sequence[Symbol],
+) -> List[StemBlueprint | LeafBlueprint]:
     """Generate blueprints and return a flat list (backward compat wrapper)."""
     return flatten_blueprint(generate_blueprint(symbols))
 
 
 def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMesh3D":
-    profile = Mesh2D.circle(radius=0.4, segments=7)
-
     mesh3d = CompundMesh3D()
 
     for blueprint in blueprints:
         if isinstance(blueprint, StemBlueprint):
+            profile = Mesh2D.circle(radius=1.0, segments=7)
             # Ensure we have at least two transforms
             if len(blueprint.transforms) >= 2:
                 stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)

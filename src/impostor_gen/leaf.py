@@ -1,5 +1,7 @@
 from typing import List
 
+import numpy as np
+
 from impostor_gen.curve import BezierCurve2D
 from impostor_gen.material import Material
 
@@ -21,12 +23,16 @@ class LeafContext(AgeingContext):
         return "Leaf"
 
 
-def create_leaf(material: Material) -> List[Symbol]:
+def create_leaf(material: Material, size_scale: float = 1.0) -> List[Symbol]:
     midrib_division = 8
     sec_vein_division = 4
-    step_size = 0.5
+    step_size = 0.5 * size_scale
 
-    leaf: List[Symbol] = [LeafContext(), MaterialKey(key=material.key), Diameter(diameter=0.1)]
+    leaf: List[Symbol] = [
+        LeafContext(),
+        MaterialKey(key=material.key),
+        Diameter(diameter=0.05 * size_scale),
+    ]
 
     growth_end_age = 8
 
@@ -55,7 +61,7 @@ def create_leaf(material: Material) -> List[Symbol]:
             symbols.append(Yaw(angle=lateral_yaws[i] if is_left else -lateral_yaws[i]))
             symbols.append(
                 F(
-                    value_se=(0.01, step_size * scale),
+                    value_se=(0.01 * size_scale, step_size * scale),
                     age_se=(0, growth_end_age),
                     age_context_type=LeafContext,
                 )
@@ -74,11 +80,11 @@ def create_leaf(material: Material) -> List[Symbol]:
     for mr in range(midrib_division):
         symbols: List[Symbol] = []
 
-        length = 0 if mr == 0 else 0.5
+        length = 0 if mr == 0 else 0.5 * size_scale
 
         symbols.append(
             F(
-                value_se=(0.01, length),
+                value_se=(0.01 * size_scale, length),
                 age_se=(0, growth_end_age),
                 age_context_type=LeafContext,
             )
@@ -86,7 +92,7 @@ def create_leaf(material: Material) -> List[Symbol]:
 
         symbols.append(
             Pitch(
-                value_se=(48, 7),
+                value_se=(48, np.random.uniform(-3, 5)),
                 age_se=(2, growth_end_age),
                 age_context_type=LeafContext,
             )
@@ -95,7 +101,7 @@ def create_leaf(material: Material) -> List[Symbol]:
         # Dont add lateral veins on the tip
         if mr < midrib_division - 1:
             symbols.append(BranchOpen())
-            symbols.append(Diameter(diameter=0.05))
+            symbols.append(Diameter(diameter=0.04 * size_scale))
             symbols.append(Yaw(angle=-90))
 
             # Add secondary vein on left side
@@ -103,7 +109,7 @@ def create_leaf(material: Material) -> List[Symbol]:
 
             symbols.append(BranchClose())
             symbols.append(BranchOpen())
-            symbols.append(Diameter(diameter=0.05))
+            symbols.append(Diameter(diameter=0.04 * size_scale))
             symbols.append(Yaw(angle=90))
 
             # Add secondary vein on right side
@@ -116,10 +122,10 @@ def create_leaf(material: Material) -> List[Symbol]:
     return [BranchOpen()] + leaf + [BranchClose()]
 
 
-def create_trifoliate_leaf(material: Material) -> List[Symbol]:
-    leaf_center = create_leaf(material)
-    leaf_left = create_leaf(material)
-    leaf_right = create_leaf(material)
+def create_trifoliate_leaf(material: Material, size_scale: float = 1.0) -> List[Symbol]:
+    leaf_center = create_leaf(material, size_scale=size_scale)
+    leaf_left = create_leaf(material, size_scale=size_scale)
+    leaf_right = create_leaf(material, size_scale=size_scale)
 
     def insert_after_branch_open(
         symbols: List[Symbol], to_insert: List[Symbol]

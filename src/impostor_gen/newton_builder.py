@@ -99,7 +99,7 @@ def _collect_graph(
             edges.append((parent_node_idx, offset))
         for child in blueprint.nodes:
             _collect_graph(child.blueprint, nodes, edges, scales,
-                           offset + child.transform_index,
+                           offset + child.parent_index,
                            include_stems, include_midrib, include_veins,
                            leaf_infos)
 
@@ -196,10 +196,10 @@ def _add_plant_rods(
     nodes: list[wp.vec3],
     edges: list[tuple[int, int]],
     radii: list[float],
-    bend_stiffness: float,
-    bend_damping: float,
-    stretch_stiffness: float,
-    stretch_damping: float,
+    bend_stiffness_modulus: float,
+    bend_damping_modulus: float,
+    stretch_stiffness_modulus: float,
+    stretch_damping_modulus: float,
     label: str | None = None,
     fix_roots: bool = True,
 ) -> tuple[list[int], list[int], dict[int, int]]:
@@ -287,10 +287,14 @@ def _add_plant_rods(
                 for ce in node_inc[nid]:
                     if ce == pe or visited[ce]:
                         continue
-
+                    
                     pz = edge_len[pe] if nid == edge_v[pe] else 0.0
                     cz = edge_len[ce] if nid == edge_v[ce] else 0.0
                     L = 0.5 * (edge_len[pe] + edge_len[ce])
+                    r = radii[nid]
+                    r2 = r * r
+                    r4 = r2 * r2
+                    print(f"Connecting body {edge_bodies[pe]} to {edge_bodies[ce]} with length {L:.4f} and radius {r:.4f} r2={r2:.6f} r4={r4:.6f}")
 
                     j = builder.add_joint_cable(
                         parent=edge_bodies[pe],
@@ -301,10 +305,10 @@ def _add_plant_rods(
                         child_xform=wp.transform(
                             wp.vec3(0.0, 0.0, cz), wp.quat_identity()
                         ),
-                        bend_stiffness=bend_stiffness / L,
-                        bend_damping=bend_damping,
-                        stretch_stiffness=stretch_stiffness / L,
-                        stretch_damping=stretch_damping,
+                        bend_stiffness=bend_stiffness_modulus * r4 / L,
+                        bend_damping=bend_damping_modulus * r4 / L,
+                        stretch_stiffness=stretch_stiffness_modulus * r2 / L,
+                        stretch_damping=stretch_damping_modulus * r2 / L,
                         collision_filter_parent=True,
                         enabled=True,
                     )
@@ -474,10 +478,10 @@ def build_newton_model(
     include_veins: bool = True,
     include_cloth: bool = False,
     rod_radius: float = 0.02,
-    bend_stiffness: float = 1.0e2,
-    bend_damping: float = 1.0e-1,
-    stretch_stiffness: float = 1.0e9,
-    stretch_damping: float = 0.0,
+    bend_stiffness_modulus: float = 1.0e2,
+    bend_damping_modulus: float = 1.0e-1,
+    stretch_stiffness_modulus: float = 1.0e9,
+    stretch_damping_modulus: float = 0.0,
     fix_root: bool = True,
     # Cloth parameters
     cloth_density: float = 1.0e-4,
@@ -501,7 +505,7 @@ def build_newton_model(
     nodes: list[wp.vec3] = []
     edges: list[tuple[int, int]] = []
     scales: list[float] = []
-    leaf_infos: list[_LeafClothInfo] = [] if include_cloth else []
+    leaf_infos: list[_LeafClothInfo] = [] if include_cloth else [] # TODO why??
     _collect_graph(
         root, nodes, edges, scales, None,
         include_stems, include_midrib, include_veins,
@@ -524,10 +528,10 @@ def build_newton_model(
             nodes,
             edges,
             radii,
-            bend_stiffness,
-            bend_damping,
-            stretch_stiffness,
-            stretch_damping,
+            bend_stiffness_modulus,
+            bend_damping_modulus,
+            stretch_stiffness_modulus,
+            stretch_damping_modulus,
             label="plant",
             fix_roots=fix_root,
         )
