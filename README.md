@@ -14,7 +14,8 @@
 - Visualize plant growth with Rerun: `uv run examples/strawberry.py`
 
 
-https://github.com/user-attachments/assets/a9bbd0c0-20f6-40a4-bde7-799059518a20
+
+https://github.com/user-attachments/assets/35efc678-b151-46ab-a437-c55a1c7ac9a5
 
 https://github.com/user-attachments/assets/e50ebc65-a6dc-4384-bd2b-015be679feba
 
