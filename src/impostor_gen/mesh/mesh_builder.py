@@ -20,11 +20,10 @@ from ..engine import (
     Tropism,
     Yaw,
 )
-from .extrude import extrude_mesh2d_along_points
 from ..leaf import LeafContext
-from .mesh2d import Mesh2D
-from .mesh3d import CompundMesh3D, Mesh3D
-from ..transform_3d import Transform3D, Vector3
+from .mesh_context import MeshContext
+from .mesh3d import CompundMesh3D
+from ..transform_3d import Transform3D
 
 FORWARD = np.array([0.0, 0.0, 1.0])
 
@@ -42,12 +41,14 @@ class StemBlueprint(BaseModel):
     transforms: List[Turtle] = Field(default_factory=lambda: [])
     nodes: List[NodeBlueprint] = Field(default_factory=lambda: [])
     material_key: Optional[str] = None
+    mesh_context: Optional[MeshContext] = None
 
 
 class LeafBlueprint(BaseModel):
     midrib: StemBlueprint
     veins: List[StemBlueprint] = Field(default_factory=lambda: [])
     material_key: Optional[str] = None
+    mesh_context: Optional[MeshContext] = None
 
     @property
     def transforms(self) -> List[Turtle]:
@@ -180,6 +181,12 @@ def generate_blueprint(
             if current_leaf is not None:
                 current_leaf.material_key = symbol.key
 
+        elif isinstance(symbol, MeshContext):
+            blueprint = stack[-1]
+            blueprint.mesh_context = symbol
+            if current_leaf is not None:
+                current_leaf.mesh_context = symbol
+
     return stack[0]
 
 
@@ -205,83 +212,10 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
     mesh3d = CompundMesh3D()
 
     for blueprint in blueprints:
-        if isinstance(blueprint, StemBlueprint):
-            profile = Mesh2D.circle(radius=1.0, segments=7)
-            # Ensure we have at least two transforms
-            if len(blueprint.transforms) >= 2:
-                stem_mesh = extrude_mesh2d_along_points(profile, blueprint.transforms)
-                stem_mesh.material_key = blueprint.material_key
-                mesh3d = mesh3d.merge(stem_mesh)
+        if blueprint.mesh_context is not None:
+            visual = blueprint.mesh_context.generate_visual(blueprint)
+            mesh3d = mesh3d.merge(visual)
 
-        else:  # LeafBlueprint
-            # This expects that all the lateral veins have the same number of transforms
-            midrib_div = len(blueprint.midrib.transforms)
-
-            layers: List[List[np.ndarray]] = []
-
-            assert len(blueprint.veins) == (midrib_div - 1) * 2, (
-                f"Each midrib section must have two secondary veins except the tip. Found {len(blueprint.veins)} veins for {midrib_div} midrib sections."
-            )
-
-            for i in range(midrib_div):
-                if i == midrib_div - 1:
-                    layers.append([blueprint.midrib.transforms[i].position])
-                else:
-                    layers.append(
-                        [t.position for t in blueprint.veins[i * 2].transforms[::-1]]
-                        + [blueprint.midrib.transforms[i].position]
-                        + [t.position for t in blueprint.veins[i * 2 + 1].transforms]
-                    )
-
-            vertices = np.concatenate(layers)
-            one_start = 0
-            faces: List[List[int]] = []
-            is_closed = False
-            winding_clockwise = True
-
-            for i in range(len(layers) - 1):
-                two_start = one_start + len(layers[i])
-                one_id = 0
-                two_id = 0
-                one_size = len(layers[i])
-                two_size = len(layers[i + 1])
-
-                id_margin = 0 if is_closed else 1
-                while one_id < one_size - id_margin or two_id < two_size - id_margin:
-                    id1 = one_start + one_id % one_size
-                    id2 = two_start + two_id % two_size
-                    id1_next = one_start + (one_id + 1) % one_size
-                    id2_next = two_start + (two_id + 1) % two_size
-
-                    # the positions of the vertices on the layer from 0 to 1
-                    up_progress = one_id / one_size
-                    down_progress = two_id / two_size
-
-                    if up_progress > down_progress:
-                        if winding_clockwise:
-                            new_face = [id1, id2_next, id2]
-                        else:
-                            new_face = [id1, id2, id2_next]
-                        two_id += 1
-                    else:
-                        if winding_clockwise:
-                            new_face = [id1, id1_next, id2]
-                        else:
-                            new_face = [id1, id2, id1_next]
-                        one_id += 1
-
-                    # Add the face to the list of faces
-                    faces.append(new_face)
-
-                one_start = two_start
-
-            leaf_mesh = Mesh3D(
-                vertex_positions=vertices,
-                # vertex_texcoords=uv_grid.reshape(-1, 2),
-                triangle_indices=np.array(faces),
-                material_key=blueprint.material_key,
-            )
-            mesh3d = mesh3d.merge(leaf_mesh)
     return mesh3d
 
 

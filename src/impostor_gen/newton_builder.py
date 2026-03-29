@@ -335,72 +335,20 @@ def _build_leaf_cloth(
     edge_ke: float,
     edge_kd: float,
     particle_radius: float,
+    bind_distance: float = 1e-4,
 ) -> ClothBinding:
     """Build a cloth mesh for a single leaf and bind particles to rod bodies."""
     bp = leaf_info.blueprint
-    midrib_div = len(bp.midrib.transforms)
-    if midrib_div < 2 or len(bp.veins) != (midrib_div - 1) * 2:
+
+    if bp.mesh_context is None:
         return ClothBinding()
 
-    # ── Build vertex layers (same algorithm as mesh_builder.generate_mesh) ──
-    layers: list[list[wp.vec3]] = []
-    # Parallel list of graph-node indices (or -1 for non-bound vertices)
-    layer_node_ids: list[list[int]] = []
+    collider = bp.mesh_context.generate_collider(bp)
+    if collider.triangle_indices is None or len(collider.vertex_positions) == 0:
+        return ClothBinding()
 
-    midrib_ni = leaf_info.midrib_node_indices
-    vein_ni = leaf_info.vein_node_indices
-
-    for i in range(midrib_div):
-        if i == midrib_div - 1:
-            layers.append([nodes[midrib_ni[i]]])
-            layer_node_ids.append([midrib_ni[i]])
-        else:
-            left_vein = bp.veins[i * 2]
-            right_vein = bp.veins[i * 2 + 1]
-            left_ni = vein_ni[i * 2] if i * 2 < len(vein_ni) else []
-            right_ni = vein_ni[i * 2 + 1] if i * 2 + 1 < len(vein_ni) else []
-
-            row_pos = (
-                [_to_wp(t.position) for t in left_vein.transforms[::-1]]
-                + [nodes[midrib_ni[i]]]
-                + [_to_wp(t.position) for t in right_vein.transforms]
-            )
-            row_ids = (
-                list(reversed(left_ni))
-                + [midrib_ni[i]]
-                + list(right_ni)
-            )
-            layers.append(row_pos)
-            layer_node_ids.append(row_ids)
-
-    # Flatten vertices
-    vertices: list[wp.vec3] = []
-    flat_node_ids: list[int] = []
-    for row_pos, row_ids in zip(layers, layer_node_ids):
-        vertices.extend(row_pos)
-        flat_node_ids.extend(row_ids)
-
-    # ── Triangulate between layers (progress-based, same as mesh_builder) ──
-    indices: list[int] = []
-    one_start = 0
-    for i in range(len(layers) - 1):
-        two_start = one_start + len(layers[i])
-        one_id = 0
-        two_id = 0
-        one_size = len(layers[i])
-        two_size = len(layers[i + 1])
-        while one_id < one_size - 1 or two_id < two_size - 1:
-            id1 = one_start + one_id % one_size
-            id2 = two_start + two_id % two_size
-            id1_next = one_start + (one_id + 1) % one_size
-            id2_next = two_start + (two_id + 1) % two_size
-            if one_id / one_size > two_id / two_size:
-                indices.extend([id1, id2_next, id2])
-                two_id += 1
-            else:
-                indices.extend([id1, id1_next, id2])
-                one_id += 1
-        one_start = two_start
+    vertices = [_to_wp(v) for v in collider.vertex_positions]
+    indices = collider.triangle_indices.flatten().tolist()
 
     if not indices:
         return ClothBinding()
@@ -423,14 +371,21 @@ def _build_leaf_cloth(
         particle_radius=particle_radius,
     )
 
-    # ── Bind particles on midrib/vein positions to rod bodies ──
+    # ── Bind particles to nearest rod bodies (proximity-based) ──
     binding = ClothBinding()
-    for local_idx, graph_node in enumerate(flat_node_ids):
-        if graph_node < 0 or graph_node not in node_to_body:
+    node_positions = np.array(
+        [[float(n[0]), float(n[1]), float(n[2])] for n in nodes]
+    )
+    for local_idx, vtx_pos in enumerate(collider.vertex_positions):
+        dists = np.linalg.norm(node_positions - vtx_pos, axis=1)
+        nearest_node = int(np.argmin(dists))
+        if dists[nearest_node] > bind_distance:
+            continue
+        if nearest_node not in node_to_body:
             continue
         p_idx = particle_start + local_idx
         binding.bind_particle_ids.append(p_idx)
-        binding.bind_body_ids.append(node_to_body[graph_node])
+        binding.bind_body_ids.append(node_to_body[nearest_node])
         builder.particle_flags[p_idx] = (
             builder.particle_flags[p_idx] & ~ParticleFlags.ACTIVE
         )

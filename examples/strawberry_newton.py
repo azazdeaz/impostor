@@ -36,6 +36,7 @@ from impostor_gen.mesh.mesh_builder import (
     log_transforms,
 )
 from impostor_gen.mesh.mesh_utils import log_mesh
+from impostor_gen.mesh.stem_mesh_context import StemMeshContext
 from impostor_gen.newton_builder import (
     bind_particles_to_bodies,
     build_newton_model,
@@ -72,6 +73,7 @@ class IterateCrown(Rule, BaseModel):
                     crown,
                     BranchOpen(),
                     MaterialKey(key="stem"),
+                    StemMeshContext(),
                     Diameter(diameter=0.005),
                     F(length=0.0),
                     Roll(angle=roll),

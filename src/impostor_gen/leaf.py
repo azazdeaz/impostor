@@ -4,6 +4,7 @@ import numpy as np
 
 from impostor_gen.curve import BezierCurve2D
 from impostor_gen.material import Material
+from impostor_gen.mesh.leaf_mesh_context import LeafMeshContext
 
 from .engine import (
     AgeingContext,
@@ -30,6 +31,7 @@ def create_leaf(material: Material, size_scale: float = 1.0) -> List[Symbol]:
 
     leaf: List[Symbol] = [
         LeafContext(),
+        LeafMeshContext(),
         MaterialKey(key=material.key),
         Diameter(diameter=0.05 * size_scale),
     ]

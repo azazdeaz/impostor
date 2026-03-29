@@ -27,6 +27,7 @@ from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material, MaterialRegistry
 from impostor_gen.mesh.mesh_builder import generate_blueprints, generate_mesh, log_transforms
 from impostor_gen.mesh.mesh_utils import log_mesh
+from impostor_gen.mesh.stem_mesh_context import StemMeshContext
 from impostor_gen.usd_animation import UsdAnimation
 import numpy as np
 
@@ -74,6 +75,7 @@ class IterateCrown(Rule, BaseModel):
                     crown,
                     BranchOpen(),
                     MaterialKey(key="stem"),
+                    StemMeshContext(),
                     Diameter(diameter=0.21),
                     F(length=0.0),
                     Roll(angle=roll),
