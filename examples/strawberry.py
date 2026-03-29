@@ -25,8 +25,8 @@ from impostor_gen.engine import (
 from impostor_gen.engine.symbol import Symbol
 from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material, MaterialRegistry
-from impostor_gen.mesh_builder import generate_blueprints, generate_mesh, log_transforms
-from impostor_gen.mesh_utils import log_mesh
+from impostor_gen.mesh.mesh_builder import generate_blueprints, generate_mesh, log_transforms
+from impostor_gen.mesh.mesh_utils import log_mesh
 from impostor_gen.usd_animation import UsdAnimation
 import numpy as np
 
@@ -90,11 +90,6 @@ class IterateCrown(Rule, BaseModel):
             )
 
 
-class XY(Symbol):
-    x: float = 0.0
-    y: float = 0.0
-
-
 def main():
     materials = MaterialRegistry()
     # materials.register(leaf_material)
@@ -102,7 +97,7 @@ def main():
 
     # Define an L-system
     lsystem = LSystem(
-        world=[Crown(), XY()],
+        world=[Crown()],
         rules=[
             InterpolateRule(),
             StemGrowthRule(),

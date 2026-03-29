@@ -9,10 +9,10 @@ import rerun as rr
 from PIL import Image
 
 from impostor_gen.material import MaterialRegistry
-from impostor_gen.mesh3d import Mesh3D
-from impostor_gen.mesh_builder import CompundMesh3D
+from .mesh3d import Mesh3D
+from .mesh_builder import CompundMesh3D
 
-from .transform_3d import Transform3D
+from ..transform_3d import Transform3D
 
 
 def merge_meshes(meshes: List[trimesh.Trimesh]) -> trimesh.Trimesh:

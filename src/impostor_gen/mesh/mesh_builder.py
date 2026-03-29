@@ -7,7 +7,7 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
-from .engine import (
+from ..engine import (
     BranchClose,
     BranchOpen,
     Diameter,
@@ -21,10 +21,10 @@ from .engine import (
     Yaw,
 )
 from .extrude import extrude_mesh2d_along_points
-from .leaf import LeafContext
+from ..leaf import LeafContext
 from .mesh2d import Mesh2D
 from .mesh3d import CompundMesh3D, Mesh3D
-from .transform_3d import Transform3D, Vector3
+from ..transform_3d import Transform3D, Vector3
 
 FORWARD = np.array([0.0, 0.0, 1.0])
 

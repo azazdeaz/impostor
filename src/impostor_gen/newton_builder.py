@@ -9,7 +9,7 @@ import warp as wp
 from newton import ParticleFlags
 from newton.math import quat_between_vectors_robust
 
-from .mesh_builder import LeafBlueprint, StemBlueprint
+from .mesh.mesh_builder import LeafBlueprint, StemBlueprint
 
 
 @dataclass

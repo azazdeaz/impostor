@@ -1,9 +1,9 @@
 from typing import List
 import numpy as np
 
-from impostor_gen.mesh2d import Mesh2D
-from impostor_gen.transform_3d import Transform3D
-from impostor_gen.mesh3d import Mesh3D
+from .mesh2d import Mesh2D
+from ..transform_3d import Transform3D
+from .mesh3d import Mesh3D
 
 
 def extrude_mesh2d_along_points(shape: Mesh2D, frames: list[Transform3D]) -> Mesh3D:

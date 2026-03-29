@@ -1,5 +1,5 @@
 from impostor_gen.material import MaterialRegistry
-from impostor_gen.mesh3d import CompundMesh3D
+from impostor_gen.mesh.mesh3d import CompundMesh3D
 
 
 from pxr import Usd, UsdGeom

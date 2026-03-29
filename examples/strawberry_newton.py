@@ -29,13 +29,13 @@ from impostor_gen.engine import (
 from impostor_gen.engine.symbol import Symbol
 from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material, MaterialRegistry
-from impostor_gen.mesh_builder import (
+from impostor_gen.mesh.mesh_builder import (
     generate_blueprint,
     generate_blueprints,
     generate_mesh,
     log_transforms,
 )
-from impostor_gen.mesh_utils import log_mesh
+from impostor_gen.mesh.mesh_utils import log_mesh
 from impostor_gen.newton_builder import (
     bind_particles_to_bodies,
     build_newton_model,

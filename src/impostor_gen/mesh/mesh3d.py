@@ -8,9 +8,9 @@ import trimesh
 from pxr import Kind, Sdf, Usd, UsdGeom, UsdShade
 from pydantic import BaseModel, Field, model_validator
 
-from impostor_gen.material import MaterialRegistry
+from ..material import MaterialRegistry
 
-from .transform_3d import Transform3D
+from ..transform_3d import Transform3D
 
 
 def concat_optional_arrays(

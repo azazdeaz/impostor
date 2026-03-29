@@ -1,7 +1,7 @@
 from typing import Optional
 import numpy as np
 from pydantic import BaseModel, Field, model_validator
-from impostor_gen.mesh3d import Mesh3D
+from .mesh3d import Mesh3D
 
 
 class Mesh2D(BaseModel):
