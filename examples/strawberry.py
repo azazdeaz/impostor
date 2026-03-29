@@ -26,7 +26,7 @@ from impostor_gen.engine.symbol import Symbol
 from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material, MaterialRegistry
 from impostor_gen.mesh.mesh_builder import generate_blueprints, generate_mesh, log_transforms
-from impostor_gen.mesh.mesh_utils import log_mesh
+from impostor_gen.mesh.mesh_utils import log_mesh, log_wireframe
 from impostor_gen.mesh.stem_mesh_context import StemMeshContext
 from impostor_gen.usd_animation import UsdAnimation
 import numpy as np
@@ -122,6 +122,7 @@ def main():
         log_transforms(blueprints)
         meshes = generate_mesh(blueprints)
         log_mesh(meshes, materials)
+        log_wireframe(meshes)
         lsystem.log_graph()
         lsystem.log_as_markdown()
 

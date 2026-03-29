@@ -83,6 +83,33 @@ def log_mesh(mesh: Mesh3D | CompundMesh3D, materials: MaterialRegistry):
         rr.log(f"mesh/material_{material_key}", rr.Asset3D(contents=asset, albedo_factor=(1.0, 1.0, 1.0, 0.5)))  # type: ignore
 
 
+def log_wireframe(mesh: Mesh3D | CompundMesh3D):
+    """Log mesh edges as lines to rerun."""
+    if isinstance(mesh, Mesh3D):
+        mesh = CompundMesh3D(submeshes=[mesh])
+
+    material_groups: Dict[str, List[Mesh3D]] = defaultdict(list)
+    for m in mesh.submeshes:
+        material_groups[m.material_key or "__default"].append(m)
+
+    for material_key, meshes_list in material_groups.items():
+        all_strips: list[np.ndarray] = []
+        for m in meshes_list:
+            verts = m.vertex_positions
+            if m.triangle_indices is not None:
+                for tri in m.triangle_indices:
+                    a, b, c = tri
+                    all_strips.append(verts[[a, b, c, a]])
+            if m.line_indices is not None:
+                for line in m.line_indices:
+                    all_strips.append(verts[line])
+        if all_strips:
+            rr.log(
+                f"wireframe/material_{material_key}",
+                rr.LineStrips3D(all_strips),
+            )
+
+
 def create_mesh_with_texture(
     vertices: np.ndarray,
     faces: np.ndarray,

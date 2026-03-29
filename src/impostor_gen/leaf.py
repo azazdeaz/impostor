@@ -39,7 +39,7 @@ def create_leaf(material: Material, size_scale: float = 1.0) -> List[Symbol]:
     growth_end_age = 8
 
     lateral_scales = BezierCurve2D(
-        [(0, 0.4), (0.2, 1.1), (0.3, 1.0), (0.4, 0.4), (1.0, 0.0)]
+        [(0, 0.4), (0.2, 1.1), (0.3, 0.7), (0.4, 0.4), (1.0, 0.0)]
     )
     lateral_scales = lateral_scales.sample_y_evenly(midrib_division)
 
