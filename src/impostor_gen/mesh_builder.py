@@ -7,8 +7,6 @@ import rerun as rr
 from pydantic import BaseModel, Field
 from scipy.spatial.transform import Rotation
 
-from impostor_gen.engine.core_symbols import UV
-
 from .engine import (
     BranchClose,
     BranchOpen,
@@ -32,7 +30,7 @@ FORWARD = np.array([0.0, 0.0, 1.0])
 
 
 class Turtle(Transform3D):
-    uv: UV = Field(default_factory=lambda: UV())
+    pass
 
 
 class NodeBlueprint(BaseModel):
@@ -122,9 +120,6 @@ def generate_blueprint(
 
         elif isinstance(symbol, Diameter):
             turtle.set_scale(symbol.diameter)
-
-        elif isinstance(symbol, UV):
-            turtle.uv = symbol.model_copy()
 
         elif isinstance(symbol, BranchOpen):
             transform_stack.append(turtle.model_copy())
