@@ -39,11 +39,9 @@ from impostor_gen.mesh.mesh_builder import (
 from impostor_gen.mesh.mesh_utils import log_mesh
 from impostor_gen.mesh.stem_mesh_context import StemMeshContext
 from impostor_gen.newton_builder import (
-    bind_particles_to_bodies,
     build_newton_model,
-    compute_cloth_local_offsets,
-    prepare_visual_skin_gpu,
-    skin_visual_mesh,
+    ClothBindingHelper,
+    PlantSkinRenderer,
 )
 
 # ── Materials (only keys matter for physics) ────────────────────────────
@@ -85,8 +83,8 @@ class IterateCrown(Rule, BaseModel):
                         target_length=0.26 + age * 0.001,
                         growth_speed=0.01,
                         section_length=0.04,
-                        diameter_start=0.005,
-                        diameter_end=0.00625,
+                        diameter_start=0.006,
+                        diameter_end=0.0036,
                     ),
                     StemTip(),
                     *create_trifoliate_leaf(leaf_material, size_scale=0.05),
@@ -147,9 +145,6 @@ class Example:
             stretch_damping_modulus=1.0e1,
         )
         builder = result.builder
-        self.cloth_bindings = result.cloth_bindings
-        self.num_bindings = len(self.cloth_bindings.bind_particle_ids)
-        self.visual_skin = result.visual_skin
 
         # Ground plane
         builder.add_ground_plane(
@@ -179,12 +174,13 @@ class Example:
         self.state_1 = self.model.state()
         self.control = self.model.control()
 
-        # Compute cloth particle → body local offsets
-        if self.num_bindings > 0:
-            device = self.solver.device
-            self.bind_body_ids_wp, self.bind_particle_ids_wp, self.bind_local_offsets_wp = (
-                compute_cloth_local_offsets(self.state_0, self.cloth_bindings, device=device)
-            )
+        # Cloth binding helper: pins leaf particles to rod bodies each substep
+        # Skin renderer: drives the high-res visual mesh from simulation state
+        device = self.solver.device
+        self.cloth_helper = ClothBindingHelper(
+            self.state_0, result.cloth_bindings, device=device,
+        )
+        self.skin_renderer = PlantSkinRenderer(result.skin, device=device)
 
         self.collision_pipeline = newton.CollisionPipeline(
             self.model,
@@ -192,22 +188,6 @@ class Example:
             soft_contact_margin=0.005,
         )
         self.contacts = self.collision_pipeline.contacts()
-
-        # Prepare visual skinning GPU arrays
-        self.has_visual_skin = self.visual_skin is not None
-        if self.has_visual_skin:
-            device = self.solver.device
-            skin = self.visual_skin
-            assert skin is not None
-            (
-                self.vis_indices_wp,
-                self.vis_collider_tris_wp,
-                self.vis_face_ids_wp,
-                self.vis_bary_u_wp,
-                self.vis_bary_v_wp,
-                self.vis_positions_wp,
-            ) = prepare_visual_skin_gpu(skin, device=device)
-            self.vis_num_verts = skin.num_visual_verts
 
         self.viewer.set_model(self.model)
         self.viewer.show_triangles = False  # hide collision cloth
@@ -226,22 +206,8 @@ class Example:
             self.state_0.clear_forces()
             self.viewer.apply_forces(self.state_0)
 
-            # Bind cloth particles to rod body transforms
-            if self.num_bindings > 0:
-                wp.launch(
-                    kernel=bind_particles_to_bodies,
-                    dim=self.num_bindings,
-                    inputs=[
-                        self.state_0.body_q,
-                        self.bind_body_ids_wp,
-                        self.bind_particle_ids_wp,
-                        self.bind_local_offsets_wp,
-                    ],
-                    outputs=[
-                        self.state_0.particle_q,
-                        self.state_1.particle_q,
-                    ],
-                )
+            # Move pinned cloth particles to match their rod bodies
+            self.cloth_helper.bind(self.state_0, self.state_1)
 
             if substep % 16 == 0:
                 self.collision_pipeline.collide(self.state_0, self.contacts)
@@ -265,40 +231,9 @@ class Example:
         self.viewer.log_state(self.state_0)
         self.viewer.log_contacts(self.contacts, self.state_0)
 
-        # Skin and render high-resolution visual leaves
-        if self.has_visual_skin:
-            wp.launch(
-                kernel=skin_visual_mesh,
-                dim=self.vis_num_verts,
-                inputs=[
-                    self.state_0.particle_q,
-                    self.vis_collider_tris_wp,
-                    self.vis_face_ids_wp,
-                    self.vis_bary_u_wp,
-                    self.vis_bary_v_wp,
-                ],
-                outputs=[self.vis_positions_wp],
-            )
-            self.viewer.log_mesh(
-                "/geo/visual_leaves",
-                self.vis_positions_wp,
-                self.vis_indices_wp,
-                backface_culling=False,
-            )
-            # Set leaf color to green via the GL ObjectColor attribute.
-            # HACK: MeshGL.update_texture() uploads the texture but never sets
-            # the shader's texture_enable flag (attribute 8, w-component stays
-            # 0.0), so the `texture` param of log_mesh is silently ignored.
-            # As a workaround we poke the ObjectColor attribute (location 7)
-            # directly.
-            # TODO: Once Newton fixes MeshGL texture_enable, replace this with
-            #       log_mesh(..., texture=<green 1x1 image>) and drop the GL calls.
-            mesh_gl = self.viewer.objects["/geo/visual_leaves"]
-            from newton._src.viewer.gl.opengl import RendererGL
-            gl = RendererGL.gl
-            gl.glBindVertexArray(mesh_gl.vao)
-            gl.glVertexAttrib3f(7, 0.2, 0.6, 0.1)
-            gl.glBindVertexArray(0)
+        # Skin the visual mesh: gather control points → barycentric interpolation
+        self.skin_renderer.update(self.state_0)
+        self.skin_renderer.render(self.viewer)
 
         self.viewer.end_frame()
 

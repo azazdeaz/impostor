@@ -26,30 +26,43 @@ class ClothBinding:
 
 
 @dataclass
-class VisualSkinBinding:
-    """Precomputed barycentric mapping from visual mesh vertices to collider triangles.
+class SkinBinding:
+    """Precomputed barycentric mapping from visual mesh vertices to control points.
 
-    All indices reference global particle IDs so the skinning kernel can index
-    directly into ``state.particle_q``.
+    Control points can be sourced from either cloth particles
+    (``cp_particle_ids >= 0``) or rigid body transforms
+    (``cp_body_ids >= 0`` with ``cp_local_offsets``).
+    At runtime, ``gather_skin_controls`` populates a flat control-positions
+    array and ``interpolate_skin_positions`` interpolates visual vertex
+    positions via barycentric coordinates.
     """
-    visual_indices: np.ndarray  # (M, 3) int32 — visual triangle indices (local to this binding)
-    collider_tri_indices: np.ndarray  # (T, 3) int32 — collider tri verts as global particle IDs
-    face_ids: np.ndarray  # (N,) int32 — per-visual-vertex: which collider triangle
-    bary_u: np.ndarray  # (N,) float32
-    bary_v: np.ndarray  # (N,) float32
-    num_visual_verts: int = 0
+    visual_indices: np.ndarray      # (M, 3) int32 — visual triangle indices
+    num_visual_verts: int
+    num_control_points: int
+    cp_particle_ids: np.ndarray     # (num_cp,) int32 — particle ID or -1
+    cp_body_ids: np.ndarray         # (num_cp,) int32 — body ID or -1
+    cp_local_offsets: np.ndarray    # (num_cp, 3) float32
+    tri_indices: np.ndarray         # (T, 3) int32 — collider tri indices into control pts
+    face_ids: np.ndarray            # (num_visual_verts,) int32
+    bary_u: np.ndarray              # (num_visual_verts,) float32
+    bary_v: np.ndarray              # (num_visual_verts,) float32
 
-    def merge(self, other: VisualSkinBinding) -> VisualSkinBinding:
-        # Offset other's visual indices and face_ids
+    def merge(self, other: SkinBinding) -> SkinBinding:
+        """Concatenate two bindings, offsetting indices so they don't collide."""
         vi_offset = self.num_visual_verts
-        fi_offset = len(self.collider_tri_indices)
-        return VisualSkinBinding(
+        cp_offset = self.num_control_points
+        tri_offset = len(self.tri_indices)
+        return SkinBinding(
             visual_indices=np.vstack([self.visual_indices, other.visual_indices + vi_offset]),
-            collider_tri_indices=np.vstack([self.collider_tri_indices, other.collider_tri_indices]),
-            face_ids=np.concatenate([self.face_ids, other.face_ids + fi_offset]),
+            num_visual_verts=self.num_visual_verts + other.num_visual_verts,
+            num_control_points=self.num_control_points + other.num_control_points,
+            cp_particle_ids=np.concatenate([self.cp_particle_ids, other.cp_particle_ids]),
+            cp_body_ids=np.concatenate([self.cp_body_ids, other.cp_body_ids]),
+            cp_local_offsets=np.vstack([self.cp_local_offsets, other.cp_local_offsets]),
+            tri_indices=np.vstack([self.tri_indices, other.tri_indices + cp_offset]),
+            face_ids=np.concatenate([self.face_ids, other.face_ids + tri_offset]),
             bary_u=np.concatenate([self.bary_u, other.bary_u]),
             bary_v=np.concatenate([self.bary_v, other.bary_v]),
-            num_visual_verts=self.num_visual_verts + other.num_visual_verts,
         )
 
 
@@ -58,7 +71,7 @@ class NewtonModelResult:
     """Result of build_newton_model: builder + cloth binding data."""
     builder: newton.ModelBuilder
     cloth_bindings: ClothBinding = field(default_factory=ClothBinding)
-    visual_skin: VisualSkinBinding | None = None
+    skin: SkinBinding | None = None
 
 
 @dataclass
@@ -67,6 +80,13 @@ class _LeafClothInfo:
     blueprint: LeafBlueprint
     midrib_node_indices: list[int] = field(default_factory=list)
     vein_node_indices: list[list[int]] = field(default_factory=list)
+
+
+@dataclass
+class _StemVisualInfo:
+    """Internal: tracks graph-node indices for a stem with a mesh context."""
+    blueprint: StemBlueprint
+    node_indices: list[int] = field(default_factory=list)
 
 
 @wp.kernel
@@ -78,49 +98,77 @@ def bind_particles_to_bodies(
     particle_q_0: wp.array(dtype=wp.vec3),
     particle_q_1: wp.array(dtype=wp.vec3),
 ):
+    """Pin cloth particles to rigid bodies each substep.
+
+    Uses precomputed body-local offsets to move particles that sit along
+    the leaf skeleton (midrib/vein nodes) so they track the rod bodies.
+    Both state buffers are written so the solver sees consistent positions.
+    """
     tid = wp.tid()
     body_idx = bind_body_ids[tid]
     p_idx = bind_particle_ids[tid]
     xform = body_q[body_idx]
+    # Transform the body-local offset into world space
     world_pos = wp.transform_point(xform, local_offsets[tid])
     particle_q_0[p_idx] = world_pos
     particle_q_1[p_idx] = world_pos
 
 
 @wp.kernel
-def skin_visual_mesh(
+def gather_skin_controls(
     particle_q: wp.array(dtype=wp.vec3),
-    collider_tri_indices: wp.array2d(dtype=wp.int32),
+    body_q: wp.array(dtype=wp.transform),
+    cp_particle_ids: wp.array(dtype=wp.int32),
+    cp_body_ids: wp.array(dtype=wp.int32),
+    cp_local_offsets: wp.array(dtype=wp.vec3),
+    out_positions: wp.array(dtype=wp.vec3),
+):
+    """Resolve control point positions from mixed sources (step 1 of skinning).
+
+    Each control point is either:
+      - a cloth particle (cp_particle_ids >= 0) → read directly from particle_q
+      - a rigid body point (cp_body_ids >= 0)   → transform local offset by body_q
+    The result is a flat array of world-space positions used by
+    interpolate_skin_positions.
+    """
+    tid = wp.tid()
+    pid = cp_particle_ids[tid]
+    if pid >= 0:
+        # Leaf cloth: control point is a simulated particle
+        out_positions[tid] = particle_q[pid]
+    else:
+        # Stem rod: control point is rigidly attached to a body
+        bid = cp_body_ids[tid]
+        xform = body_q[bid]
+        out_positions[tid] = wp.transform_point(xform, cp_local_offsets[tid])
+
+
+@wp.kernel
+def interpolate_skin_positions(
+    control_positions: wp.array(dtype=wp.vec3),
+    tri_indices: wp.array2d(dtype=wp.int32),
     face_ids: wp.array(dtype=wp.int32),
     bary_u: wp.array(dtype=wp.float32),
     bary_v: wp.array(dtype=wp.float32),
     out_positions: wp.array(dtype=wp.vec3),
 ):
+    """Interpolate visual vertex positions via barycentric coords (step 2 of skinning).
+
+    Each visual vertex was mapped to a collider triangle (face_ids) with
+    precomputed barycentric weights (bary_u, bary_v). The collider triangle
+    vertices are looked up from control_positions (populated by
+    gather_skin_controls).
+    """
     tid = wp.tid()
     fi = face_ids[tid]
     u = bary_u[tid]
     v = bary_v[tid]
-    a = particle_q[collider_tri_indices[fi, 0]]
-    b = particle_q[collider_tri_indices[fi, 1]]
-    c = particle_q[collider_tri_indices[fi, 2]]
+    # Fetch the three collider triangle vertices
+    a = control_positions[tri_indices[fi, 0]]
+    b = control_positions[tri_indices[fi, 1]]
+    c = control_positions[tri_indices[fi, 2]]
+    # Barycentric interpolation: P = (1-u-v)*A + u*B + v*C
     out_positions[tid] = (1.0 - u - v) * a + u * b + v * c
-
-
-def prepare_visual_skin_gpu(
-    skin: VisualSkinBinding, device=None
-) -> tuple[wp.array, wp.array, wp.array, wp.array, wp.array, wp.array]:
-    """Convert a VisualSkinBinding to GPU arrays.
-
-    Returns (visual_indices, collider_tri_indices, face_ids, bary_u, bary_v, out_positions).
-    """
-    return (
-        wp.array(skin.visual_indices.flatten(), dtype=wp.int32, device=device),
-        wp.array(skin.collider_tri_indices, dtype=wp.int32, ndim=2, device=device),
-        wp.array(skin.face_ids, dtype=wp.int32, device=device),
-        wp.array(skin.bary_u, dtype=wp.float32, device=device),
-        wp.array(skin.bary_v, dtype=wp.float32, device=device),
-        wp.zeros(skin.num_visual_verts, dtype=wp.vec3, device=device),
-    )
 
 
 def _closest_point_on_triangle(
@@ -129,6 +177,7 @@ def _closest_point_on_triangle(
     """Return barycentric (u, v) of the closest point on triangle (a,b,c) to p.
 
     Convention: point = (1-u-v)*a + u*b + v*c.
+    Uses Voronoi region tests to handle vertex, edge, and interior cases.
     """
     ab = b - a
     ac = c - a
@@ -185,10 +234,12 @@ def _compute_barycentric_mapping(
     bary_u = np.empty(n, dtype=np.float32)
     bary_v = np.empty(n, dtype=np.float32)
 
+    # Precompute triangle vertex positions for all collider faces
     tri_a = collider_verts[collider_tris[:, 0]]
     tri_b = collider_verts[collider_tris[:, 1]]
     tri_c = collider_verts[collider_tris[:, 2]]
 
+    # Brute-force: for each visual vertex, test all collider triangles
     for i, p in enumerate(visual_verts):
         best_dist = float("inf")
         best_fi = 0
@@ -224,11 +275,13 @@ def _collect_graph(
     include_midrib: bool,
     include_veins: bool,
     leaf_infos: list[_LeafClothInfo] | None = None,
+    stem_infos: list[_StemVisualInfo] | None = None,
 ) -> None:
     """Recursively collect nodes and edges from the blueprint tree.
 
     Emits raw nodes/edges/scales without deduplication — call _deduplicate_nodes after.
     If *leaf_infos* is provided, appends a _LeafClothInfo for each leaf encountered.
+    If *stem_infos* is provided, appends a _StemVisualInfo for each stem with a mesh_context.
     """
     if isinstance(blueprint, StemBlueprint):
         if not include_stems:
@@ -239,7 +292,7 @@ def _collect_graph(
                 _collect_graph(child.blueprint, nodes, edges, scales,
                                parent_node_idx,
                                include_stems, include_midrib, include_veins,
-                               leaf_infos)
+                               leaf_infos, stem_infos)
             return
         offset = len(nodes)
         for t in transforms:
@@ -249,11 +302,16 @@ def _collect_graph(
             edges.append((offset + i, offset + i + 1))
         if parent_node_idx is not None:
             edges.append((parent_node_idx, offset))
+        if stem_infos is not None and blueprint.mesh_context is not None:
+            stem_infos.append(_StemVisualInfo(
+                blueprint=blueprint,
+                node_indices=list(range(offset, offset + len(transforms))),
+            ))
         for child in blueprint.nodes:
             _collect_graph(child.blueprint, nodes, edges, scales,
                            offset + child.parent_index,
                            include_stems, include_midrib, include_veins,
-                           leaf_infos)
+                           leaf_infos, stem_infos)
 
     elif isinstance(blueprint, LeafBlueprint):
         if not include_midrib:
@@ -354,15 +412,16 @@ def _add_plant_rods(
     stretch_damping_modulus: float,
     label: str | None = None,
     fix_roots: bool = True,
-) -> tuple[list[int], list[int], dict[int, int]]:
+) -> tuple[list[int], list[int], dict[int, int], dict[int, np.ndarray]]:
     """Add rod bodies and cable joints for a node/edge graph.
 
     Each edge becomes a capsule rigid body oriented along +Z from node u to v.
     Joints are built via BFS spanning forest and wrapped into articulations,
     following the same pattern as newton's ``add_rod_graph``.
 
-    Returns (body_indices, joint_indices, node_to_body) where node_to_body maps
-    each graph-node index to an incident body id.
+    Returns (body_indices, joint_indices, node_to_body, body_xforms) where
+    node_to_body maps each graph-node index to an incident body id, and
+    body_xforms maps body id to its initial transform as [px,py,pz,qx,qy,qz,qw].
     """
     num_nodes = len(nodes)
     node_inc: list[list[int]] = [[] for _ in range(num_nodes)]
@@ -370,6 +429,7 @@ def _add_plant_rods(
     edge_v: list[int] = []
     edge_len: list[float] = []
     edge_bodies: list[int] = []
+    body_xforms: dict[int, np.ndarray] = {}
 
     for u, v in edges:
         seg_vec = nodes[v] - nodes[u]
@@ -383,11 +443,16 @@ def _add_plant_rods(
 
         r = (radii[u] + radii[v]) * 0.5
 
+        xform = wp.transform(nodes[u], q)
         body_id = builder.add_link(
-            xform=wp.transform(nodes[u], q),
+            xform=xform,
             com=wp.vec3(0.0, 0.0, half),
             label=f"{label}_b{idx}" if label else None,
         )
+        body_xforms[body_id] = np.array([
+            float(nodes[u][0]), float(nodes[u][1]), float(nodes[u][2]),
+            float(q[0]), float(q[1]), float(q[2]), float(q[3]),
+        ])
         builder.add_shape_capsule(
             body_id,
             xform=wp.transform(wp.vec3(0.0, 0.0, half), wp.quat_identity()),
@@ -403,17 +468,18 @@ def _add_plant_rods(
         node_inc[u].append(idx)
         node_inc[v].append(idx)
 
-    # Build node→body lookup (any incident body works for binding)
+    # Map each graph node to one of its incident bodies (used for cloth binding
+    # and stem skinning — any incident body is fine since they meet at the node)
     node_to_body: dict[int, int] = {}
     for idx2 in range(len(edge_bodies)):
         node_to_body.setdefault(edge_u[idx2], edge_bodies[idx2])
         node_to_body.setdefault(edge_v[idx2], edge_bodies[idx2])
 
     if not edge_bodies:
-        return [], [], {}
+        return [], [], {}, {}
 
-
-    # BFS spanning forest → cable joints → articulations
+    # BFS spanning forest: connect bodies with cable joints, then wrap
+    # each connected component into an articulation for the solver
     all_joints: list[int] = []
     visited = [False] * len(edge_bodies)
 
@@ -472,7 +538,7 @@ def _add_plant_rods(
         if comp_joints:
             builder.add_articulation(comp_joints, label=label)
 
-    return edge_bodies, all_joints, node_to_body
+    return edge_bodies, all_joints, node_to_body, body_xforms
 
 
 def _build_leaf_cloth(
@@ -488,7 +554,7 @@ def _build_leaf_cloth(
     edge_kd: float,
     particle_radius: float,
     bind_distance: float = 1e-4,
-) -> tuple[ClothBinding, VisualSkinBinding | None]:
+) -> tuple[ClothBinding, SkinBinding | None]:
     """Build a cloth mesh for a single leaf and bind particles to rod bodies.
 
     Also computes a barycentric mapping from the visual mesh to the collider
@@ -509,7 +575,7 @@ def _build_leaf_cloth(
     if not indices:
         return ClothBinding(), None
 
-    # ── Add cloth mesh ──
+    # ── Add cloth mesh (each vertex becomes a simulated particle) ──
     particle_start = len(builder.particle_q)
     builder.add_cloth_mesh(
         pos=wp.vec3(0.0, 0.0, 0.0),
@@ -527,7 +593,9 @@ def _build_leaf_cloth(
         particle_radius=particle_radius,
     )
 
-    # ── Bind particles to nearest rod bodies (proximity-based) ──
+    # ── Pin cloth particles near rod skeleton nodes ──
+    # Particles within bind_distance of a rod node are made kinematic:
+    # they'll be driven by bind_particles_to_bodies each substep.
     binding = ClothBinding()
     node_positions = np.array(
         [[float(n[0]), float(n[1]), float(n[2])] for n in nodes]
@@ -542,12 +610,13 @@ def _build_leaf_cloth(
         p_idx = particle_start + local_idx
         binding.bind_particle_ids.append(p_idx)
         binding.bind_body_ids.append(node_to_body[nearest_node])
+        # Deactivate so the solver doesn't simulate this particle freely
         builder.particle_flags[p_idx] = (
             builder.particle_flags[p_idx] & ~ParticleFlags.ACTIVE
         )
         builder.particle_mass[p_idx] = 0.0
 
-    # ── Precompute visual-mesh barycentric skinning ──
+    # ── Map high-res visual mesh onto the low-res collider via barycentric coords ──
     visual = bp.mesh_context.generate_visual(bp)
     if visual.triangle_indices is None or len(visual.vertex_positions) == 0:
         return binding, None
@@ -556,18 +625,115 @@ def _build_leaf_cloth(
     face_ids, bary_u, bary_v = _compute_barycentric_mapping(
         visual.vertex_positions, collider.vertex_positions, collider_tris,
     )
-    # Store collider tri indices as *global* particle IDs
-    global_collider_tris = collider_tris + particle_start
+    # For leaves, control points = cloth particles (driven by VBD solver)
+    num_cp = len(collider.vertex_positions)
 
-    skin = VisualSkinBinding(
+    skin = SkinBinding(
         visual_indices=visual.triangle_indices.astype(np.int32),
-        collider_tri_indices=global_collider_tris.astype(np.int32),
+        num_visual_verts=len(visual.vertex_positions),
+        num_control_points=num_cp,
+        cp_particle_ids=np.arange(particle_start, particle_start + num_cp, dtype=np.int32),
+        cp_body_ids=np.full(num_cp, -1, dtype=np.int32),
+        cp_local_offsets=np.zeros((num_cp, 3), dtype=np.float32),
+        tri_indices=collider_tris.astype(np.int32),
         face_ids=face_ids,
         bary_u=bary_u,
         bary_v=bary_v,
-        num_visual_verts=len(visual.vertex_positions),
     )
     return binding, skin
+
+
+def _inverse_transform_point(body_origin: np.ndarray, world_pos: np.ndarray) -> np.ndarray:
+    """Compute body-local position from world position and body transform.
+
+    ``body_origin`` is [px, py, pz, qx, qy, qz, qw].
+    Applies the inverse rotation (quaternion conjugate) to (world_pos - body_pos).
+    """
+    body_pos = body_origin[:3]
+    bq = body_origin[3:7]  # (qx, qy, qz, qw)
+    diff = world_pos - body_pos
+    w = -bq[:3]  # conjugate imaginary part
+    s = bq[3]    # real part
+    t = 2.0 * np.cross(w, diff)
+    return diff + s * t + np.cross(w, t)
+
+
+def _build_stem_visual(
+    stem_info: _StemVisualInfo,
+    node_to_body: dict[int, int],
+    body_xforms: dict[int, np.ndarray],
+) -> SkinBinding | None:
+    """Build a visual skin binding for a stem's visual mesh.
+
+    Each collider vertex is bound to the nearest rod body as a rigid control
+    point.  The visual mesh is then barycentric-mapped onto the collider
+    triangles.
+    """
+    bp = stem_info.blueprint
+    if bp.mesh_context is None:
+        return None
+
+    collider = bp.mesh_context.generate_collider(bp)
+    if collider.triangle_indices is None or len(collider.vertex_positions) == 0:
+        return None
+
+    visual = bp.mesh_context.generate_visual(bp)
+    if visual.triangle_indices is None or len(visual.vertex_positions) == 0:
+        return None
+
+    num_transforms = len(bp.transforms)
+    num_cp = len(collider.vertex_positions)
+    # The collider is an extruded tube: each ring of vertices corresponds
+    # to one transform (cross-section frame) along the stem.
+    vertex_per_ring = num_cp // num_transforms
+
+    # All stem control points are body-sourced (no particles)
+    cp_particle_ids = np.full(num_cp, -1, dtype=np.int32)
+    cp_body_ids = np.empty(num_cp, dtype=np.int32)
+    cp_local_offsets = np.empty((num_cp, 3), dtype=np.float32)
+
+    for k in range(num_cp):
+        # Map vertex → ring index → graph node → rod body
+        frame_idx = min(k // vertex_per_ring, num_transforms - 1)
+        graph_node = stem_info.node_indices[frame_idx]
+        body_id = node_to_body.get(graph_node)
+        if body_id is None:
+            # Fallback: try adjacent frames
+            for adj_offset in (1, -1, 2, -2):
+                adj = frame_idx + adj_offset
+                if 0 <= adj < num_transforms:
+                    body_id = node_to_body.get(stem_info.node_indices[adj])
+                    if body_id is not None:
+                        break
+        if body_id is None:
+            cp_body_ids[k] = 0
+            cp_local_offsets[k] = [0.0, 0.0, 0.0]
+            continue
+
+        cp_body_ids[k] = body_id
+        # Store the vertex position in the body's local frame so
+        # gather_skin_controls can reconstruct it from body_q later
+        cp_local_offsets[k] = _inverse_transform_point(
+            body_xforms[body_id], collider.vertex_positions[k],
+        )
+
+    collider_tris = collider.triangle_indices
+    face_ids, bary_u, bary_v = _compute_barycentric_mapping(
+        visual.vertex_positions, collider.vertex_positions, collider_tris,
+    )
+
+    return SkinBinding(
+        visual_indices=visual.triangle_indices.astype(np.int32),
+        num_visual_verts=len(visual.vertex_positions),
+        num_control_points=num_cp,
+        cp_particle_ids=cp_particle_ids,
+        cp_body_ids=cp_body_ids,
+        cp_local_offsets=cp_local_offsets.astype(np.float32),
+        tri_indices=collider_tris.astype(np.int32),
+        face_ids=face_ids,
+        bary_u=bary_u,
+        bary_v=bary_v,
+    )
 
 
 def compute_cloth_local_offsets(
@@ -576,6 +742,10 @@ def compute_cloth_local_offsets(
     device=None,
 ) -> tuple[wp.array, wp.array, wp.array]:
     """Compute body-local offsets for bound particles after model finalization.
+
+    Reads the finalized body and particle positions from state, then for each
+    bound pair inverts the body transform to get the particle's position in
+    body-local coordinates.  These offsets stay constant throughout simulation.
 
     Returns (bind_body_ids_wp, bind_particle_ids_wp, local_offsets_wp) ready
     for the ``bind_particles_to_bodies`` kernel.
@@ -588,8 +758,9 @@ def compute_cloth_local_offsets(
         body_pos = tf[:3]
         bq = tf[3:7]  # (qx, qy, qz, qw)
         p_pos = particle_q_np[p_idx]
+        # Inverse quaternion rotation: conjugate(q) * (p - body_pos)
         diff = p_pos - body_pos
-        w = np.array([-bq[0], -bq[1], -bq[2]])
+        w = np.array([-bq[0], -bq[1], -bq[2]])  # conjugate imaginary
         s = bq[3]
         t = 2.0 * np.cross(w, diff)
         local = diff + s * t + np.cross(w, t)
@@ -600,6 +771,129 @@ def compute_cloth_local_offsets(
         wp.array(bindings.bind_particle_ids, dtype=wp.int32, device=device),
         wp.array(offsets, dtype=wp.vec3, device=device),
     )
+
+
+class ClothBindingHelper:
+    """Manages GPU state for binding cloth particles to rigid bodies."""
+
+    def __init__(self, state, cloth_bindings: ClothBinding, device=None):
+        self.num_bindings = len(cloth_bindings.bind_particle_ids)
+        if self.num_bindings > 0:
+            self.bind_body_ids_wp, self.bind_particle_ids_wp, self.bind_local_offsets_wp = (
+                compute_cloth_local_offsets(state, cloth_bindings, device=device)
+            )
+
+    def bind(self, state_0, state_1):
+        """Update bound particle positions from body transforms."""
+        if self.num_bindings == 0:
+            return
+        wp.launch(
+            kernel=bind_particles_to_bodies,
+            dim=self.num_bindings,
+            inputs=[
+                state_0.body_q,
+                self.bind_body_ids_wp,
+                self.bind_particle_ids_wp,
+                self.bind_local_offsets_wp,
+            ],
+            outputs=[
+                state_0.particle_q,
+                state_1.particle_q,
+            ],
+        )
+
+
+class PlantSkinRenderer:
+    """Manages GPU skinning and rendering for visual plant meshes."""
+
+    def __init__(self, skin: SkinBinding | None, device=None):
+        self.active = skin is not None
+        if not self.active:
+            return
+        assert skin is not None
+        self.num_control_points = skin.num_control_points
+        self.num_visual_verts = skin.num_visual_verts
+        self.visual_indices_wp = wp.array(
+            skin.visual_indices.flatten(), dtype=wp.int32, device=device,
+        )
+        self.cp_particle_ids_wp = wp.array(
+            skin.cp_particle_ids, dtype=wp.int32, device=device,
+        )
+        self.cp_body_ids_wp = wp.array(
+            skin.cp_body_ids, dtype=wp.int32, device=device,
+        )
+        self.cp_local_offsets_wp = wp.array(
+            skin.cp_local_offsets, dtype=wp.vec3, device=device,
+        )
+        self.tri_indices_wp = wp.array(
+            skin.tri_indices, dtype=wp.int32, ndim=2, device=device,
+        )
+        self.face_ids_wp = wp.array(skin.face_ids, dtype=wp.int32, device=device)
+        self.bary_u_wp = wp.array(skin.bary_u, dtype=wp.float32, device=device)
+        self.bary_v_wp = wp.array(skin.bary_v, dtype=wp.float32, device=device)
+        self.control_positions_wp = wp.zeros(
+            skin.num_control_points, dtype=wp.vec3, device=device,
+        )
+        self.visual_positions_wp = wp.zeros(
+            skin.num_visual_verts, dtype=wp.vec3, device=device,
+        )
+
+    def update(self, state):
+        """Launch GPU kernels to update visual mesh positions from state."""
+        if not self.active:
+            return
+        wp.launch(
+            kernel=gather_skin_controls,
+            dim=self.num_control_points,
+            inputs=[
+                state.particle_q,
+                state.body_q,
+                self.cp_particle_ids_wp,
+                self.cp_body_ids_wp,
+                self.cp_local_offsets_wp,
+            ],
+            outputs=[self.control_positions_wp],
+        )
+        wp.launch(
+            kernel=interpolate_skin_positions,
+            dim=self.num_visual_verts,
+            inputs=[
+                self.control_positions_wp,
+                self.tri_indices_wp,
+                self.face_ids_wp,
+                self.bary_u_wp,
+                self.bary_v_wp,
+            ],
+            outputs=[self.visual_positions_wp],
+        )
+
+    def render(
+        self,
+        viewer,
+        name: str = "/geo/visual_plant",
+        color: tuple[float, float, float] = (0.2, 0.6, 0.1),
+    ):
+        """Render the skinned visual mesh to the viewer."""
+        if not self.active:
+            return
+        viewer.log_mesh(
+            name,
+            self.visual_positions_wp,
+            self.visual_indices_wp,
+            backface_culling=False,
+        )
+        # Set color via the GL ObjectColor attribute.
+        # HACK: MeshGL.update_texture() uploads the texture but never sets
+        # the shader's texture_enable flag (attribute 8, w-component stays
+        # 0.0), so the `texture` param of log_mesh is silently ignored.
+        # TODO: Once Newton fixes MeshGL texture_enable, replace this with
+        #       log_mesh(..., texture=<color image>) and drop the GL calls.
+        mesh_gl = viewer.objects[name]
+        from newton._src.viewer.gl.opengl import RendererGL
+        gl = RendererGL.gl
+        gl.glBindVertexArray(mesh_gl.vao)
+        gl.glVertexAttrib3f(7, *color)
+        gl.glBindVertexArray(0)
 
 
 def build_newton_model(
@@ -636,25 +930,31 @@ def build_newton_model(
     nodes: list[wp.vec3] = []
     edges: list[tuple[int, int]] = []
     scales: list[float] = []
-    leaf_infos: list[_LeafClothInfo] = [] if include_cloth else [] # TODO why??
+    leaf_infos: list[_LeafClothInfo] = []
+    stem_infos: list[_StemVisualInfo] = []
     _collect_graph(
         root, nodes, edges, scales, None,
         include_stems, include_midrib, include_veins,
         leaf_infos if include_cloth else None,
+        stem_infos,
     )
+    # Merge overlapping nodes (e.g. where a stem tip meets a leaf base)
     nodes, edges, scales, old_to_new = _deduplicate_nodes(nodes, edges, scales)
     radii = [s * rod_radius for s in scales]
 
-    # Remap leaf_info node indices through deduplication
+    # Remap node indices through deduplication
     for li in leaf_infos:
         li.midrib_node_indices = [old_to_new[i] for i in li.midrib_node_indices]
         li.vein_node_indices = [
             [old_to_new[j] for j in vi] for vi in li.vein_node_indices
         ]
+    for si in stem_infos:
+        si.node_indices = [old_to_new[i] for i in si.node_indices]
 
     node_to_body: dict[int, int] = {}
+    body_xforms: dict[int, np.ndarray] = {}
     if edges:
-        _, _, node_to_body = _add_plant_rods(
+        _, _, node_to_body, body_xforms = _add_plant_rods(
             builder,
             nodes,
             edges,
@@ -667,18 +967,24 @@ def build_newton_model(
             fix_roots=fix_root,
         )
 
-    # Build cloth meshes for leaves
+    # Build cloth meshes for leaves (simulated by VBD solver)
     cloth_bindings = ClothBinding()
-    visual_skin: VisualSkinBinding | None = None
+    skin: SkinBinding | None = None
     if include_cloth:
         for li in leaf_infos:
-            cb, skin = _build_leaf_cloth(
+            cb, leaf_skin = _build_leaf_cloth(
                 builder, li, node_to_body, nodes,
                 cloth_density, tri_ke, tri_ka, tri_kd,
                 edge_ke, edge_kd, particle_radius,
             )
             cloth_bindings = cloth_bindings.merge(cb)
-            if skin is not None:
-                visual_skin = skin if visual_skin is None else visual_skin.merge(skin)
+            if leaf_skin is not None:
+                skin = leaf_skin if skin is None else skin.merge(leaf_skin)
 
-    return NewtonModelResult(builder=builder, cloth_bindings=cloth_bindings, visual_skin=visual_skin)
+    # Build visual skin for stems (bound rigidly to rod bodies)
+    for si in stem_infos:
+        stem_skin = _build_stem_visual(si, node_to_body, body_xforms)
+        if stem_skin is not None:
+            skin = stem_skin if skin is None else skin.merge(stem_skin)
+
+    return NewtonModelResult(builder=builder, cloth_bindings=cloth_bindings, skin=skin)
