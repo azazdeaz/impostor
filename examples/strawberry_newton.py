@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import rerun as rr
 import warp as wp
 from pydantic import BaseModel
@@ -41,6 +42,8 @@ from impostor_gen.newton_builder import (
     bind_particles_to_bodies,
     build_newton_model,
     compute_cloth_local_offsets,
+    prepare_visual_skin_gpu,
+    skin_visual_mesh,
 )
 
 # ── Materials (only keys matter for physics) ────────────────────────────
@@ -146,6 +149,7 @@ class Example:
         builder = result.builder
         self.cloth_bindings = result.cloth_bindings
         self.num_bindings = len(self.cloth_bindings.bind_particle_ids)
+        self.visual_skin = result.visual_skin
 
         # Ground plane
         builder.add_ground_plane(
@@ -189,7 +193,24 @@ class Example:
         )
         self.contacts = self.collision_pipeline.contacts()
 
+        # Prepare visual skinning GPU arrays
+        self.has_visual_skin = self.visual_skin is not None
+        if self.has_visual_skin:
+            device = self.solver.device
+            skin = self.visual_skin
+            assert skin is not None
+            (
+                self.vis_indices_wp,
+                self.vis_collider_tris_wp,
+                self.vis_face_ids_wp,
+                self.vis_bary_u_wp,
+                self.vis_bary_v_wp,
+                self.vis_positions_wp,
+            ) = prepare_visual_skin_gpu(skin, device=device)
+            self.vis_num_verts = skin.num_visual_verts
+
         self.viewer.set_model(self.model)
+        self.viewer.show_triangles = False  # hide collision cloth
         self.capture()
 
     def capture(self):
@@ -243,6 +264,42 @@ class Example:
         self.viewer.begin_frame(self.sim_time)
         self.viewer.log_state(self.state_0)
         self.viewer.log_contacts(self.contacts, self.state_0)
+
+        # Skin and render high-resolution visual leaves
+        if self.has_visual_skin:
+            wp.launch(
+                kernel=skin_visual_mesh,
+                dim=self.vis_num_verts,
+                inputs=[
+                    self.state_0.particle_q,
+                    self.vis_collider_tris_wp,
+                    self.vis_face_ids_wp,
+                    self.vis_bary_u_wp,
+                    self.vis_bary_v_wp,
+                ],
+                outputs=[self.vis_positions_wp],
+            )
+            self.viewer.log_mesh(
+                "/geo/visual_leaves",
+                self.vis_positions_wp,
+                self.vis_indices_wp,
+                backface_culling=False,
+            )
+            # Set leaf color to green via the GL ObjectColor attribute.
+            # HACK: MeshGL.update_texture() uploads the texture but never sets
+            # the shader's texture_enable flag (attribute 8, w-component stays
+            # 0.0), so the `texture` param of log_mesh is silently ignored.
+            # As a workaround we poke the ObjectColor attribute (location 7)
+            # directly.
+            # TODO: Once Newton fixes MeshGL texture_enable, replace this with
+            #       log_mesh(..., texture=<green 1x1 image>) and drop the GL calls.
+            mesh_gl = self.viewer.objects["/geo/visual_leaves"]
+            from newton._src.viewer.gl.opengl import RendererGL
+            gl = RendererGL.gl
+            gl.glBindVertexArray(mesh_gl.vao)
+            gl.glVertexAttrib3f(7, 0.2, 0.6, 0.1)
+            gl.glBindVertexArray(0)
+
         self.viewer.end_frame()
 
 

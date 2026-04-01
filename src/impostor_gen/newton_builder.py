@@ -26,10 +26,39 @@ class ClothBinding:
 
 
 @dataclass
+class VisualSkinBinding:
+    """Precomputed barycentric mapping from visual mesh vertices to collider triangles.
+
+    All indices reference global particle IDs so the skinning kernel can index
+    directly into ``state.particle_q``.
+    """
+    visual_indices: np.ndarray  # (M, 3) int32 — visual triangle indices (local to this binding)
+    collider_tri_indices: np.ndarray  # (T, 3) int32 — collider tri verts as global particle IDs
+    face_ids: np.ndarray  # (N,) int32 — per-visual-vertex: which collider triangle
+    bary_u: np.ndarray  # (N,) float32
+    bary_v: np.ndarray  # (N,) float32
+    num_visual_verts: int = 0
+
+    def merge(self, other: VisualSkinBinding) -> VisualSkinBinding:
+        # Offset other's visual indices and face_ids
+        vi_offset = self.num_visual_verts
+        fi_offset = len(self.collider_tri_indices)
+        return VisualSkinBinding(
+            visual_indices=np.vstack([self.visual_indices, other.visual_indices + vi_offset]),
+            collider_tri_indices=np.vstack([self.collider_tri_indices, other.collider_tri_indices]),
+            face_ids=np.concatenate([self.face_ids, other.face_ids + fi_offset]),
+            bary_u=np.concatenate([self.bary_u, other.bary_u]),
+            bary_v=np.concatenate([self.bary_v, other.bary_v]),
+            num_visual_verts=self.num_visual_verts + other.num_visual_verts,
+        )
+
+
+@dataclass
 class NewtonModelResult:
     """Result of build_newton_model: builder + cloth binding data."""
     builder: newton.ModelBuilder
     cloth_bindings: ClothBinding = field(default_factory=ClothBinding)
+    visual_skin: VisualSkinBinding | None = None
 
 
 @dataclass
@@ -56,6 +85,129 @@ def bind_particles_to_bodies(
     world_pos = wp.transform_point(xform, local_offsets[tid])
     particle_q_0[p_idx] = world_pos
     particle_q_1[p_idx] = world_pos
+
+
+@wp.kernel
+def skin_visual_mesh(
+    particle_q: wp.array(dtype=wp.vec3),
+    collider_tri_indices: wp.array2d(dtype=wp.int32),
+    face_ids: wp.array(dtype=wp.int32),
+    bary_u: wp.array(dtype=wp.float32),
+    bary_v: wp.array(dtype=wp.float32),
+    out_positions: wp.array(dtype=wp.vec3),
+):
+    tid = wp.tid()
+    fi = face_ids[tid]
+    u = bary_u[tid]
+    v = bary_v[tid]
+    a = particle_q[collider_tri_indices[fi, 0]]
+    b = particle_q[collider_tri_indices[fi, 1]]
+    c = particle_q[collider_tri_indices[fi, 2]]
+    out_positions[tid] = (1.0 - u - v) * a + u * b + v * c
+
+
+def prepare_visual_skin_gpu(
+    skin: VisualSkinBinding, device=None
+) -> tuple[wp.array, wp.array, wp.array, wp.array, wp.array, wp.array]:
+    """Convert a VisualSkinBinding to GPU arrays.
+
+    Returns (visual_indices, collider_tri_indices, face_ids, bary_u, bary_v, out_positions).
+    """
+    return (
+        wp.array(skin.visual_indices.flatten(), dtype=wp.int32, device=device),
+        wp.array(skin.collider_tri_indices, dtype=wp.int32, ndim=2, device=device),
+        wp.array(skin.face_ids, dtype=wp.int32, device=device),
+        wp.array(skin.bary_u, dtype=wp.float32, device=device),
+        wp.array(skin.bary_v, dtype=wp.float32, device=device),
+        wp.zeros(skin.num_visual_verts, dtype=wp.vec3, device=device),
+    )
+
+
+def _closest_point_on_triangle(
+    p: np.ndarray, a: np.ndarray, b: np.ndarray, c: np.ndarray
+) -> tuple[float, float]:
+    """Return barycentric (u, v) of the closest point on triangle (a,b,c) to p.
+
+    Convention: point = (1-u-v)*a + u*b + v*c.
+    """
+    ab = b - a
+    ac = c - a
+    ap = p - a
+    d1 = ab @ ap
+    d2 = ac @ ap
+    if d1 <= 0.0 and d2 <= 0.0:
+        return 0.0, 0.0
+
+    bp_ = p - b
+    d3 = ab @ bp_
+    d4 = ac @ bp_
+    if d3 >= 0.0 and d4 <= d3:
+        return 1.0, 0.0
+
+    cp_ = p - c
+    d5 = ab @ cp_
+    d6 = ac @ cp_
+    if d6 >= 0.0 and d5 <= d6:
+        return 0.0, 1.0
+
+    vc = d1 * d4 - d3 * d2
+    if vc <= 0.0 and d1 >= 0.0 and d3 <= 0.0:
+        v = d1 / (d1 - d3)
+        return v, 0.0
+
+    vb = d5 * d2 - d1 * d6
+    if vb <= 0.0 and d2 >= 0.0 and d6 <= 0.0:
+        w = d2 / (d2 - d6)
+        return 0.0, w
+
+    va = d3 * d6 - d5 * d4
+    if va <= 0.0 and (d4 - d3) >= 0.0 and (d5 - d6) >= 0.0:
+        w = (d4 - d3) / ((d4 - d3) + (d5 - d6))
+        return 1.0 - w, w
+
+    denom = 1.0 / (va + vb + vc)
+    v = vb * denom
+    w = vc * denom
+    return v, w
+
+
+def _compute_barycentric_mapping(
+    visual_verts: np.ndarray,
+    collider_verts: np.ndarray,
+    collider_tris: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """For each visual vertex, find the closest collider triangle + barycentric coords.
+
+    Returns (face_ids, bary_u, bary_v) arrays.
+    """
+    n = len(visual_verts)
+    face_ids = np.empty(n, dtype=np.int32)
+    bary_u = np.empty(n, dtype=np.float32)
+    bary_v = np.empty(n, dtype=np.float32)
+
+    tri_a = collider_verts[collider_tris[:, 0]]
+    tri_b = collider_verts[collider_tris[:, 1]]
+    tri_c = collider_verts[collider_tris[:, 2]]
+
+    for i, p in enumerate(visual_verts):
+        best_dist = float("inf")
+        best_fi = 0
+        best_u = 0.0
+        best_v = 0.0
+        for fi in range(len(collider_tris)):
+            u, v = _closest_point_on_triangle(p, tri_a[fi], tri_b[fi], tri_c[fi])
+            proj = (1.0 - u - v) * tri_a[fi] + u * tri_b[fi] + v * tri_c[fi]
+            d = float(np.linalg.norm(p - proj))
+            if d < best_dist:
+                best_dist = d
+                best_fi = fi
+                best_u = u
+                best_v = v
+        face_ids[i] = best_fi
+        bary_u[i] = best_u
+        bary_v[i] = best_v
+
+    return face_ids, bary_u, bary_v
 
 
 def _to_wp(pos) -> wp.vec3:
@@ -336,22 +488,26 @@ def _build_leaf_cloth(
     edge_kd: float,
     particle_radius: float,
     bind_distance: float = 1e-4,
-) -> ClothBinding:
-    """Build a cloth mesh for a single leaf and bind particles to rod bodies."""
+) -> tuple[ClothBinding, VisualSkinBinding | None]:
+    """Build a cloth mesh for a single leaf and bind particles to rod bodies.
+
+    Also computes a barycentric mapping from the visual mesh to the collider
+    mesh so a higher-resolution visual can be skinned at runtime.
+    """
     bp = leaf_info.blueprint
 
     if bp.mesh_context is None:
-        return ClothBinding()
+        return ClothBinding(), None
 
     collider = bp.mesh_context.generate_collider(bp)
     if collider.triangle_indices is None or len(collider.vertex_positions) == 0:
-        return ClothBinding()
+        return ClothBinding(), None
 
     vertices = [_to_wp(v) for v in collider.vertex_positions]
     indices = collider.triangle_indices.flatten().tolist()
 
     if not indices:
-        return ClothBinding()
+        return ClothBinding(), None
 
     # ── Add cloth mesh ──
     particle_start = len(builder.particle_q)
@@ -391,7 +547,27 @@ def _build_leaf_cloth(
         )
         builder.particle_mass[p_idx] = 0.0
 
-    return binding
+    # ── Precompute visual-mesh barycentric skinning ──
+    visual = bp.mesh_context.generate_visual(bp)
+    if visual.triangle_indices is None or len(visual.vertex_positions) == 0:
+        return binding, None
+
+    collider_tris = collider.triangle_indices  # (T, 3) local indices
+    face_ids, bary_u, bary_v = _compute_barycentric_mapping(
+        visual.vertex_positions, collider.vertex_positions, collider_tris,
+    )
+    # Store collider tri indices as *global* particle IDs
+    global_collider_tris = collider_tris + particle_start
+
+    skin = VisualSkinBinding(
+        visual_indices=visual.triangle_indices.astype(np.int32),
+        collider_tri_indices=global_collider_tris.astype(np.int32),
+        face_ids=face_ids,
+        bary_u=bary_u,
+        bary_v=bary_v,
+        num_visual_verts=len(visual.vertex_positions),
+    )
+    return binding, skin
 
 
 def compute_cloth_local_offsets(
@@ -493,13 +669,16 @@ def build_newton_model(
 
     # Build cloth meshes for leaves
     cloth_bindings = ClothBinding()
+    visual_skin: VisualSkinBinding | None = None
     if include_cloth:
         for li in leaf_infos:
-            cb = _build_leaf_cloth(
+            cb, skin = _build_leaf_cloth(
                 builder, li, node_to_body, nodes,
                 cloth_density, tri_ke, tri_ka, tri_kd,
                 edge_ke, edge_kd, particle_radius,
             )
             cloth_bindings = cloth_bindings.merge(cb)
+            if skin is not None:
+                visual_skin = skin if visual_skin is None else visual_skin.merge(skin)
 
-    return NewtonModelResult(builder=builder, cloth_bindings=cloth_bindings)
+    return NewtonModelResult(builder=builder, cloth_bindings=cloth_bindings, visual_skin=visual_skin)
