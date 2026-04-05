@@ -38,11 +38,7 @@ from impostor_gen.mesh.mesh_builder import (
 )
 from impostor_gen.mesh.mesh_utils import log_mesh
 from impostor_gen.mesh.stem_mesh_context import StemMeshContext
-from impostor_gen.newton_builder import (
-    build_newton_model,
-    ClothBindingHelper,
-    PlantSkinRenderer,
-)
+from impostor_gen.newton_builder import PlantSimulation
 
 # ── Materials (only keys matter for physics) ────────────────────────────
 leaf_material = Material(key="leaf", diffuse_color=(0.2, 0.6, 0.1))
@@ -129,10 +125,9 @@ class Example:
 
         self.viewer = viewer
 
-        # Grow the plant and build as rod/cable structure
-        # set visualize=True to view the growth process in rerun
+        # Grow the plant and build the simulation facade
         blueprints = grow_plant(iterations=50, visualize=False)
-        result = build_newton_model(
+        self.plant = PlantSimulation(
             blueprints,
             include_stems=True,
             include_midrib=True,
@@ -144,25 +139,26 @@ class Example:
             bend_damping_modulus=1.0e6,
             stretch_damping_modulus=1.0e1,
         )
-        builder = result.builder
 
-        # Ground plane
+        # Build the scene: plant + extras
+        builder = newton.ModelBuilder()
+        self.plant.add_to_builder(builder)
+
         builder.add_ground_plane(
             cfg=newton.ModelBuilder.ShapeConfig(ke=1e6, kd=1e1, mu=0.5)
         )
-
-        # SPHERE
         self.sphere_pos = wp.vec3(0.2, -0.225, 0.04)
         body_sphere = builder.add_body(xform=wp.transform(p=self.sphere_pos, q=wp.quat_identity()), label="sphere")
         builder.add_shape_sphere(body_sphere, radius=0.04)
-
         builder.color(include_bending=True)
 
-        # Finalize
+        # Finalize and initialize
         self.model = builder.finalize()
-        self.model.soft_contact_ke = 1e4
-        self.model.soft_contact_kd = 1e-4
-        self.model.soft_contact_mu = 0.5
+        self.state_0 = self.model.state()
+        self.state_1 = self.model.state()
+        self.control = self.model.control()
+
+        self.plant.initialize(self.model, self.state_0)
 
         self.solver = newton.solvers.SolverVBD(
             self.model,
@@ -170,27 +166,9 @@ class Example:
             friction_epsilon=0.1,
             rigid_enable_dahl_friction=False,
         )
-        self.state_0 = self.model.state()
-        self.state_1 = self.model.state()
-        self.control = self.model.control()
-
-        # Cloth binding helper: pins leaf particles to rod bodies each substep
-        # Skin renderer: drives the high-res visual mesh from simulation state
-        device = self.solver.device
-        self.cloth_helper = ClothBindingHelper(
-            self.state_0, result.cloth_bindings, device=device,
-        )
-        self.skin_renderer = PlantSkinRenderer(result.skin, device=device)
-
-        self.collision_pipeline = newton.CollisionPipeline(
-            self.model,
-            broad_phase="nxn",
-            soft_contact_margin=0.005,
-        )
-        self.contacts = self.collision_pipeline.contacts()
 
         self.viewer.set_model(self.model)
-        self.viewer.show_triangles = False  # hide collision cloth
+        self.viewer.show_triangles = False
         self.capture()
 
     def capture(self):
@@ -206,14 +184,10 @@ class Example:
             self.state_0.clear_forces()
             self.viewer.apply_forces(self.state_0)
 
-            # Move pinned cloth particles to match their rod bodies
-            self.cloth_helper.bind(self.state_0, self.state_1)
-
-            if substep % 16 == 0:
-                self.collision_pipeline.collide(self.state_0, self.contacts)
-            self.solver.set_rigid_history_update(substep % 16 == 0)
+            self.plant.pre_step(self.state_0, self.state_1, substep)
+            self.solver.set_rigid_history_update(substep % self.plant.collision_interval == 0)
             self.solver.step(
-                self.state_0, self.state_1, self.control, self.contacts, self.sim_dt
+                self.state_0, self.state_1, self.control, self.plant.contacts, self.sim_dt
             )
             self.state_0, self.state_1 = self.state_1, self.state_0
 
@@ -222,19 +196,13 @@ class Example:
             wp.capture_launch(self.graph)
         else:
             self.simulate()
-        num_rigid = self.contacts.rigid_contact_count.numpy()[0]
-        print(f"Collisions: {num_rigid} rigid contacts")
         self.sim_time += self.frame_dt
 
     def render(self):
         self.viewer.begin_frame(self.sim_time)
         self.viewer.log_state(self.state_0)
-        self.viewer.log_contacts(self.contacts, self.state_0)
-
-        # Skin the visual mesh: gather control points → barycentric interpolation
-        self.skin_renderer.update(self.state_0)
-        self.skin_renderer.render(self.viewer)
-
+        self.viewer.log_contacts(self.plant.contacts, self.state_0)
+        self.plant.render(self.viewer, self.state_0)
         self.viewer.end_frame()
 
 

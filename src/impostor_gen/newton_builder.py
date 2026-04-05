@@ -773,7 +773,7 @@ def compute_cloth_local_offsets(
     )
 
 
-class ClothBindingHelper:
+class _ClothBindingHelper:
     """Manages GPU state for binding cloth particles to rigid bodies."""
 
     def __init__(self, state, cloth_bindings: ClothBinding, device=None):
@@ -803,7 +803,7 @@ class ClothBindingHelper:
         )
 
 
-class PlantSkinRenderer:
+class _PlantSkinRenderer:
     """Manages GPU skinning and rendering for visual plant meshes."""
 
     def __init__(self, skin: SkinBinding | None, device=None):
@@ -882,18 +882,164 @@ class PlantSkinRenderer:
             self.visual_indices_wp,
             backface_culling=False,
         )
-        # Set color via the GL ObjectColor attribute.
-        # HACK: MeshGL.update_texture() uploads the texture but never sets
-        # the shader's texture_enable flag (attribute 8, w-component stays
-        # 0.0), so the `texture` param of log_mesh is silently ignored.
-        # TODO: Once Newton fixes MeshGL texture_enable, replace this with
-        #       log_mesh(..., texture=<color image>) and drop the GL calls.
+        # HACK: MeshGL.update_texture() never sets texture_enable, so we
+        # set color via the GL ObjectColor attribute directly.
         mesh_gl = viewer.objects[name]
         from newton._src.viewer.gl.opengl import RendererGL
         gl = RendererGL.gl
         gl.glBindVertexArray(mesh_gl.vao)
         gl.glVertexAttrib3f(7, *color)
         gl.glBindVertexArray(0)
+
+
+class PlantSimulation:
+    """High-level facade for adding a simulated plant to a Newton scene.
+
+    Encapsulates the build → initialize → step → render lifecycle so users
+    don't need to manage cloth bindings, skin renderers, or collision
+    pipeline details manually.
+
+    Usage::
+
+        plant = PlantSimulation(blueprint, include_cloth=True)
+        plant.add_to_builder(builder)       # before finalize
+        model = builder.finalize()
+        plant.initialize(model)             # after finalize
+
+        # sim loop (each substep)
+        plant.pre_step(state_0, state_1, substep)
+        solver.step(state_0, state_1, control, plant.contacts, dt)
+
+        # render
+        plant.render(viewer, state_0)
+    """
+
+    def __init__(
+        self,
+        blueprint: StemBlueprint,
+        *,
+        # Structure toggles
+        include_stems: bool = True,
+        include_midrib: bool = True,
+        include_veins: bool = True,
+        include_cloth: bool = False,
+        # Rod physics
+        rod_radius: float = 0.02,
+        bend_stiffness_modulus: float = 1.0e2,
+        bend_damping_modulus: float = 1.0e-1,
+        stretch_stiffness_modulus: float = 1.0e9,
+        stretch_damping_modulus: float = 0.0,
+        fix_root: bool = True,
+        # Cloth physics
+        cloth_density: float = 1.0e-4,
+        tri_ke: float = 1.0e4,
+        tri_ka: float = 1.0e4,
+        tri_kd: float = 1.0e-4,
+        edge_ke: float = 1.0e0,
+        edge_kd: float = 1.0e-2,
+        particle_radius: float = 0.003,
+        # Collision
+        soft_contact_margin: float = 0.005,
+        collision_interval: int = 16,
+    ):
+        self._result = build_newton_model(
+            blueprint,
+            include_stems=include_stems,
+            include_midrib=include_midrib,
+            include_veins=include_veins,
+            include_cloth=include_cloth,
+            rod_radius=rod_radius,
+            bend_stiffness_modulus=bend_stiffness_modulus,
+            bend_damping_modulus=bend_damping_modulus,
+            stretch_stiffness_modulus=stretch_stiffness_modulus,
+            stretch_damping_modulus=stretch_damping_modulus,
+            fix_root=fix_root,
+            cloth_density=cloth_density,
+            tri_ke=tri_ke,
+            tri_ka=tri_ka,
+            tri_kd=tri_kd,
+            edge_ke=edge_ke,
+            edge_kd=edge_kd,
+            particle_radius=particle_radius,
+        )
+        self._soft_contact_margin = soft_contact_margin
+        self.collision_interval = collision_interval
+        self._body_offset = 0
+        self._particle_offset = 0
+
+        # Set after initialize()
+        self.contacts: newton.Contacts | None = None
+        self._cloth_helper: _ClothBindingHelper | None = None
+        self._skin_renderer: _PlantSkinRenderer | None = None
+        self._collision_pipeline: newton.CollisionPipeline | None = None
+
+    @property
+    def builder(self) -> newton.ModelBuilder:
+        """The internal ModelBuilder (read-only access for inspection)."""
+        return self._result.builder
+
+    def add_to_builder(self, builder: newton.ModelBuilder) -> None:
+        """Merge the plant into an existing scene builder.
+
+        Records body/particle index offsets so that cloth bindings and skin
+        data remain correct after finalize().
+        """
+        self._body_offset = builder.body_count
+        self._particle_offset = builder.particle_count
+        builder.add_builder(self._result.builder)
+
+        # Offset binding indices to match their new positions in the combined model
+        bindings = self._result.cloth_bindings
+        bindings.bind_body_ids = [b + self._body_offset for b in bindings.bind_body_ids]
+        bindings.bind_particle_ids = [p + self._particle_offset for p in bindings.bind_particle_ids]
+
+        skin = self._result.skin
+        if skin is not None:
+            mask = skin.cp_particle_ids >= 0
+            skin.cp_particle_ids[mask] += self._particle_offset
+            mask = skin.cp_body_ids >= 0
+            skin.cp_body_ids[mask] += self._body_offset
+
+    def initialize(self, model: newton.Model, state: newton.State | None = None) -> None:
+        """Wire up runtime helpers after model finalization.
+
+        Call this once after ``builder.finalize()``. If *state* is not provided,
+        a temporary state is created to compute initial body-local offsets.
+        """
+        if state is None:
+            state = model.state()
+        device = model.device
+
+        self._cloth_helper = _ClothBindingHelper(
+            state, self._result.cloth_bindings, device=device,
+        )
+        self._skin_renderer = _PlantSkinRenderer(self._result.skin, device=device)
+        self._collision_pipeline = newton.CollisionPipeline(
+            model, broad_phase="nxn", soft_contact_margin=self._soft_contact_margin,
+        )
+        self.contacts = self._collision_pipeline.contacts()
+
+    def pre_step(self, state_0, state_1, substep: int) -> None:
+        """Run cloth binding and (periodically) collision detection.
+
+        Call this once per substep, before ``solver.step()``.
+        """
+        assert self._cloth_helper is not None, "Call initialize() first"
+        assert self._collision_pipeline is not None
+        assert self.contacts is not None
+
+        # Pin cloth particles to their rod bodies
+        self._cloth_helper.bind(state_0, state_1)
+
+        # Run collision detection periodically (not every substep for performance)
+        if substep % self.collision_interval == 0:
+            self._collision_pipeline.collide(state_0, self.contacts)
+
+    def render(self, viewer, state) -> None:
+        """Update and render the skinned visual mesh."""
+        assert self._skin_renderer is not None, "Call initialize() first"
+        self._skin_renderer.update(state)
+        self._skin_renderer.render(viewer)
 
 
 def build_newton_model(
@@ -988,3 +1134,8 @@ def build_newton_model(
             skin = stem_skin if skin is None else skin.merge(stem_skin)
 
     return NewtonModelResult(builder=builder, cloth_bindings=cloth_bindings, skin=skin)
+
+
+# Backward-compatible aliases for the renamed internal helpers
+ClothBindingHelper = _ClothBindingHelper
+PlantSkinRenderer = _PlantSkinRenderer
