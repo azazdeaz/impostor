@@ -892,16 +892,36 @@ class _PlantSkinRenderer:
         gl.glBindVertexArray(0)
 
 
+def _broadcast(val, n: int, name: str) -> list:
+    """Normalize a scalar-or-list parameter to a list of length *n*."""
+    if isinstance(val, list):
+        if len(val) != n:
+            raise ValueError(f"{name}: expected {n} values, got {len(val)}")
+        return val
+    return [val] * n
+
+
 class PlantSimulation:
-    """High-level facade for adding a simulated plant to a Newton scene.
+    """High-level facade for adding simulated plants to a Newton scene.
 
-    Encapsulates the build → initialize → step → render lifecycle so users
-    don't need to manage cloth bindings, skin renderers, or collision
-    pipeline details manually.
+    Accepts a single blueprint or a list of blueprints.  When a list is
+    given, every other parameter can be either a single value (applied to
+    all plants) or a list of the same length (one value per plant).
 
-    Usage::
+    Usage (single)::
 
-        plant = PlantSimulation(blueprint, include_cloth=True)
+        plant = PlantSimulation(blueprint, position=(1, 0, 0))
+
+    Usage (batch)::
+
+        plant = PlantSimulation(
+            [bp1, bp2],
+            position=[(0, 0, 0), (1, 0, 0)],
+            rod_radius=0.02,          # same for both
+        )
+
+    Lifecycle::
+
         plant.add_to_builder(builder)       # before finalize
         model = builder.finalize()
         plant.initialize(model)             # after finalize
@@ -916,89 +936,117 @@ class PlantSimulation:
 
     def __init__(
         self,
-        blueprint: StemBlueprint,
+        blueprint: StemBlueprint | list[StemBlueprint],
         *,
         # Structure toggles
-        include_stems: bool = True,
-        include_midrib: bool = True,
-        include_veins: bool = True,
-        include_cloth: bool = False,
+        include_stems: bool | list[bool] = True,
+        include_midrib: bool | list[bool] = True,
+        include_veins: bool | list[bool] = True,
+        include_cloth: bool | list[bool] = False,
         # Rod physics
-        rod_radius: float = 0.02,
-        bend_stiffness_modulus: float = 1.0e2,
-        bend_damping_modulus: float = 1.0e-1,
-        stretch_stiffness_modulus: float = 1.0e9,
-        stretch_damping_modulus: float = 0.0,
-        fix_root: bool = True,
+        rod_radius: float | list[float] = 0.02,
+        bend_stiffness_modulus: float | list[float] = 1.0e2,
+        bend_damping_modulus: float | list[float] = 1.0e-1,
+        stretch_stiffness_modulus: float | list[float] = 1.0e9,
+        stretch_damping_modulus: float | list[float] = 0.0,
+        fix_root: bool | list[bool] = True,
         # Cloth physics
-        cloth_density: float = 1.0e-4,
-        tri_ke: float = 1.0e4,
-        tri_ka: float = 1.0e4,
-        tri_kd: float = 1.0e-4,
-        edge_ke: float = 1.0e0,
-        edge_kd: float = 1.0e-2,
-        particle_radius: float = 0.003,
+        cloth_density: float | list[float] = 1.0e-2,
+        tri_ke: float | list[float] = 1.0e4,
+        tri_ka: float | list[float] = 1.0e4,
+        tri_kd: float | list[float] = 1.0e-4,
+        edge_ke: float | list[float] = 1.0e0,
+        edge_kd: float | list[float] = 1.0e-2,
+        particle_radius: float | list[float] = 0.003,
         # Collision
         soft_contact_margin: float = 0.005,
         collision_interval: int = 16,
+        # Placement
+        position: tuple[float, float, float] | list[tuple[float, float, float]] = (0.0, 0.0, 0.0),
     ):
-        self._result = build_newton_model(
-            blueprint,
-            include_stems=include_stems,
-            include_midrib=include_midrib,
-            include_veins=include_veins,
-            include_cloth=include_cloth,
-            rod_radius=rod_radius,
-            bend_stiffness_modulus=bend_stiffness_modulus,
-            bend_damping_modulus=bend_damping_modulus,
-            stretch_stiffness_modulus=stretch_stiffness_modulus,
-            stretch_damping_modulus=stretch_damping_modulus,
-            fix_root=fix_root,
-            cloth_density=cloth_density,
-            tri_ke=tri_ke,
-            tri_ka=tri_ka,
-            tri_kd=tri_kd,
-            edge_ke=edge_ke,
-            edge_kd=edge_kd,
-            particle_radius=particle_radius,
-        )
+        blueprints = blueprint if isinstance(blueprint, list) else [blueprint]
+        n = len(blueprints)
+        bc = _broadcast
+
+        positions = bc(position, n, "position")
+        include_stems_l = bc(include_stems, n, "include_stems")
+        include_midrib_l = bc(include_midrib, n, "include_midrib")
+        include_veins_l = bc(include_veins, n, "include_veins")
+        include_cloth_l = bc(include_cloth, n, "include_cloth")
+        rod_radius_l = bc(rod_radius, n, "rod_radius")
+        bend_stiffness_l = bc(bend_stiffness_modulus, n, "bend_stiffness_modulus")
+        bend_damping_l = bc(bend_damping_modulus, n, "bend_damping_modulus")
+        stretch_stiffness_l = bc(stretch_stiffness_modulus, n, "stretch_stiffness_modulus")
+        stretch_damping_l = bc(stretch_damping_modulus, n, "stretch_damping_modulus")
+        fix_root_l = bc(fix_root, n, "fix_root")
+        cloth_density_l = bc(cloth_density, n, "cloth_density")
+        tri_ke_l = bc(tri_ke, n, "tri_ke")
+        tri_ka_l = bc(tri_ka, n, "tri_ka")
+        tri_kd_l = bc(tri_kd, n, "tri_kd")
+        edge_ke_l = bc(edge_ke, n, "edge_ke")
+        edge_kd_l = bc(edge_kd, n, "edge_kd")
+        particle_radius_l = bc(particle_radius, n, "particle_radius")
+
+        self._results: list[NewtonModelResult] = []
+        self._positions = positions
+        for i in range(n):
+            self._results.append(build_newton_model(
+                blueprints[i],
+                include_stems=include_stems_l[i],
+                include_midrib=include_midrib_l[i],
+                include_veins=include_veins_l[i],
+                include_cloth=include_cloth_l[i],
+                rod_radius=rod_radius_l[i],
+                bend_stiffness_modulus=bend_stiffness_l[i],
+                bend_damping_modulus=bend_damping_l[i],
+                stretch_stiffness_modulus=stretch_stiffness_l[i],
+                stretch_damping_modulus=stretch_damping_l[i],
+                fix_root=fix_root_l[i],
+                cloth_density=cloth_density_l[i],
+                tri_ke=tri_ke_l[i],
+                tri_ka=tri_ka_l[i],
+                tri_kd=tri_kd_l[i],
+                edge_ke=edge_ke_l[i],
+                edge_kd=edge_kd_l[i],
+                particle_radius=particle_radius_l[i],
+            ))
+
         self._soft_contact_margin = soft_contact_margin
         self.collision_interval = collision_interval
-        self._body_offset = 0
-        self._particle_offset = 0
 
-        # Set after initialize()
+        # Merged state — populated by add_to_builder / initialize
+        self._cloth_bindings = ClothBinding()
+        self._skin: SkinBinding | None = None
         self.contacts: newton.Contacts | None = None
         self._cloth_helper: _ClothBindingHelper | None = None
         self._skin_renderer: _PlantSkinRenderer | None = None
         self._collision_pipeline: newton.CollisionPipeline | None = None
 
-    @property
-    def builder(self) -> newton.ModelBuilder:
-        """The internal ModelBuilder (read-only access for inspection)."""
-        return self._result.builder
-
     def add_to_builder(self, builder: newton.ModelBuilder) -> None:
-        """Merge the plant into an existing scene builder.
+        """Merge all plants into an existing scene builder.
 
-        Records body/particle index offsets so that cloth bindings and skin
-        data remain correct after finalize().
+        Each plant is placed at its respective *position*.  Records index
+        offsets so that cloth bindings and skin data remain correct after
+        ``builder.finalize()``.
         """
-        self._body_offset = builder.body_count
-        self._particle_offset = builder.particle_count
-        builder.add_builder(self._result.builder)
+        for result, pos in zip(self._results, self._positions):
+            body_off = builder.body_count
+            particle_off = builder.particle_count
+            builder.add_builder(result.builder, xform=wp.transform(wp.vec3(*pos)))
 
-        # Offset binding indices to match their new positions in the combined model
-        bindings = self._result.cloth_bindings
-        bindings.bind_body_ids = [b + self._body_offset for b in bindings.bind_body_ids]
-        bindings.bind_particle_ids = [p + self._particle_offset for p in bindings.bind_particle_ids]
+            # Offset binding indices
+            cb = result.cloth_bindings
+            cb.bind_body_ids = [b + body_off for b in cb.bind_body_ids]
+            cb.bind_particle_ids = [p + particle_off for p in cb.bind_particle_ids]
+            self._cloth_bindings = self._cloth_bindings.merge(cb)
 
-        skin = self._result.skin
-        if skin is not None:
-            mask = skin.cp_particle_ids >= 0
-            skin.cp_particle_ids[mask] += self._particle_offset
-            mask = skin.cp_body_ids >= 0
-            skin.cp_body_ids[mask] += self._body_offset
+            skin = result.skin
+            if skin is not None:
+                mask = skin.cp_particle_ids >= 0
+                skin.cp_particle_ids[mask] += particle_off
+                mask = skin.cp_body_ids >= 0
+                skin.cp_body_ids[mask] += body_off
+                self._skin = skin if self._skin is None else self._skin.merge(skin)
 
     def initialize(self, model: newton.Model, state: newton.State | None = None) -> None:
         """Wire up runtime helpers after model finalization.
@@ -1011,9 +1059,9 @@ class PlantSimulation:
         device = model.device
 
         self._cloth_helper = _ClothBindingHelper(
-            state, self._result.cloth_bindings, device=device,
+            state, self._cloth_bindings, device=device,
         )
-        self._skin_renderer = _PlantSkinRenderer(self._result.skin, device=device)
+        self._skin_renderer = _PlantSkinRenderer(self._skin, device=device)
         self._collision_pipeline = newton.CollisionPipeline(
             model, broad_phase="nxn", soft_contact_margin=self._soft_contact_margin,
         )
@@ -1028,10 +1076,8 @@ class PlantSimulation:
         assert self._collision_pipeline is not None
         assert self.contacts is not None
 
-        # Pin cloth particles to their rod bodies
         self._cloth_helper.bind(state_0, state_1)
 
-        # Run collision detection periodically (not every substep for performance)
         if substep % self.collision_interval == 0:
             self._collision_pipeline.collide(state_0, self.contacts)
 
@@ -1059,7 +1105,7 @@ def build_newton_model(
     tri_ke: float = 1.0e4,
     tri_ka: float = 1.0e4,
     tri_kd: float = 1.0e-4,
-    edge_ke: float = 1.0e0,
+    edge_ke: float = 1.0e2,
     edge_kd: float = 1.0e-2,
     particle_radius: float = 0.003,
 ) -> NewtonModelResult:
