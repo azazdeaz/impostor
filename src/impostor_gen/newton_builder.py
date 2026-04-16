@@ -412,6 +412,7 @@ def _add_plant_rods(
     stretch_damping_modulus: float,
     label: str | None = None,
     fix_roots: bool = True,
+    rod_density: float = 1000.0,
 ) -> tuple[list[int], list[int], dict[int, int], dict[int, np.ndarray]]:
     """Add rod bodies and cable joints for a node/edge graph.
 
@@ -458,7 +459,7 @@ def _add_plant_rods(
             xform=wp.transform(wp.vec3(0.0, 0.0, half), wp.quat_identity()),
             radius=r,
             half_height=half,
-            cfg=newton.ModelBuilder.ShapeConfig(collision_group=-1)
+            cfg=newton.ModelBuilder.ShapeConfig(collision_group=-1, density=rod_density)
         )
 
         edge_u.append(u)
@@ -945,6 +946,7 @@ class PlantSimulation:
         include_cloth: bool | list[bool] = False,
         # Rod physics
         rod_radius: float | list[float] = 0.02,
+        rod_density: float | list[float] = 1000.0,
         bend_stiffness_modulus: float | list[float] = 1.0e2,
         bend_damping_modulus: float | list[float] = 1.0e-1,
         stretch_stiffness_modulus: float | list[float] = 1.0e9,
@@ -974,6 +976,7 @@ class PlantSimulation:
         include_veins_l = bc(include_veins, n, "include_veins")
         include_cloth_l = bc(include_cloth, n, "include_cloth")
         rod_radius_l = bc(rod_radius, n, "rod_radius")
+        rod_density_l = bc(rod_density, n, "rod_density")
         bend_stiffness_l = bc(bend_stiffness_modulus, n, "bend_stiffness_modulus")
         bend_damping_l = bc(bend_damping_modulus, n, "bend_damping_modulus")
         stretch_stiffness_l = bc(stretch_stiffness_modulus, n, "stretch_stiffness_modulus")
@@ -997,6 +1000,7 @@ class PlantSimulation:
                 include_veins=include_veins_l[i],
                 include_cloth=include_cloth_l[i],
                 rod_radius=rod_radius_l[i],
+                rod_density=rod_density_l[i],
                 bend_stiffness_modulus=bend_stiffness_l[i],
                 bend_damping_modulus=bend_damping_l[i],
                 stretch_stiffness_modulus=stretch_stiffness_l[i],
@@ -1095,6 +1099,7 @@ def build_newton_model(
     include_veins: bool = True,
     include_cloth: bool = False,
     rod_radius: float = 0.02,
+    rod_density: float = 600.0,
     bend_stiffness_modulus: float = 1.0e2,
     bend_damping_modulus: float = 1.0e-1,
     stretch_stiffness_modulus: float = 1.0e9,
@@ -1157,6 +1162,7 @@ def build_newton_model(
             stretch_damping_modulus,
             label="plant",
             fix_roots=fix_root,
+            rod_density=rod_density,
         )
 
     # Build cloth meshes for leaves (simulated by VBD solver)

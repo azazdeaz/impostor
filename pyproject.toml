@@ -6,14 +6,17 @@ readme = "README.md"
 authors = [
     { name = "Andras Polgar", email = "azazdeaz@gmail.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "huggingface-hub>=1.9.2",
     "imgui-bundle==1.92.0",
+    "lerobot[feetech]>=0.5.1",
     "newton[examples]>=1.0.0",
-    "numpy>=2.3.1",
+    "numpy>=2.2.0",
     "opencv-python>=4.11.0.86",
     "pillow>=11.3.0",
     "pydantic>=2.11.7",
+    "pynput>=1.8.1",
     "rerun-sdk>=0.24.0",
     "scipy>=1.16.0",
     "triangle>=20250106",
@@ -21,13 +24,16 @@ dependencies = [
     "usd-core>=25.8",
 ]
 
+[tool.uv.sources]
+"newton" = { git = "https://github.com/newton-physics/newton.git", rev = "8d7a6e2c86001091861b2791c3d8cbb9c11fac63" }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 # In pyproject.toml
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

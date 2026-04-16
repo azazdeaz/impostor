@@ -11,8 +11,10 @@
 
 
 #### Quick demos (assuming you have [uv](https://docs.astral.sh/uv/) installed):
-- Simulate plant model with newton-physics: `uv run examples/strawberry_newton.py`
+
 - Visualize plant growth with Rerun: `uv run examples/strawberry.py`
+- Simulate plant model with newton-physics: `uv run examples/strawberry_newton.py`
+    - And with an SO101 arm: `uv run examples/strawberry_newton.py --soarm` (`--help` for more options)
 
 
 

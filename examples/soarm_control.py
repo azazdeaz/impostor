@@ -36,7 +36,7 @@ class TrajectoryController:
         self.frequencies = np.zeros(num_joints, dtype=np.float32)
         self.phases = np.zeros(num_joints, dtype=np.float32)
         # Defaults for the first 4 joints
-        _amp = [0.8, 0.3, 0.4, 0.3]
+        _amp = [0.4, 0.3, 0.4, 0.3]
         _freq = [0.3, 0.2, 0.25, 0.15]
         _phase = [0.0, 1.0, 0.5, 1.5]
         n = min(num_joints, len(_amp))

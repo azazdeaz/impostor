@@ -33,7 +33,7 @@ def create_leaf(material: Material, size_scale: float = 1.0) -> List[Symbol]:
         LeafContext(),
         LeafMeshContext(),
         MaterialKey(key=material.key),
-        Diameter(diameter=0.05 * size_scale),
+        Diameter(diameter=0.11 * size_scale),
     ]
 
     growth_end_age = 8
@@ -103,7 +103,7 @@ def create_leaf(material: Material, size_scale: float = 1.0) -> List[Symbol]:
         # Dont add lateral veins on the tip
         if mr < midrib_division - 1:
             symbols.append(BranchOpen())
-            symbols.append(Diameter(diameter=0.04 * size_scale))
+            symbols.append(Diameter(diameter=0.1 * size_scale))
             symbols.append(Yaw(angle=-90))
 
             # Add secondary vein on left side
@@ -111,7 +111,7 @@ def create_leaf(material: Material, size_scale: float = 1.0) -> List[Symbol]:
 
             symbols.append(BranchClose())
             symbols.append(BranchOpen())
-            symbols.append(Diameter(diameter=0.04 * size_scale))
+            symbols.append(Diameter(diameter=0.1 * size_scale))
             symbols.append(Yaw(angle=90))
 
             # Add secondary vein on right side
