@@ -21,8 +21,8 @@ import newton.examples
 from newton.solvers import SolverVBD
 
 from impostor_gen.newton_builder import PlantSimulation
-from soarm_control import add_cli_args, create_controller
-from strawberry_plant import grow_strawberry_plant
+from utils.soarm_control import add_cli_args, create_controller
+from utils.strawberry_plant import grow_strawberry_plant
 
 
 # ── Asset download ──────────────────────────────────────────────────────

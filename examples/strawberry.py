@@ -10,7 +10,7 @@ from impostor_gen.material import MaterialRegistry
 from impostor_gen.mesh.mesh_builder import generate_blueprints, generate_mesh, log_transforms
 from impostor_gen.mesh.mesh_utils import log_mesh, log_wireframe
 from impostor_gen.usd_animation import UsdAnimation
-from strawberry_plant import Crown, IterateCrown
+from utils.strawberry_plant import Crown, IterateCrown
 
 
 def main():

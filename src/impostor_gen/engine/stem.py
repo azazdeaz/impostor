@@ -39,7 +39,7 @@ class StemContext(AgeingContext):
         start_age = section_index * self.section_growth_time()
         end_age = start_age + self.section_growth_time()
         return (start_age, end_age)
-
+    
     def create_next_section(
         self, created_section_count: int
     ) -> Optional[tuple[Diameter, F]]:
