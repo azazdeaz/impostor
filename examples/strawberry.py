@@ -7,7 +7,7 @@ from impostor_gen.engine import (
     StemGrowthRule,
 )
 from impostor_gen.material import MaterialRegistry
-from impostor_gen.mesh.mesh_builder import generate_blueprints, generate_mesh, log_transforms
+from impostor_gen.mesh.mesh_builder import generate_blueprints, generate_mesh, log_blueprints
 from impostor_gen.mesh.mesh_utils import log_mesh, log_wireframe
 from impostor_gen.usd_animation import UsdAnimation
 from utils.strawberry_plant import Crown, IterateCrown
@@ -40,7 +40,7 @@ def main():
         print(f"Iteration {i}, world size: {len(lsystem.world)}")
         # if i % 5 == 0 or i == iterations - 1:
         blueprints = generate_blueprints(lsystem.world)
-        log_transforms(blueprints)
+        log_blueprints(blueprints)
         meshes = generate_mesh(blueprints)
         log_mesh(meshes, materials)
         log_wireframe(meshes)

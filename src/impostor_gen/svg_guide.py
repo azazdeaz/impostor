@@ -168,9 +168,37 @@ class SvgGuide:
             self._curves = _parse_svg(self._path)
         return self._curves
 
+    def _resolve_curve(self, dotted_path: str) -> _CurveData:
+        curves = self._ensure_parsed()
+        if dotted_path in curves:
+            return curves[dotted_path]
+
+        # Robust fallback: allow looking up by leaf label if hierarchy changed.
+        suffix = f".{dotted_path}"
+        matches = [curve for key, curve in curves.items() if key.endswith(suffix)]
+        if len(matches) == 1:
+            return matches[0]
+
+        raise KeyError(dotted_path)
+
     def get_mm(self, dotted_path: str, num_points: int) -> list[float]:
         """Sample curve as mm displacements from the ZERO line."""
-        return self._ensure_parsed()[dotted_path].sample(num_points)
+        return self._resolve_curve(dotted_path).sample(num_points)
+
+    def get_meters(self, dotted_path: str, num_points: int) -> list[float]:
+        """Sample curve as meters (1 mm in SVG = 0.001 m)."""
+        return [v / 1000.0 for v in self.get_mm(dotted_path, num_points)]
+
+    def get_meter(self, dotted_path: str) -> float:
+        """Return path X-extent in meters (max_x - min_x)."""
+        segments = self._resolve_curve(dotted_path).segments
+        xs = np.array(
+            [x for (x0, _, cx1, _, cx2, _, x1, _) in segments for x in (x0, cx1, cx2, x1)],
+            dtype=np.float64,
+        )
+        if xs.size == 0:
+            return 0.0
+        return float(xs.max() - xs.min()) / 1000.0
 
     def get_radians(self, dotted_path: str, num_points: int) -> list[float]:
         """Sample curve as radians (1 cm in SVG = 1 radian)."""

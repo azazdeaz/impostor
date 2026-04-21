@@ -25,7 +25,7 @@ class LeafContext(AgeingContext):
 
 
 def create_leaf(material: Material, svg_guide: SvgGuide, size_scale: float = 1.0) -> List[Symbol]:
-    midrib_division = 8
+    midrib_division = 7
     sec_vein_division = 4
 
     leaf: List[Symbol] = [
@@ -37,12 +37,11 @@ def create_leaf(material: Material, svg_guide: SvgGuide, size_scale: float = 1.0
 
     growth_end_age = 8
 
-    lateral_lengths = svg_guide.get_mm("leaflet.secondary_veins.lengths", midrib_division)
+    lateral_lengths = svg_guide.get_meters("leaflet.secondary_veins.lengths", midrib_division)
     initial_lateral_yaws = svg_guide.get_degrees("leaflet.secondary_veins.start_angles", midrib_division)
     lateral_yaws = svg_guide.get_degrees("leaflet.secondary_veins.curvings", sec_vein_division)
-    print("Lateral scales:", lateral_lengths)
-    print("Initial lateral yaws:", initial_lateral_yaws)
-    print("Lateral yaws:", lateral_yaws)
+    midrib_length = svg_guide.get_meter("midrib_length")
+
     def lateral_vein(section_idx: int, is_left: bool) -> List[Symbol]:
         symbols: List[Symbol] = [
             Yaw(
@@ -76,25 +75,9 @@ def create_leaf(material: Material, svg_guide: SvgGuide, size_scale: float = 1.0
     for mr in range(midrib_division):
         symbols: List[Symbol] = []
 
-        midrib_length = 400
         length = midrib_length / midrib_division
 
-        symbols.append(
-            F(
-                value_se=(0.01 * size_scale, length),
-                age_se=(0, growth_end_age),
-                age_context_type=LeafContext,
-            )
-        )
-
-        symbols.append(
-            Pitch(
-                value_se=(48, np.random.uniform(-3, 5)),
-                age_se=(2, growth_end_age),
-                age_context_type=LeafContext,
-            )
-        )
-
+        # Add secondary veins before advancing so section 0 branches from the first midrib point.
         # Dont add lateral veins on the tip
         if mr < midrib_division - 1:
             symbols.append(BranchOpen())
@@ -114,6 +97,22 @@ def create_leaf(material: Material, svg_guide: SvgGuide, size_scale: float = 1.0
 
             symbols.append(BranchClose())
 
+        symbols.append(
+            F(
+                value_se=(0.01 * size_scale, length),
+                age_se=(0, growth_end_age),
+                age_context_type=LeafContext,
+            )
+        )
+
+        symbols.append(
+            Pitch(
+                value_se=(48, np.random.uniform(-3, 5)),
+                age_se=(2, growth_end_age),
+                age_context_type=LeafContext,
+            )
+        )
+
         leaf.extend(symbols)
 
     return [BranchOpen()] + leaf + [BranchClose()]
@@ -121,8 +120,8 @@ def create_leaf(material: Material, svg_guide: SvgGuide, size_scale: float = 1.0
 
 def create_trifoliate_leaf(material: Material, svg_guide: SvgGuide, size_scale: float = 1.0) -> List[Symbol]:
     leaf_center = create_leaf(material, svg_guide, size_scale=size_scale)
-    # leaf_left = create_leaf(material, svg_guide, size_scale=size_scale)
-    # leaf_right = create_leaf(material, svg_guide, size_scale=size_scale)
+    leaf_left = create_leaf(material, svg_guide, size_scale=size_scale)
+    leaf_right = create_leaf(material, svg_guide, size_scale=size_scale)
 
     def insert_after_branch_open(
         symbols: List[Symbol], to_insert: List[Symbol]
@@ -133,8 +132,7 @@ def create_trifoliate_leaf(material: Material, svg_guide: SvgGuide, size_scale: 
                 return
 
     insert_after_branch_open(leaf_center, [Pitch(angle=20)])
-    # insert_after_branch_open(leaf_left, [Yaw(angle=-85)])
-    # insert_after_branch_open(leaf_right, [Yaw(angle=85)])
+    insert_after_branch_open(leaf_left, [Yaw(angle=-85)])
+    insert_after_branch_open(leaf_right, [Yaw(angle=85)])
 
-    return leaf_center
     return leaf_left + leaf_center + leaf_right

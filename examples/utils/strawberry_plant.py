@@ -25,13 +25,15 @@ from impostor_gen.leaf import create_trifoliate_leaf
 from impostor_gen.material import Material
 from impostor_gen.mesh.mesh_builder import generate_blueprint
 from impostor_gen.mesh.stem_mesh_context import StemMeshContext
+from impostor_gen.svg_guide import SvgGuide
 
 leaf_material = Material(key="leaf", diffuse_color=(0.2, 0.6, 0.1))
+leaf_svg_guide = SvgGuide("assets/strawberry_guides.svg")
 
 
 class Crown(AgeingContext):
     shoot_period: int = 12
-    max_shoots: int = 3
+    max_shoots: int = 3 
     angle_step: float = 137.5
 
 
@@ -64,7 +66,7 @@ class IterateCrown(Rule, BaseModel):
                     diameter_end=0.0022,
                 ),
                 StemTip(),
-                *create_trifoliate_leaf(leaf_material, size_scale=0.025),
+                *create_trifoliate_leaf(leaf_material, leaf_svg_guide, size_scale=0.025),
                 BranchClose(),
             ])
 
