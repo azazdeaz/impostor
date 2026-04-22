@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import re
+import warnings
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -204,10 +205,6 @@ class SvgGuide:
         """Sample curve as radians (1 cm in SVG = 1 radian)."""
         return [v / 10.0 for v in self.get_mm(dotted_path, num_points)]
 
-    def get_degrees(self, dotted_path: str, num_points: int) -> list[float]:
-        """Sample curve as degrees (1 cm in SVG = 1 radian, converted)."""
-        return [math.degrees(v) for v in self.get_radians(dotted_path, num_points)]
-
 
 # ── SVG tree walker ──────────────────────────────────────────────────
 
@@ -225,10 +222,22 @@ def _find_zero_y(group: ET.Element) -> float:
 def _parse_svg(path: Path) -> dict[str, _CurveData]:
     tree = ET.parse(path)
     curves: dict[str, _CurveData] = {}
+    warned_transforms: set[str] = set()
 
     def walk(el: ET.Element, prefix: str, zero_y: float) -> None:
         label = el.get(f"{{{_INKSCAPE_NS}}}label")
         is_group = el.tag == f"{{{_SVG_NS}}}g"
+        transform = el.get("transform")
+        if transform:
+            display_label = label or el.tag.split("}")[-1]
+            warning_key = f"{prefix}.{display_label}:{transform}"
+            if warning_key not in warned_transforms:
+                warnings.warn(
+                    f"SVG element '{prefix}.{display_label}' has transform='{transform}'. "
+                    "Transforms are currently ignored by SvgGuide.",
+                    stacklevel=2,
+                )
+                warned_transforms.add(warning_key)
 
         if is_group:
             key = f"{prefix}.{label}" if prefix and label else (label or prefix)
