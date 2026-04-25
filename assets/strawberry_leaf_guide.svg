@@ -185,5 +185,15 @@
        id="path_vein_free_tip_length"
        inkscape:label="vein_free_tip_length"
        sodipodi:nodetypes="cc" />
+    <g
+       inkscape:groupmode="layer"
+       id="layer_texture"
+       inkscape:label="texture">
+      <path
+         style="fill:none;fill-opacity:0.291095;stroke:#6c1ee9;stroke-width:0.303753;stroke-opacity:1"
+         d="M 8,92 H 205"
+         id="path_texture_zero"
+         inkscape:label="ZERO" />
+    </g>
   </g>
 </svg>

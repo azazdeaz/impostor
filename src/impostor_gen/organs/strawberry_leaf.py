@@ -10,6 +10,8 @@ import rerun as rr
 from ..mesh.mesh3d import Mesh3D
 from ..svg_guide import SvgGuide
 
+TEXTURE_RESOLUTION = 512
+
 
 def _spacing_starts_along_midrib(
     midrib_length_m: float,
@@ -228,6 +230,40 @@ def _inflate_curve_along_normals(
     return out
 
 
+def _point_in_polygon(points: np.ndarray, polygon: np.ndarray) -> np.ndarray:
+    """Vectorized ray-casting test for points inside a 2D polygon."""
+    x = points[:, 0]
+    y = points[:, 1]
+    inside = np.zeros(len(points), dtype=bool)
+    n = len(polygon)
+    for i in range(n):
+        x1, y1 = polygon[i]
+        x2, y2 = polygon[(i + 1) % n]
+        cross = (x2 - x1) * (y - y1) / ((y2 - y1) + 1e-12) + x1
+        intersects = ((y1 > y) != (y2 > y)) & (x < cross)
+        inside ^= intersects
+    return inside
+
+
+def _distance_to_polyline(points: np.ndarray, polyline: np.ndarray) -> np.ndarray:
+    """Minimum Euclidean distance from points to a 2D polyline."""
+    if len(polyline) < 2:
+        return np.full(len(points), np.inf, dtype=np.float64)
+
+    dmin = np.full(len(points), np.inf, dtype=np.float64)
+    for a, b in zip(polyline[:-1], polyline[1:]):
+        ab = b - a
+        denom = float(np.dot(ab, ab))
+        if denom <= 1e-12:
+            continue
+        ap = points - a
+        t = np.clip((ap @ ab) / denom, 0.0, 1.0)
+        proj = a + t[:, None] * ab
+        d = np.linalg.norm(points - proj, axis=1)
+        dmin = np.minimum(dmin, d)
+    return dmin
+
+
 @dataclass
 class StrawberryLeaf:
     midrib_positions_2d: np.ndarray
@@ -343,6 +379,52 @@ class StrawberryLeaf:
     def get_collision_mesh(self) -> Mesh3D:
         return Mesh3D.empty()
 
+    def generate_albedo_texture(self, resolution: int = TEXTURE_RESOLUTION) -> np.ndarray:
+        """Generate a simple RGB albedo map from leaf distance fields."""
+        boundary = np.vstack((self.left_blade_curve_2d, self.right_blade_curve_2d[::-1]))
+        if len(boundary) < 3:
+            return np.zeros((resolution, resolution, 3), dtype=np.uint8)
+
+        bmin = boundary.min(axis=0)
+        bmax = boundary.max(axis=0)
+        pad = 0.03 * max(float(bmax[0] - bmin[0]), float(bmax[1] - bmin[1]), 1e-3)
+        xmin, ymin = bmin - pad
+        xmax, ymax = bmax + pad
+
+        xs = np.linspace(xmin, xmax, resolution, dtype=np.float64)
+        ys = np.linspace(ymax, ymin, resolution, dtype=np.float64)
+        xx, yy = np.meshgrid(xs, ys)
+        pts = np.column_stack((xx.ravel(), yy.ravel()))
+
+        mask = _point_in_polygon(pts, boundary)
+        d_midrib = _distance_to_polyline(pts, self.midrib_positions_2d)
+
+        d_veins = np.full(len(pts), np.inf, dtype=np.float64)
+        for vein in self.left_secondary_veins_2d + self.right_secondary_veins_2d:
+            d_veins = np.minimum(d_veins, _distance_to_polyline(pts, vein))
+
+        boundary_closed = np.vstack((boundary, boundary[:1]))
+        d_edge = _distance_to_polyline(pts, boundary_closed)
+
+        # Gaussian-like falloffs from guide geometry.
+        scale = max(self.midrib_length_m, 1e-6)
+        w_midrib = np.exp(-((d_midrib / (0.020 * scale + 1e-6)) ** 2))
+        w_vein = np.exp(-((d_veins / (0.012 * scale + 1e-6)) ** 2))
+        w_edge = np.exp(-((d_edge / (0.018 * scale + 1e-6)) ** 2))
+
+        base = np.array([0.24, 0.47, 0.18], dtype=np.float64)
+        midrib_col = np.array([0.78, 0.86, 0.52], dtype=np.float64)
+        vein_col = np.array([0.54, 0.70, 0.35], dtype=np.float64)
+
+        color = np.tile(base, (len(pts), 1))
+        color += (midrib_col - base) * (0.70 * w_midrib)[:, None]
+        color += (vein_col - base) * (0.45 * w_vein)[:, None]
+        color *= (1.0 - 0.22 * w_edge)[:, None]
+        color = np.clip(color, 0.0, 1.0)
+        color[~mask] = 0.0
+
+        return (color.reshape(resolution, resolution, 3) * 255.0).astype(np.uint8)
+
     def log_structure(self, path: str = "strawberry_leaf/structure") -> None:
         strips_3d: List[np.ndarray] = []
 
@@ -383,3 +465,6 @@ class StrawberryLeaf:
         )
         blade_points = np.vstack((left_blade_3d, right_blade_3d))
         rr.log(f"{path}/blades", rr.Points3D(blade_points))
+
+    def log_albedo(self, path: str = "strawberry_leaf/albedo") -> None:
+        rr.log(path, rr.Image(self.generate_albedo_texture()))

@@ -7,6 +7,7 @@ def main() -> None:
 
     leaf = StrawberryLeaf.from_guide("assets/strawberry_leaf_guide.svg")
     leaf.log_structure()
+    leaf.log_albedo()
 
     print(f"Midrib length (m): {leaf.midrib_length_m:.6f}")
     print(f"Vein resolution (m): {leaf.vein_resolution_m:.6f}")
