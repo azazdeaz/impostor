@@ -335,7 +335,17 @@ def _collect_graph(
                 if not vein.transforms:
                     vein_indices.append([])
                     continue
-                midrib_node = offset + (v_idx // 2)
+
+                # Veins are emitted before each midrib F step, so vein pair i
+                # branches from the node preceding transforms[i]:
+                #   pair 0 → parent_node_idx (stem tip the leaf hangs from)
+                #   pair i → midrib node i-1
+                section_idx = v_idx // 2
+                if section_idx == 0:
+                    midrib_node = parent_node_idx if parent_node_idx is not None else offset
+                else:
+                    midrib_node = offset + section_idx - 1
+
                 vein_offset = len(nodes)
                 vi = list(range(vein_offset, vein_offset + len(vein.transforms)))
                 for t in vein.transforms:

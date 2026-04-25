@@ -15,7 +15,8 @@ from .mesh3d import Mesh3D
 
 def _triangulate_leaf(blueprint: Any) -> Mesh3D:
     """Build a triangulated Mesh3D from a LeafBlueprint's midrib + veins."""
-    midrib_div = len(blueprint.midrib.transforms)
+    midrib_pts = np.array([t.position for t in blueprint.midrib.transforms])
+    midrib_div = len(midrib_pts)
 
     layers: List[List[np.ndarray]] = []
 
@@ -24,13 +25,14 @@ def _triangulate_leaf(blueprint: Any) -> Mesh3D:
         f"Found {len(blueprint.veins)} veins for {midrib_div} midrib sections."
     )
 
+    # Convention: every midrib section except the tip has a left/right vein pair.
     for i in range(midrib_div):
         if i == midrib_div - 1:
-            layers.append([blueprint.midrib.transforms[i].position])
+            layers.append([midrib_pts[-1]])
         else:
             layers.append(
                 [t.position for t in blueprint.veins[i * 2].transforms[::-1]]
-                + [blueprint.midrib.transforms[i].position]
+                + [midrib_pts[i]]
                 + [t.position for t in blueprint.veins[i * 2 + 1].transforms]
             )
 

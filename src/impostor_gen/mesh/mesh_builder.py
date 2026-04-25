@@ -221,10 +221,36 @@ def generate_mesh(blueprints: List[StemBlueprint | LeafBlueprint]) -> "CompundMe
 
 def log_transforms(blueprints: List[StemBlueprint | LeafBlueprint]):
     arrows = rr.Arrows3D(
-        vectors=[[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        vectors=[[10, 0, 0], [0, 10, 0], [0, 0, 10]],
         colors=[[255, 0, 0], [0, 255, 0], [0, 0, 255]],
     )
     rr.log("stem/frames", rr.Clear(recursive=True))
     for i, b in enumerate(blueprints):
         for j, t in enumerate(b.transforms):
             rr.log(f"stem/frames/{i}/{j}", t.to_rerun(), arrows)
+
+def log_blueprints(blueprints: List[StemBlueprint | LeafBlueprint], path: str = "blueprints"):
+    """Log arrows connecting consecutive transforms in each blueprint chain."""
+    origins, vectors, colors = [], [], []
+
+    for blueprint in blueprints:
+        if isinstance(blueprint, LeafBlueprint):
+            # Keep leaf strands distinct so veins don't connect to each other/midrib.
+            transform_chains = [blueprint.midrib.transforms] + [
+                vein.transforms for vein in blueprint.veins
+            ]
+        else:
+            transform_chains = [blueprint.transforms]
+
+        for transforms in transform_chains:
+            for a, b in zip(transforms, transforms[1:]):
+                origins.append(a.position)
+                vectors.append(b.position - a.position)
+                colors.append([0, 200, 255, 180])
+
+    if origins:
+        rr.log(path, rr.Arrows3D(
+            origins=np.array(origins),
+            vectors=np.array(vectors),
+            colors=np.array(colors),
+        ))
